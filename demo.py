@@ -1,8 +1,10 @@
 from AIGN import AIGN
 from ideas import idea_list
 from LLM import chatLLM
+from config_manager import update_aign_settings
 
 aign = AIGN(chatLLM)
+update_aign_settings(aign)
 
 user_idea = idea_list[1]
 user_requriments = "主角独自一人行动。非常重要！主角不要有朋友！！！"

@@ -2,3 +2,5 @@ dashscope
 openai
 zhipuai
 gradio
+google-generativeai
+anthropic

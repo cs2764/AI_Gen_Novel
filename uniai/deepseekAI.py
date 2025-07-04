@@ -3,7 +3,7 @@ import os
 from openai import OpenAI
 
 
-def deepseekChatLLM(model_name="deepseek-chat", api_key=None):
+def deepseekChatLLM(model_name="deepseek-chat", api_key=None, system_prompt=""):
     """
     model_name 取值
     - deepseek-chat
@@ -18,6 +18,18 @@ def deepseekChatLLM(model_name="deepseek-chat", api_key=None):
         max_tokens=None,
         stream=False,
     ) -> dict:
+        # 如果设置了系统提示词，合并到第一个用户消息的开头
+        if system_prompt and messages:
+            # 找到第一个用户消息
+            for i, msg in enumerate(messages):
+                if msg.get("role") == "user":
+                    # 将系统提示词添加到用户消息的开头
+                    original_content = msg["content"]
+                    messages[i]["content"] = f"{system_prompt}\n\n{original_content}"
+                    break
+            else:
+                # 如果没有用户消息，创建一个包含系统提示词的用户消息
+                messages.append({"role": "user", "content": system_prompt})
         if not stream:
             response = client.chat.completions.create(
                 model=model_name,
