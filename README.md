@@ -73,6 +73,8 @@ LLM 在转换和审阅上表现较好，而在计划阶段存在缺陷。本项�
 
 ## 快速开始
 
+📋 **完整安装指南**: [查看 INSTALL.md](INSTALL.md)
+
 ### 1. 环境配置
 
 ```bash
@@ -85,6 +87,8 @@ pip install -r requirements.txt
 ```
 
 ### 2. 配置 API 密钥
+
+⚙️ **详细配置指南**: [查看 AI 提供商配置指南](README_Provider_Config.md)
 
 首次运行时，程序会自动创建配置文件。您需要：
 
@@ -101,17 +105,32 @@ pip install -r requirements.txt
 4. 点击"生成开头"开始创作
 5. 使用"自动生成"功能批量生成多个章节
 
+🎯 **了解更多功能**: [查看功能详情](FEATURES.md)
+
+## 文档导航 📚
+
+完整的项目文档和开发指南：
+
+- **[📋 安装配置指南](INSTALL.md)** - 详细的安装和配置说明
+- **[⚙️ AI 提供商配置指南](README_Provider_Config.md)** - 各种 AI 提供商的配置方法
+- **[🏗️ 架构设计文档](ARCHITECTURE.md)** - 系统架构和技术设计
+- **[🔧 开发者文档](DEVELOPER.md)** - 项目结构和开发指南
+- **[📖 API 接口文档](API.md)** - 详细的 API 接口说明
+- **[🤝 贡献指南](CONTRIBUTING.md)** - 如何参与项目开发
+- **[📝 更新日志](CHANGELOG.md)** - 版本历史和变更记录
+- **[🎯 功能详情](FEATURES.md)** - 完整的功能列表
+
 ## 支持的 AI 提供商
 
-| 提供商 | 模型示例 | 特点 |
-|--------|----------|------|
-| DeepSeek | deepseek-chat | 中文优化，成本低 |
-| OpenRouter | gpt-4, claude-3 | 多模型选择 |
-| Claude | claude-3-sonnet | 长文本理解 |
-| Gemini | gemini-pro | 多模态支持 |
-| LM Studio | 本地模型 | 隐私保护 |
-| 智谱 AI | glm-4 | 国产模型 |
-| 阿里云 | qwen-long | 长文本处理 |
+| 提供商 | 模型示例 | 特点 | 配置指南 |
+|--------|----------|------|----------|
+| DeepSeek | deepseek-chat | 中文优化，成本低 | [查看配置](README_Provider_Config.md#deepseek-配置) |
+| OpenRouter | gpt-4, claude-3 | 多模型选择 | [查看配置](README_Provider_Config.md#openrouter-配置) |
+| Claude | claude-3-sonnet | 长文本理解 | [查看配置](README_Provider_Config.md#claude-配置) |
+| Gemini | gemini-pro | 多模态支持 | [查看配置](README_Provider_Config.md#gemini-配置) |
+| LM Studio | 本地模型 | 隐私保护 | [查看配置](README_Provider_Config.md#lm-studio-配置) |
+| 智谱 AI | glm-4 | 国产模型 | [查看配置](README_Provider_Config.md#智谱-ai-配置) |
+| 阿里云 | qwen-long | 长文本处理 | [查看配置](README_Provider_Config.md#阿里云配置) |
 
 ## 系统架构
 
@@ -148,6 +167,27 @@ AI_Gen_Novel/
 - 多智能体协作框架
 - 基于 RecurrentGPT 的循环生成
 
+## 开发者资源 👨‍💻
+
+### 快速开发指南
+
+1. **新手入门**: 参考 [开发者文档](DEVELOPER.md) 了解项目结构
+2. **API 使用**: 查看 [API 文档](API.md) 了解接口详情  
+3. **代码贡献**: 阅读 [贡献指南](CONTRIBUTING.md) 了解开发流程
+4. **架构理解**: 学习 [架构文档](ARCHITECTURE.md) 掌握系统设计
+
+### 扩展开发
+
+- **添加新的 AI 提供商**: 参考 [开发者文档 - AI 提供商扩展](DEVELOPER.md#ai-提供商扩展)
+- **自定义智能体**: 参考 [开发者文档 - 智能体开发](DEVELOPER.md#智能体开发)
+- **UI 定制**: 参考 [开发者文档 - 用户界面](DEVELOPER.md#用户界面)
+
+### 调试和测试
+
+- **配置调试**: 使用 Web 配置界面的测试功能
+- **API 测试**: 参考 [API 文档](API.md) 中的示例代码
+- **问题排查**: 查看 [故障排除指南](README_Provider_Config.md#故障排除)
+
 ## 开发说明
 
 本项目完全由 Claude Code 开发，体现了 AI 在软件开发中的应用潜力：
@@ -159,13 +199,30 @@ AI_Gen_Novel/
 
 ## 贡献指南
 
-欢迎提交 Issues 和 Pull Requests！
+欢迎为项目做出贡献！我们提供了详细的指南帮助您参与开发：
 
-1. Fork 项目
-2. 创建特性分支
-3. 提交更改
-4. 推送到分支
-5. 创建 Pull Request
+📖 **[完整贡献指南](CONTRIBUTING.md)** - 详细的贡献流程和规范
+
+### 快速贡献步骤
+
+1. Fork 项目到您的 GitHub 账户
+2. 阅读 [贡献指南](CONTRIBUTING.md) 了解开发规范
+3. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+4. 提交更改 (`git commit -m 'feat: 添加某个功能'`)
+5. 推送到分支 (`git push origin feature/amazing-feature`)
+6. 创建 Pull Request
+
+### 贡献方式
+
+- 🐛 **报告 Bug**: 通过 GitHub Issues 报告问题
+- 💡 **功能建议**: 提出新功能或改进建议
+- 📝 **改进文档**: 完善项目文档
+- 🔧 **代码贡献**: 修复 Bug 或实现新功能
+- 🤖 **AI 提供商**: 添加新的 AI 提供商支持
+
+### 开发环境设置
+
+参考 [贡献指南 - 开发环境设置](CONTRIBUTING.md#开发环境设置) 了解如何搭建开发环境。
 
 ## 许可证
 
