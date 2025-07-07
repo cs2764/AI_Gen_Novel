@@ -50,6 +50,12 @@ LLM 在转换和审阅上表现较好，而在计划阶段存在缺陷。本项�
 - **配置验证**: 自动验证 API 配置的有效性
 - **错误处理**: 优雅的错误处理和用户提示
 
+### 6. 自定义默认想法配置 ✨
+- **个性化设置**: 支持自定义默认想法、写作要求和润色要求
+- **持久化存储**: 配置自动保存到本地文件，不上传到 GitHub
+- **动态加载**: 页面刷新后自动加载用户自定义的默认值
+- **便捷管理**: 在设置界面中可视化管理自定义配置
+
 ## 技术特色
 
 ### 多智能体协作
@@ -99,11 +105,17 @@ pip install -r requirements.txt
 
 ### 3. 开始创作
 
-1. 在"想法"框中输入您的小说创意
-2. 点击"生成大纲"
-3. 根据需要调整大纲和设置
-4. 点击"生成开头"开始创作
-5. 使用"自动生成"功能批量生成多个章节
+1. **设置默认想法** (可选):
+   - 在"⚙️ 配置设置"中打开"📝 默认想法配置"标签
+   - 设置您的默认想法、写作要求和润色要求
+   - 启用自定义默认想法功能
+
+2. **开始创作**:
+   - 在"想法"框中输入您的小说创意 (如已设置默认想法会自动填充)
+   - 点击"生成大纲"
+   - 根据需要调整大纲和设置
+   - 点击"生成开头"开始创作
+   - 使用"自动生成"功能批量生成多个章节
 
 🎯 **了解更多功能**: [查看功能详情](FEATURES.md)
 
@@ -142,6 +154,8 @@ AI_Gen_Novel/
 ├── config_manager.py         # 静态配置管理
 ├── dynamic_config_manager.py # 动态配置管理
 ├── web_config_interface.py   # Web 配置界面
+├── default_ideas_manager.py  # 默认想法管理器
+├── model_fetcher.py          # 模型获取器
 ├── uniai/                    # AI 提供商接口
 │   ├── deepseekAI.py
 │   ├── openrouterAI.py
@@ -155,7 +169,14 @@ AI_Gen_Novel/
 
 ## 版本历史
 
-### v2.0.0 (当前版本)
+### v2.1.0 (当前版本)
+- 🎯 **自定义默认想法配置**: 支持个性化设置默认想法、写作要求和润色要求
+- 🔧 **Web配置界面增强**: 新增默认想法配置标签页，支持可视化管理
+- 🔄 **动态配置加载**: 页面刷新后自动加载用户自定义的默认值
+- 📁 **配置文件管理**: 用户配置文件自动忽略，不上传到 GitHub
+- 🐛 **修复页面刷新问题**: 解决页面刷新后设置不显示的问题
+
+### v2.0.0
 - 完全重构的配置管理系统
 - 统一的系统提示词处理机制
 - 新增多个 AI 提供商支持
@@ -241,3 +262,13 @@ AI_Gen_Novel/
 ---
 
 **注意**: 本项目仅用于研究和学习目的，生成的内容仅供参考。请遵守相关法律法规，合理使用 AI 技术。
+
+## Star History
+
+<a href="https://www.star-history.com/#cs2764/AI_Gen_Novel&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=cs2764/AI_Gen_Novel&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=cs2764/AI_Gen_Novel&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=cs2764/AI_Gen_Novel&type=Date" />
+ </picture>
+</a>

@@ -170,6 +170,11 @@ class AIGN:
         # 日志系统
         self.log_buffer = []
         self.max_log_entries = 100
+        
+        # 进度同步
+        self.progress_message = ""
+        self.time_message = ""
+        self.last_update_time = 0
 
         self.novel_outline_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
@@ -225,6 +230,36 @@ class AIGN:
         self.memory_maker.chatLLM = new_chatllm
         self.title_generator.chatLLM = new_chatllm
         self.ending_writer.chatLLM = new_chatllm
+    
+    def _refresh_chatllm_for_auto_generation(self):
+        """为自动生成刷新ChatLLM实例，确保使用当前配置的提供商"""
+        try:
+            from config_manager import get_chatllm
+            from dynamic_config_manager import get_config_manager
+            
+            # 获取当前配置的ChatLLM实例
+            print("🔄 正在刷新ChatLLM实例以使用当前配置的提供商...")
+            config_manager = get_config_manager()
+            current_provider = config_manager.get_current_provider()
+            current_config = config_manager.get_current_config()
+            
+            if current_config and current_config.api_key:
+                print(f"✅ 使用提供商: {current_provider.upper()}")
+                print(f"🤖 使用模型: {current_config.model_name}")
+                
+                # 获取新的ChatLLM实例
+                new_chatllm = get_chatllm(allow_incomplete=False)
+                
+                # 更新所有Agent的ChatLLM
+                self.update_chatllm(new_chatllm)
+                
+                print("✅ ChatLLM实例已更新，自动生成将使用当前配置的提供商")
+            else:
+                print("⚠️  当前配置无效，将继续使用原有ChatLLM实例")
+                
+        except Exception as e:
+            print(f"⚠️  刷新ChatLLM失败: {e}")
+            print("🔄 将继续使用原有ChatLLM实例进行自动生成")
 
     def updateNovelContent(self):
         self.novel_content = ""
@@ -511,6 +546,9 @@ class AIGN:
                 start_time = time.time()
                 print(f"🚀 开始自动生成小说，目标章节数: {self.target_chapter_count}")
                 
+                # 在自动生成开始时，更新ChatLLM实例以使用当前配置的提供商
+                self._refresh_chatllm_for_auto_generation()
+                
                 # 检查是否需要先生成开头
                 has_beginning = len(self.paragraph_list) > 0 or len(self.novel_content.strip()) > 0
                 
@@ -532,6 +570,11 @@ class AIGN:
                 
                 while self.chapter_count < self.target_chapter_count and self.auto_generation_running:
                     chapter_start_time = time.time()
+                    
+                    # 每隔几章检查一次ChatLLM配置是否有变化
+                    if self.chapter_count % 5 == 0 and self.chapter_count > 0:
+                        print("🔄 检查配置更新...")
+                        self._refresh_chatllm_for_auto_generation()
                     
                     # 计算进度
                     progress = (self.chapter_count / self.target_chapter_count) * 100
@@ -564,7 +607,10 @@ class AIGN:
                     except Exception as e:
                         error_msg = f"❌ 生成第{self.chapter_count + 1}章时出错: {e}"
                         print(error_msg)
-                        self._sync_to_webui(error_msg)
+                        # 如果出错，尝试刷新ChatLLM后重试
+                        print("🔄 尝试刷新ChatLLM配置后重试...")
+                        self._refresh_chatllm_for_auto_generation()
+                        self._sync_to_webui(error_msg + " (已尝试刷新配置)")
                         time.sleep(5)  # 出错后等待5秒再继续
                         continue
                 
@@ -573,6 +619,8 @@ class AIGN:
                     completion_msg = f"🎉 自动生成完成！共生成 {self.chapter_count} 章，总耗时: {total_time/60:.1f} 分钟"
                     print(completion_msg)
                     self._sync_to_webui(completion_msg)
+                    # 确保最后一章内容被保存
+                    self.saveToFile()
                 else:
                     stop_msg = f"⏹️  自动生成已停止，当前进度: {self.chapter_count}/{self.target_chapter_count}"
                     print(stop_msg)
@@ -592,12 +640,16 @@ class AIGN:
         return auto_thread
     
     def _update_progress_status(self, progress_msg, time_msg):
-        """更新进度状态到WebUI（留空，由app.py实现具体同步逻辑）"""
-        pass
+        """更新进度状态到WebUI"""
+        self.progress_message = progress_msg
+        self.time_message = time_msg
+        self.log_message(f"进度: {progress_msg}, 时间: {time_msg}")
     
     def _sync_to_webui(self, message):
-        """同步消息到WebUI（留空，由app.py实现具体同步逻辑）"""
-        pass
+        """同步消息到WebUI"""
+        self.log_message(message)
+        # 强制刷新状态
+        self.last_update_time = time.time()
     
     def log_message(self, message):
         """添加日志消息到缓冲区"""

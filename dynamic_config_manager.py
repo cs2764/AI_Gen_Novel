@@ -87,9 +87,11 @@ class DynamicConfigManager:
                 model_name="openai/gpt-4",
                 base_url="https://openrouter.ai/api/v1",
                 models=[
-                    "openai/gpt-4", "openai/gpt-3.5-turbo",
-                    "anthropic/claude-3-opus", "anthropic/claude-3-sonnet",
-                    "google/gemini-pro", "meta-llama/llama-2-70b-chat"
+                    "openai/gpt-4", "openai/gpt-4-turbo", "openai/gpt-3.5-turbo",
+                    "deepseek/deepseek-chat", "deepseek/deepseek-coder",
+                    "google/gemini-pro", "google/gemini-1.5-pro", "google/gemini-2.0-flash-exp",
+                    "qwen/qwen-2.5-72b-instruct", "qwen/qwen-2-72b-instruct",
+                    "grok/grok-beta", "x-ai/grok-beta"
                 ]
             ),
             "claude": ProviderConfig(
@@ -133,21 +135,24 @@ class DynamicConfigManager:
                     try:
                         print(f"🔧 使用ModelFetcher获取 {provider_name} 的模型列表")
                         # 在锁外执行网络请求，避免阻塞其他操作
-                        fresh_models = ModelFetcher.fetch_models(
+                        fetcher = ModelFetcher()
+                        fresh_models = fetcher.fetch_models(
                             provider_name, 
                             config.api_key, 
-                            config.base_url
+                            base_url=config.base_url
                         )
-                        print(f"📥 ModelFetcher返回 {len(fresh_models)} 个模型: {fresh_models}")
+                        print(f"📥 ModelFetcher返回 {len(fresh_models)} 个模型")
                         
                         if fresh_models:
+                            # 提取模型ID列表
+                            model_ids = [model.id for model in fresh_models]
                             # 只在更新配置时使用锁
                             with self._config_lock:
-                                self._providers[provider_name].models = fresh_models
+                                self._providers[provider_name].models = model_ids
                                 print(f"💾 更新 {provider_name} 配置中的模型列表")
                             # 保存更新后的配置
                             self.save_config_to_file()
-                            result = fresh_models.copy()
+                            result = model_ids.copy()
                         else:
                             print(f"⚠️ ModelFetcher返回空列表，保持原有模型列表")
                             result = config.models.copy()

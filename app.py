@@ -105,6 +105,7 @@ try:
     from config_manager import get_chatllm, update_aign_settings
     from web_config_interface import get_web_config_interface
     from dynamic_config_manager import get_config_manager
+    from default_ideas_manager import get_default_ideas_manager
     
     # Get chatLLM with incomplete config support
     chatLLM = get_chatllm(allow_incomplete=True)
@@ -156,6 +157,10 @@ def make_middle_chat():
             # 动态获取当前配置的ChatLLM实例，确保使用最新的提供商配置
             current_chatllm = get_chatllm(allow_incomplete=True)
             
+            # 初始化变量，防止引用错误
+            output_text = ""
+            total_tokens = 0
+            
             for resp in current_chatllm(
                 messages, temperature=temperature, top_p=top_p, stream=True
             ):
@@ -163,13 +168,23 @@ def make_middle_chat():
                 total_tokens = resp["total_tokens"]
 
                 carrier.history[-1]["content"] = f"total_tokens: {total_tokens}\n{output_text}"
+            
+            # 如果没有收到任何响应，设置默认值
+            if not output_text:
+                output_text = "未收到AI响应，请检查配置"
+                carrier.history[-1]["content"] = f"total_tokens: {total_tokens}\n{output_text}"
+                
             return {
                 "content": output_text,
                 "total_tokens": total_tokens,
             }
         except Exception as e:
-            carrier.history[-1]["content"] = f"Error: {e}"
-            raise e
+            error_msg = f"ChatLLM调用失败: {e}"
+            carrier.history[-1]["content"] = f"Error: {error_msg}"
+            return {
+                "content": error_msg,
+                "total_tokens": 0,
+            }
 
     return carrier, middle_chat
 
@@ -369,12 +384,14 @@ def reload_chatllm(aign_instance=None):
         # 更新AIGN实例的ChatLLM（如果提供）
         if aign_instance and hasattr(aign_instance, 'update_chatllm'):
             aign_instance.update_chatllm(chatLLM)
+            print("🔄 AIGN实例的ChatLLM已更新")
         
         # 重新检查配置有效性
         global config_is_valid
         config_is_valid = check_config_valid()
         
-        return f"✅ ChatLLM实例已更新，配置状态: {'有效' if config_is_valid else '无效'}"
+        current_provider = config_manager.get_current_provider()
+        return f"✅ ChatLLM实例已更新，当前提供商: {current_provider.upper()}，配置状态: {'有效' if config_is_valid else '无效'}"
     except Exception as e:
         return f"❌ ChatLLM更新失败: {str(e)}"
 
@@ -411,6 +428,30 @@ with gr.Blocks(css=css) as demo:
     
     aign = gr.State(aign_instance)
     
+    def get_current_default_values():
+        """动态获取当前的默认想法配置"""
+        try:
+            default_ideas_manager = get_default_ideas_manager()
+            # 重新加载配置以确保获取最新值
+            default_ideas_manager.config_data = default_ideas_manager._load_config()
+            return default_ideas_manager.get_default_values()
+        except Exception as e:
+            print(f"⚠️  获取默认想法配置失败: {e}")
+            return {"user_idea": "", "user_requirements": "", "embellishment_idea": ""}
+    
+    def update_default_ideas_on_load():
+        """页面加载时更新默认想法文本框"""
+        try:
+            current_defaults = get_current_default_values()
+            default_user_idea = current_defaults.get("user_idea") or "主角独自一人在异世界冒险，它爆种时会大喊一句：原神，启动！！！"
+            user_requirements = current_defaults.get("user_requirements", "")
+            embellishment_idea = current_defaults.get("embellishment_idea", "")
+            
+            return default_user_idea, user_requirements, embellishment_idea
+        except Exception as e:
+            print(f"⚠️  更新默认想法失败: {e}")
+            return "主角独自一人在异世界冒险，它爆种时会大喊一句：原神，启动！！！", "", ""
+    
     # 显示标题和版本信息
     gr.Markdown(f"## AI 网络小说生成器 - 增强版 v{get_version()}")
     gr.Markdown("*基于 Claude Code 开发的智能小说创作工具*")
@@ -438,20 +479,23 @@ with gr.Blocks(css=css) as demo:
             with gr.Tab("📝 开始"):
                 if config_is_valid:
                     gr.Markdown("生成大纲->大纲标签->生成开头->状态标签->生成下一段")
+                    # 动态获取当前的默认想法配置
+                    current_defaults = get_current_default_values()
+                    default_user_idea = current_defaults.get("user_idea") or "主角独自一人在异世界冒险，它爆种时会大喊一句：原神，启动！！！"
                     user_idea_text = gr.Textbox(
-                        "主角独自一人在异世界冒险，它爆种时会大喊一句：原神，启动！！！",
+                        default_user_idea,
                         label="想法",
                         lines=4,
                         interactive=True,
                     )
                     user_requriments_text = gr.Textbox(
-                        "",
+                        current_defaults.get("user_requirements", ""),
                         label="写作要求",
                         lines=4,
                         interactive=True,
                     )
                     embellishment_idea_text = gr.Textbox(
-                        "",
+                        current_defaults.get("embellishment_idea", ""),
                         label="润色要求",
                         lines=4,
                         interactive=True,
@@ -603,11 +647,54 @@ with gr.Blocks(css=css) as demo:
             outputs=[config_components['status_output']]
         )
     
-    # 定时更新进度 - 移除不兼容的every参数
+    # 添加配置界面的自动刷新机制
+    def refresh_config_interface():
+        """刷新配置界面的默认想法部分"""
+        try:
+            web_config = get_web_config_interface()
+            return web_config.refresh_default_ideas_interface()
+        except Exception as e:
+            print(f"⚠️  刷新配置界面失败: {e}")
+            return False, "", "", "", f"❌ 刷新失败: {str(e)}"
+    
+    # 页面加载时的更新事件 - 主界面
+    def on_page_load_main(aign_instance):
+        """页面加载时的主界面更新函数"""
+        # 更新进度信息
+        progress_info = update_progress(aign_instance)
+        # 更新主界面默认想法
+        default_ideas_info = update_default_ideas_on_load()
+        
+        # 确保类型一致：将tuple转换为list后合并
+        return progress_info + list(default_ideas_info)
+    
+    # 定时更新进度和主界面默认想法
     demo.load(
-        update_progress,
+        on_page_load_main,
         [aign],
-        [progress_text, output_file_text, novel_content_text]
+        [progress_text, output_file_text, novel_content_text, user_idea_text, user_requriments_text, embellishment_idea_text]
+    )
+    
+    # 配置界面的自动刷新（如果存在）
+    if 'ideas_enabled_checkbox' in config_components:
+        demo.load(
+            fn=refresh_config_interface,
+            outputs=[
+                config_components['ideas_enabled_checkbox'],
+                config_components['ideas_user_idea_input'],
+                config_components['ideas_user_requirements_input'],
+                config_components['ideas_embellishment_input'],
+                config_components['default_ideas_info']
+            ]
+        )
+    
+    # 添加定时刷新功能
+    import gradio as gr
+    timer = gr.Timer(value=2.0)  # 每2秒刷新一次
+    timer.tick(
+        fn=update_progress,
+        inputs=[aign],
+        outputs=[progress_text, output_file_text, novel_content_text]
     )
 
 
