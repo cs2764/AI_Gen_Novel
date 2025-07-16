@@ -37,6 +37,8 @@ LLM 在转换和审阅上表现较好，而在计划阶段存在缺陷。本项�
 - **LM Studio**: 本地模型支持
 - **智谱 AI**: 国产大模型
 - **阿里云**: 通义千问系列
+- **Fireworks AI**: 高性能推理平台
+- **Lambda Labs**: GPU 云服务平台
 
 ### 4. 自动化生成功能
 - **批量生成**: 支持自动生成指定章节数的小说
@@ -55,6 +57,15 @@ LLM 在转换和审阅上表现较好，而在计划阶段存在缺陷。本项�
 - **持久化存储**: 配置自动保存到本地文件，不上传到 GitHub
 - **动态加载**: 页面刷新后自动加载用户自定义的默认值
 - **便捷管理**: 在设置界面中可视化管理自定义配置
+
+### 7. 智能化文章生成流程 🎯
+- **多阶段生成**: 从创意到完整小说的结构化生成流程
+- **智能体协作**: 专业化的AI智能体负责不同创作任务
+- **增强故事线**: 支持OpenRouter的Structured Outputs和Tool Calling
+- **章节管理**: 自动化的章节规划和内容生成
+- **记忆管理**: 三层记忆架构确保故事连贯性
+
+📖 **详细流程说明**: [查看AI小说生成器文章生成流程详解](AI_NOVEL_GENERATION_PROCESS.md)
 
 ## 技术特色
 
@@ -143,6 +154,8 @@ pip install -r requirements.txt
 | LM Studio | 本地模型 | 隐私保护 | [查看配置](README_Provider_Config.md#lm-studio-配置) |
 | 智谱 AI | glm-4 | 国产模型 | [查看配置](README_Provider_Config.md#智谱-ai-配置) |
 | 阿里云 | qwen-long | 长文本处理 | [查看配置](README_Provider_Config.md#阿里云配置) |
+| Fireworks AI | llama-v3.1-405b | 高性能推理 | [查看配置](README_Provider_Config.md#fireworks-ai-配置) |
+| Lambda Labs | 多种模型 | GPU云服务 | [查看配置](README_Provider_Config.md#lambda-labs-配置) |
 
 ## 系统架构
 
@@ -163,7 +176,10 @@ AI_Gen_Novel/
 │   ├── geminiAI.py
 │   ├── lmstudioAI.py
 │   ├── zhipuAI.py
-│   └── aliAI.py
+│   ├── aliAI.py
+│   ├── fireworksAI.py
+│   ├── lambdaAI.py
+│   └── grokAI.py
 └── README_*.md               # 详细文档
 ```
 
@@ -187,6 +203,31 @@ AI_Gen_Novel/
 - 基础的 AI 小说生成功能
 - 多智能体协作框架
 - 基于 RecurrentGPT 的循环生成
+
+## 开发计划 🚧
+
+### 近期计划 (v2.3.0)
+1. **Gradio兼容性优化**
+   - 解决Gradio版本与质谱的兼容性问题
+   - 升级到最新版本的Gradio
+   - 优化界面响应速度和稳定性
+
+2. **提示词系统优化**
+   - 优化正文生成提示词结构
+   - 减少输入提示词的数量和复杂度
+   - 提升生成效率和质量
+
+### 中期计划 (v2.4.0)
+- 多语言支持
+- 题材模板库
+- 角色关系图谱
+- 情节分析工具
+
+### 长期计划 (v3.0.0)
+- 多模态输入支持（图像、音频）
+- 实时协作编辑
+- 云端同步功能
+- 移动端适配
 
 ## 开发者资源 👨‍💻
 
