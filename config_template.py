@@ -6,7 +6,7 @@
 # ===========================================
 
 # 当前使用的AI提供商 (请选择一个)
-# 可选值: "deepseek", "ali", "zhipu", "lmstudio", "gemini", "openrouter", "claude"
+# 可选值: "deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda"
 CURRENT_PROVIDER = "deepseek"
 
 # ===========================================
@@ -30,14 +30,14 @@ ALI_CONFIG = {
 }
 
 # ===========================================
-# 智谱AI配置
+# 智谱AI配置 - 暂时禁用
 # ===========================================
-ZHIPU_CONFIG = {
-    "api_key": "your-zhipu-api-key-here",     # 请替换为您的智谱AI API密钥
-    "model_name": "glm-4",                    # 模型名称: glm-4, glm-3-turbo
-    "base_url": None,                         # 使用默认地址
-    "system_prompt": ""                       # 系统提示词(可选)
-}
+# ZHIPU_CONFIG = {
+#     "api_key": "your-zhipu-api-key-here",     # 请替换为您的智谱AI API密钥
+#     "model_name": "glm-4",                    # 模型名称: glm-4, glm-3-turbo
+#     "base_url": None,                         # 使用默认地址
+#     "system_prompt": ""                       # 系统提示词(可选)
+# }
 
 # ===========================================
 # LM Studio 本地配置
@@ -77,6 +77,36 @@ CLAUDE_CONFIG = {
     "model_name": "claude-3-sonnet-20240229", # 模型名称: claude-3-opus-20240229, claude-3-sonnet-20240229等
     "base_url": "https://api.anthropic.com",  # Anthropic API地址
     "system_prompt": ""                       # 系统提示词(可选)
+}
+
+# ===========================================
+# xAI Grok 配置
+# ===========================================
+GROK_CONFIG = {
+    "api_key": "your-grok-api-key-here",      # 请替换为您的xAI API密钥
+    "model_name": "grok-3-mini",              # 模型名称: grok-3-mini, grok-beta, grok-vision-beta
+    "base_url": "https://api.x.ai/v1",        # xAI API地址
+    "system_prompt": ""                       # 系统提示词(可选)
+}
+
+# ===========================================
+# Fireworks AI 配置
+# ===========================================
+FIREWORKS_CONFIG = {
+    "api_key": "your-fireworks-api-key-here",  # 请替换为您的Fireworks AI API密钥
+    "model_name": "accounts/fireworks/models/deepseek-v3-0324",  # 模型名称，支持自定义
+    "base_url": "https://api.fireworks.ai/inference/v1",  # Fireworks API地址
+    "system_prompt": ""                        # 系统提示词(可选)
+}
+
+# ===========================================
+# Lambda AI 配置
+# ===========================================
+LAMBDA_CONFIG = {
+    "api_key": "your-lambda-api-key-here",     # 请替换为您的Lambda API密钥
+    "model_name": "llama-4-maverick-17b-128e-instruct-fp8",  # 模型名称
+    "base_url": "https://api.lambda.ai/v1",    # Lambda API地址
+    "system_prompt": ""                        # 系统提示词(可选)
 }
 
 # ===========================================
@@ -135,11 +165,14 @@ NETWORK_SETTINGS = {
 API密钥获取方式:
 - DeepSeek: https://platform.deepseek.com/
 - 阿里云: https://dashscope.console.aliyun.com/
-- 智谱AI: https://open.bigmodel.cn/
+# - 智谱AI: https://open.bigmodel.cn/ (暂时禁用)
 - LM Studio: 本地部署，无需真实密钥
 - Google Gemini: https://makersuite.google.com/app/apikey
 - OpenRouter: https://openrouter.ai/keys
 - Anthropic Claude: https://console.anthropic.com/
+- xAI Grok: https://console.x.ai/
+- Fireworks AI: https://fireworks.ai/account/api-keys
+- Lambda AI: https://lambda.ai/inference
 
 注意事项:
 - 请勿将 config.py 上传到公开的代码仓库

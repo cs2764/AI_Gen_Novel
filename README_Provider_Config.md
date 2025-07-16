@@ -26,7 +26,7 @@ AI 网络小说生成器支持两种配置方式：
 
 ## 支持的提供商
 
-目前支持以下 7 个 AI 提供商：
+目前支持以下 8 个 AI 提供商：
 
 | 提供商 | 模型示例 | 特点 | 中文支持 |
 |--------|----------|------|----------|
@@ -37,6 +37,7 @@ AI 网络小说生成器支持两种配置方式：
 | **LM Studio** | local-model | 本地部署，隐私保护 | ⭐⭐ |
 | **智谱 AI** | glm-4 | 国产大模型 | ⭐⭐⭐ |
 | **阿里云** | qwen-long | 长文本模型 | ⭐⭐⭐ |
+| **Lambda** | llama-4-maverick-17b-128e-instruct-fp8 | 成本低，多模型选择 | ⭐⭐ |
 
 ## 配置方式
 
@@ -223,6 +224,38 @@ ALI_CONFIG = {
 1. 访问 [阿里云模型服务](https://dashscope.aliyun.com/)
 2. 登录阿里云账号
 3. 在 API-KEY 管理页面创建密钥
+
+### Lambda 配置
+
+```python
+LAMBDA_CONFIG = {
+    "api_key": "your-lambda-api-key",           # 必填：Lambda API 密钥
+    "model_name": "llama-4-maverick-17b-128e-instruct-fp8",  # 推荐模型
+    "base_url": "https://api.lambda.ai/v1",     # 默认：Lambda API 地址
+    "system_prompt": ""                         # 可选：自定义系统提示词
+}
+```
+
+**推荐模型：**
+- `llama-4-maverick-17b-128e-instruct-fp8` - Llama 4 Maverick（推荐）
+- `llama-4-scout-17b-16e-instruct` - Llama 4 Scout
+- `deepseek-r1-0528` - DeepSeek R1
+- `deepseek-v3-0324` - DeepSeek V3
+- `llama3.1-70b-instruct-fp8` - Llama 3.1 70B
+- `llama3.1-405b-instruct-fp8` - Llama 3.1 405B（最强大）
+- `qwen3-32b-fp8` - Qwen3 32B
+
+**获取方式：**
+1. 访问 [Lambda 官网](https://lambda.ai/inference)
+2. 注册账号并完成身份验证
+3. 在 API Keys 页面创建新的 API 密钥
+
+**特点：**
+- 价格低廉，性价比极高
+- 多种高质量模型选择
+- 无速率限制
+- 支持长上下文处理
+- 开箱即用的 OpenAI 兼容 API
 
 ## 高级配置
 

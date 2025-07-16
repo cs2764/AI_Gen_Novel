@@ -11,8 +11,20 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import logging
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+# 配置日志 - 动态从配置文件读取级别
+def _get_logging_level():
+    """从配置文件读取日志级别"""
+    try:
+        from dynamic_config_manager import get_config_manager
+        config_manager = get_config_manager()
+        debug_level = config_manager.get_debug_level()
+        # 将调试级别映射到logging级别
+        level_map = {'0': logging.WARNING, '1': logging.INFO, '2': logging.DEBUG}
+        return level_map.get(debug_level, logging.INFO)
+    except Exception:
+        return logging.INFO
+
+logging.basicConfig(level=_get_logging_level())
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -57,14 +69,16 @@ class ModelFetcher:
                 return self._fetch_deepseek_models(api_key, **kwargs)
             elif provider == 'ali':
                 return self._fetch_ali_models(api_key, **kwargs)
-            elif provider == 'zhipu':
-                return self._fetch_zhipu_models(api_key, **kwargs)
+            # elif provider == 'zhipu':
+            #     return self._fetch_zhipu_models(api_key, **kwargs)
             elif provider == 'gemini':
                 return self._fetch_gemini_models(api_key, **kwargs)
             elif provider == 'openrouter':
                 return self._fetch_openrouter_models(api_key, **kwargs)
             elif provider == 'lmstudio':
                 return self._fetch_lmstudio_models(api_key, **kwargs)
+            elif provider == 'fireworks':
+                return self._fetch_fireworks_models(api_key, **kwargs)
             else:
                 logger.warning(f"不支持的提供商: {provider}")
                 return []
@@ -171,24 +185,24 @@ class ModelFetcher:
         
         return models
     
-    def _fetch_zhipu_models(self, api_key: str, base_url: str = "https://open.bigmodel.cn/api/paas/v4") -> List[ModelInfo]:
-        """获取智谱AI模型列表"""
-        # 智谱AI API没有提供模型列表接口，返回已知的模型列表
-        known_models = [
-            "glm-4", "glm-4-0520", "glm-4-air", "glm-4-airx", 
-            "glm-4-flash", "glm-3-turbo", "CharacterGLM-3", "CogView-3"
-        ]
-        
-        models = []
-        for model_id in known_models:
-            models.append(ModelInfo(
-                id=model_id,
-                name=model_id,
-                provider='zhipu',
-                owned_by='zhipuai'
-            ))
-        
-        return models
+    # def _fetch_zhipu_models(self, api_key: str, base_url: str = "https://open.bigmodel.cn/api/paas/v4") -> List[ModelInfo]:
+    #     """获取智谱AI模型列表"""
+    #     # 智谱AI API没有提供模型列表接口，返回已知的模型列表
+    #     known_models = [
+    #         "glm-4", "glm-4-0520", "glm-4-air", "glm-4-airx", 
+    #         "glm-4-flash", "glm-3-turbo", "CharacterGLM-3", "CogView-3"
+    #     ]
+    #     
+    #     models = []
+    #     for model_id in known_models:
+    #         models.append(ModelInfo(
+    #             id=model_id,
+    #             name=model_id,
+    #             provider='zhipu',
+    #             owned_by='zhipuai'
+    #         ))
+    #     
+    #     return models
     
     def _fetch_gemini_models(self, api_key: str, base_url: str = "https://generativelanguage.googleapis.com/v1beta") -> List[ModelInfo]:
         """获取Google Gemini模型列表"""
@@ -338,6 +352,33 @@ class ModelFetcher:
                 provider='lmstudio',
                 description='LM Studio模型获取失败'
             )]
+    
+    def _fetch_fireworks_models(self, api_key: str, base_url: str = "https://api.fireworks.ai/inference/v1") -> List[ModelInfo]:
+        """获取Fireworks AI模型列表 - 返回预设模型列表（Fireworks不提供公开的模型列表API）"""
+        # Fireworks AI 不提供公开的模型列表API，返回常用的预设模型
+        known_models = [
+            "accounts/fireworks/models/deepseek-v3-0324",
+            "accounts/fireworks/models/llama-v3p1-405b-instruct", 
+            "accounts/fireworks/models/llama-v3p1-70b-instruct",
+            "accounts/fireworks/models/llama-v3p1-8b-instruct",
+            "accounts/fireworks/models/mixtral-8x7b-instruct",
+            "accounts/fireworks/models/mixtral-8x22b-instruct",
+            "accounts/fireworks/models/qwen2p5-72b-instruct",
+            "accounts/fireworks/models/gemma2-9b-it",
+            "accounts/fireworks/models/phi-3-vision-128k-instruct"
+        ]
+        
+        models = []
+        for model_id in known_models:
+            models.append(ModelInfo(
+                id=model_id,
+                name=model_id.split('/')[-1] if '/' in model_id else model_id,  # 提取模型名称
+                provider='fireworks',
+                owned_by='fireworks',
+                description='Fireworks AI模型'
+            ))
+        
+        return models
     
     def get_all_models(self, provider_configs: Dict[str, Dict[str, Any]]) -> Dict[str, List[ModelInfo]]:
         """

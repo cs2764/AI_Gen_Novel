@@ -26,10 +26,13 @@ class ProviderConfig:
     base_url: Optional[str] = None
     models: List[str] = None
     system_prompt: str = ""
+    provider_routing: Optional[Dict[str, Any]] = None  # OpenRouter provider routing配置
     
     def __post_init__(self):
         if self.models is None:
             self.models = []
+        if self.provider_routing is None:
+            self.provider_routing = {}
 
 class DynamicConfigManager:
     """动态配置管理器"""
@@ -38,6 +41,8 @@ class DynamicConfigManager:
         self._config_lock = threading.RLock()  # 使用RLock支持重入
         self._current_provider = "deepseek"
         self._providers = {}
+        self._debug_level = "1"  # 默认调试级别
+        self._json_auto_repair = True  # 默认开启JSON自动修复
         self._load_default_configs()
         # 尝试从文件加载配置
         self.load_config_from_file()
@@ -60,13 +65,13 @@ class DynamicConfigManager:
                 base_url=None,
                 models=["qwen-long", "qwen-plus", "qwen-turbo", "qwen-max"]
             ),
-            "zhipu": ProviderConfig(
-                name="zhipu",
-                api_key="your-zhipu-api-key-here",
-                model_name="glm-4",
-                base_url=None,
-                models=["glm-4", "glm-3-turbo", "glm-4-flash"]
-            ),
+            # "zhipu": ProviderConfig(
+            #     name="zhipu",
+            #     api_key="your-zhipu-api-key-here",
+            #     model_name="glm-4",
+            #     base_url=None,
+            #     models=["glm-4", "glm-3-turbo", "glm-4-flash"]
+            # ),
             "lmstudio": ProviderConfig(
                 name="lmstudio",
                 api_key="lm-studio",
@@ -92,7 +97,12 @@ class DynamicConfigManager:
                     "google/gemini-pro", "google/gemini-1.5-pro", "google/gemini-2.0-flash-exp",
                     "qwen/qwen-2.5-72b-instruct", "qwen/qwen-2-72b-instruct",
                     "grok/grok-beta", "x-ai/grok-beta"
-                ]
+                ],
+                provider_routing={
+                    "order": ["Lambda", "DeepInfra"],  # 优先使用Lambda，然后是DeepInfra
+                    "allow_fallbacks": True,  # 允许回退到其他提供商
+                    "sort": "price"  # 在同优先级内按价格排序
+                }
             ),
             "claude": ProviderConfig(
                 name="claude",
@@ -102,6 +112,49 @@ class DynamicConfigManager:
                 models=[
                     "claude-3-opus-20240229", "claude-3-sonnet-20240229", 
                     "claude-3-haiku-20240307", "claude-3-5-sonnet-20241022"
+                ]
+            ),
+            "grok": ProviderConfig(
+                name="grok",
+                api_key="your-grok-api-key-here",
+                model_name="grok-3-mini",
+                base_url="https://api.x.ai/v1",
+                models=[
+                    "grok-3-mini", "grok-beta", "grok-vision-beta"
+                ]
+            ),
+            "fireworks": ProviderConfig(
+                name="fireworks",
+                api_key="your-fireworks-api-key-here",
+                model_name="accounts/fireworks/models/deepseek-v3-0324",
+                base_url="https://api.fireworks.ai/inference/v1",
+                models=[
+                    "accounts/fireworks/models/deepseek-v3-0324",
+                    "accounts/fireworks/models/llama-v3p1-405b-instruct",
+                    "accounts/fireworks/models/llama-v3p1-70b-instruct",
+                    "accounts/fireworks/models/llama-v3p1-8b-instruct",
+                    "accounts/fireworks/models/mixtral-8x7b-instruct",
+                    "accounts/fireworks/models/mixtral-8x22b-instruct"
+                ]
+            ),
+            "lambda": ProviderConfig(
+                name="lambda",
+                api_key="your-lambda-api-key-here",
+                model_name="llama-4-maverick-17b-128e-instruct-fp8",
+                base_url="https://api.lambda.ai/v1",
+                models=[
+                    "llama-4-maverick-17b-128e-instruct-fp8",
+                    "llama-4-scout-17b-16e-instruct",
+                    "deepseek-r1-0528",
+                    "deepseek-v3-0324",
+                    "llama3.1-8b-instruct",
+                    "llama3.1-70b-instruct-fp8",
+                    "llama3.1-405b-instruct-fp8",
+                    "llama3.3-70b-instruct-fp8",
+                    "qwen3-32b-fp8",
+                    "hermes3-8b",
+                    "hermes3-70b",
+                    "hermes3-405b"
                 ]
             )
         }
@@ -222,6 +275,8 @@ class DynamicConfigManager:
             
             with self._config_lock:
                 config_data["current_provider"] = self._current_provider
+                config_data["debug_level"] = self._debug_level
+                config_data["json_auto_repair"] = self._json_auto_repair
                 config_data["providers"] = {}
                 
                 for name, provider_config in self._providers.items():
@@ -249,6 +304,10 @@ class DynamicConfigManager:
             
             with self._config_lock:
                 self._current_provider = config_data.get("current_provider", "deepseek")
+                self._debug_level = config_data.get("debug_level", "1")
+                self._json_auto_repair = config_data.get("json_auto_repair", True)
+                
+                # 不再设置环境变量，统一从配置文件读取
                 
                 # 加载提供商配置
                 for name, provider_data in config_data.get("providers", {}).items():
@@ -310,13 +369,13 @@ class DynamicConfigManager:
                 api_key=current_config.api_key,
                 system_prompt=current_config.system_prompt
             )
-        elif provider_name == "zhipu":
-            from uniai.zhipuAI import zhipuChatLLM
-            return zhipuChatLLM(
-                model_name=current_config.model_name,
-                api_key=current_config.api_key,
-                system_prompt=current_config.system_prompt
-            )
+        # elif provider_name == "zhipu":
+        #     from uniai.zhipuAI import zhipuChatLLM
+        #     return zhipuChatLLM(
+        #         model_name=current_config.model_name,
+        #         api_key=current_config.api_key,
+        #         system_prompt=current_config.system_prompt
+        #     )
         elif provider_name == "lmstudio":
             from uniai.lmstudioAI import lmstudioChatLLM
             return lmstudioChatLLM(
@@ -338,7 +397,8 @@ class DynamicConfigManager:
                 model_name=current_config.model_name,
                 api_key=current_config.api_key,
                 base_url=current_config.base_url,
-                system_prompt=current_config.system_prompt
+                system_prompt=current_config.system_prompt,
+                provider_routing=current_config.provider_routing
             )
         elif provider_name == "claude":
             from uniai.claudeAI import claudeChatLLM
@@ -347,8 +407,74 @@ class DynamicConfigManager:
                 api_key=current_config.api_key,
                 system_prompt=current_config.system_prompt
             )
+        elif provider_name == "grok":
+            from uniai.grokAI import grokChatLLM
+            return grokChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                base_url=current_config.base_url,
+                system_prompt=current_config.system_prompt
+            )
+        elif provider_name == "fireworks":
+            from uniai.fireworksAI import fireworksChatLLM
+            return fireworksChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                system_prompt=current_config.system_prompt
+            )
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
+    
+    def get_debug_level(self) -> str:
+        """获取当前调试级别"""
+        with self._config_lock:
+            return self._debug_level
+    
+    def set_debug_level(self, debug_level: str) -> bool:
+        """设置调试级别并保存到配置文件"""
+        try:
+            # 验证调试级别
+            if debug_level not in ['0', '1', '2']:
+                print(f"无效的调试级别: {debug_level}，使用默认值1")
+                debug_level = '1'
+            
+            with self._config_lock:
+                old_level = self._debug_level
+                self._debug_level = debug_level
+                
+                # 不再设置环境变量，统一从配置文件读取
+                
+                # 只在非静默模式下显示调试级别变更信息
+                if debug_level != '0':
+                    print(f"调试级别已从 {old_level} 更改为 {debug_level}")
+            
+            # 保存到配置文件
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置调试级别失败: {e}")
+            return False
+    
+    def get_json_auto_repair(self) -> bool:
+        """获取JSON自动修复开关状态"""
+        with self._config_lock:
+            return self._json_auto_repair
+    
+    def set_json_auto_repair(self, enabled: bool) -> bool:
+        """设置JSON自动修复开关并保存到配置文件"""
+        try:
+            with self._config_lock:
+                old_state = self._json_auto_repair
+                self._json_auto_repair = enabled
+                
+                print(f"JSON自动修复已{'开启' if enabled else '关闭'} (原状态: {'开启' if old_state else '关闭'})")
+            
+            # 保存到配置文件
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置JSON自动修复失败: {e}")
+            return False
 
 # 全局配置管理器实例
 _config_manager = None

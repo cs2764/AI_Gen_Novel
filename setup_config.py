@@ -42,14 +42,14 @@ def setup_provider_config():
     providers = {
         "1": "deepseek",
         "2": "ali", 
-        "3": "zhipu",
+        # "3": "zhipu",
         "4": "lmstudio"
     }
     
     print("请选择AI提供商:")
     print("1. DeepSeek")
     print("2. 阿里云通义千问")
-    print("3. 智谱AI")
+    # print("3. 智谱AI")
     print("4. LM Studio (本地)")
     
     while True:
@@ -79,8 +79,8 @@ def setup_provider_config():
         model_name = input("模型名称 (默认: deepseek-chat): ").strip() or "deepseek-chat"
     elif selected_provider == "ali":
         model_name = input("模型名称 (默认: qwen-long): ").strip() or "qwen-long"
-    elif selected_provider == "zhipu":
-        model_name = input("模型名称 (默认: glm-4): ").strip() or "glm-4"
+    # elif selected_provider == "zhipu":
+    #     model_name = input("模型名称 (默认: glm-4): ").strip() or "glm-4"
     
     return {
         "provider": selected_provider,

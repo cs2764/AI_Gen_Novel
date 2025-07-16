@@ -11,9 +11,17 @@ default_ideas.json
 # 输出文件
 output/
 
+# 虚拟环境目录
+ai_novel_env/
+venv/
+env/
+.env/
+
 # 测试文件
 test_*.py
 *_test.py
+test/
+tests/
 
 # 临时文件
 *.pyc
@@ -65,3 +73,52 @@ my_*
 *_backup.json
 *_user.json
 *_personal.json
+
+# 新增：忽略更多临时和调试文件
+*.tmp
+*.temp
+debug_*
+temp_*
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+
+# 新增：忽略安装和依赖相关文件
+*.whl
+*.tar.gz
+*.zip
+pip-selfcheck.json
+pyvenv.cfg
+
+# 新增：忽略运行时产生的文件
+*.pid
+*.sock
+*.out
+*.err
+core.*
+
+# 新增：忽略版本信息文件
+[0-9]*.[0-9]*
+[0-9]*.[0-9]*.[0-9]*
+version_info.txt
+
+# 新增：忽略中文临时文件
+手动安装命令.txt
+新功能使用说明.md
+*说明*.md
+*使用*.md
+*安装*.txt
+*命令*.txt
+
+# 新增：忽略Gradio相关文件
+.gradio/
+gradio_cached_examples/
+
+# 新增：忽略元数据和日志目录
+metadata/
+logs/
+*.log
+debug_logs/

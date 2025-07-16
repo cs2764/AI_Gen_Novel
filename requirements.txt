@@ -1,6 +1,9 @@
 dashscope
 openai
-zhipuai
-gradio
+gradio==3.50.2
 google-generativeai
 anthropic
+pydantic==1.10.12
+fastapi==0.104.1
+uvicorn==0.24.0
+ebooklib
