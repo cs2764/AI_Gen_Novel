@@ -5,8 +5,15 @@ novel_record.md
 
 # 配置文件 - 包含API密钥，不应上传到GitHub
 config.py
+config.json
 runtime_config.json
 default_ideas.json
+*.key
+*.secret
+.env
+.env.local
+.env.production
+.env.staging
 
 # 输出文件
 output/
