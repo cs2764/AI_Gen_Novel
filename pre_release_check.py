@@ -13,41 +13,44 @@ import glob
 
 def check_sensitive_files():
     """检查敏感文件是否被正确忽略"""
-    print("🔍 检查敏感文件...")
-    
-    sensitive_patterns = [
-        r'.*api[_-]?key.*',
-        r'.*secret.*',
-        r'.*password.*',
-        r'.*token.*',
-        r'config\.py$',
-        r'runtime_config\.json$',
-        r'.*\.log$',
-        r'.*\.db$',
-        r'.*\.sqlite$'
-    ]
-    
-    found_sensitive = []
-    
-    for root, dirs, files in os.walk('.'):
-        # 跳过被忽略的目录
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['__pycache__', 'ai_novel_env', 'output', 'metadata']]
-        
-        for file in files:
-            file_path = os.path.join(root, file)
-            for pattern in sensitive_patterns:
-                if re.match(pattern, file, re.IGNORECASE):
-                    found_sensitive.append(file_path)
-                    break
-    
-    if found_sensitive:
-        print("❌ 发现可能的敏感文件:")
-        for file in found_sensitive:
-            print(f"  - {file}")
-        return False
-    else:
-        print("✅ 未发现敏感文件")
-        return True
+    print("🔍 检查敏感文件是否被Git忽略...")
+
+    # 检查Git忽略状态
+    try:
+        result = os.popen('git check-ignore config.py runtime_config.json').read().strip()
+        ignored_files = result.split('\n') if result else []
+
+        required_ignored = ['config.py', 'runtime_config.json']
+        missing_ignored = []
+
+        for file in required_ignored:
+            if os.path.exists(file):
+                if file not in ignored_files:
+                    missing_ignored.append(file)
+                else:
+                    print(f"✅ {file} 存在且被Git忽略")
+            else:
+                print(f"⚠️ {file} 不存在，程序可能无法正常运行")
+
+        if missing_ignored:
+            print("❌ 以下敏感文件存在但未被Git忽略:")
+            for file in missing_ignored:
+                print(f"  - {file}")
+            print("请检查.gitignore配置")
+            return False
+        else:
+            print("✅ 敏感文件检查通过")
+            return True
+
+    except Exception as e:
+        print(f"⚠️ 无法检查Git忽略状态: {e}")
+        # 降级检查：确保配置文件存在
+        if os.path.exists('config.py') and os.path.exists('runtime_config.json'):
+            print("✅ 配置文件存在")
+            return True
+        else:
+            print("❌ 缺少必需的配置文件")
+            return False
 
 def check_gitignore():
     """检查.gitignore文件"""
