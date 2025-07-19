@@ -1648,13 +1648,57 @@ class AIGN:
         print(f"   • 人物列表：{'✅' if self.character_list else '❌'}")
         print(f"   • 故事线：{'✅' if self.storyline and self.storyline.get('chapters') else '❌'}")
         
+        # 获取第一章的故事线（用于开头生成）
+        first_chapter_storyline = self.getCurrentChapterStoryline(1)
+        storyline_for_beginning = ""
+        
+        if first_chapter_storyline:
+            # 格式化第一章故事线
+            chapter_title = first_chapter_storyline.get("title", "")
+            plot_summary = first_chapter_storyline.get("plot_summary", "")
+            key_events = first_chapter_storyline.get("key_events", [])
+            
+            storyline_for_beginning = f"第1章"
+            if chapter_title:
+                storyline_for_beginning += f"《{chapter_title}》"
+            storyline_for_beginning += f"：{plot_summary}"
+            
+            if key_events:
+                storyline_for_beginning += f"\n关键事件：{', '.join(key_events)}"
+        else:
+            storyline_for_beginning = "暂无故事线"
+        
+        print(f"📖 开头生成使用的故事线：{len(storyline_for_beginning)}字符")
+        print(f"   故事线内容预览：{storyline_for_beginning[:200]}{'...' if len(storyline_for_beginning) > 200 else ''}")
+        
+        # 详细的输入统计信息
+        print(f"📝 构建的输入内容（基础信息）:")
+        print("-" * 40)
+        print(f"📊 输入项统计:")
+        print(f"   • 用户想法: {len(self.user_idea) if self.user_idea else 0} 字符")
+        print(f"   • 小说大纲: {len(current_outline) if current_outline else 0} 字符")
+        print(f"   • 写作要求: {len(self.user_requriments) if self.user_requriments else 0} 字符")
+        print(f"   • 人物列表: {len(self.character_list) if self.character_list else 0} 字符")
+        print(f"   • 故事线: {len(storyline_for_beginning)} 字符")
+        
+        total_input_length = (
+            len(self.user_idea or "") + 
+            len(current_outline or "") + 
+            len(self.user_requriments or "") + 
+            len(self.character_list or "") + 
+            len(storyline_for_beginning)
+        )
+        print(f"📋 总输入长度: {total_input_length} 字符")
+        print(f"🏷️  智能体: NovelBeginningWriter")
+        print("-" * 40)
+
         resp = self.novel_beginning_writer.invoke(
             inputs={
                 "用户想法": self.user_idea,
                 "小说大纲": current_outline,
                 "写作要求": self.user_requriments,
                 "人物列表": self.character_list if self.character_list else "暂无人物列表",
-                "故事线": str(self.storyline) if self.storyline else "暂无故事线",
+                "故事线": storyline_for_beginning,
             },
             output_keys=["开头", "计划", "临时设定"],
         )
