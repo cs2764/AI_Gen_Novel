@@ -5,7 +5,7 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 __author__ = "Claude Code"
 __description__ = "AI 网络小说生成器 - 增强版"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
@@ -23,7 +23,10 @@ VERSION_INFO = {
         "改进的用户界面",
         "自定义默认想法配置",
         "Web配置界面增强",
-        "动态配置加载"
+        "动态配置加载",
+        "Cookies数据存储",
+        "智能存储适配器",
+        "浏览器数据持久化"
     ],
     "ai_providers": [
         "DeepSeek",

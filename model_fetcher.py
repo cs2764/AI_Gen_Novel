@@ -41,7 +41,7 @@ class ModelInfo:
 class ModelFetcher:
     """模型获取器主类"""
     
-    def __init__(self, timeout: int = 10):
+    def __init__(self, timeout: int = 300):
         self.timeout = timeout
         self.session = requests.Session()
         self.session.timeout = timeout

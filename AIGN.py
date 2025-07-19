@@ -55,6 +55,7 @@ class MarkdownAgent:
 
         self.chatLLM = chatLLM
         self.sys_prompt = sys_prompt
+        self.name = name
         self.temperature = temperature
         self.top_p = top_p
         self.use_memory = use_memory
@@ -88,6 +89,9 @@ class MarkdownAgent:
         # 构建完整的消息列表
         full_messages = self.history + [{"role": "user", "content": user_input}]
         
+        # 计算完整提示词长度
+        total_prompt_length = sum(len(msg["content"]) for msg in full_messages)
+        
         # 调试信息：显示发送给大模型的完整提示词（从配置文件和环境变量读取调试级别）
         import os
         
@@ -105,17 +109,24 @@ class MarkdownAgent:
             print("=" * 60)
             print("🔍 API调用完整调试信息")
             print("=" * 60)
+            print(f"📊 输入统计:")
+            print(f"   📤 用户输入长度: {len(user_input)} 字符")
+            print(f"   📋 完整提示词长度: {total_prompt_length} 字符")
+            print(f"   📝 历史消息数: {len(self.history)} 条")
+            print(f"   🏷️  智能体: {getattr(self, 'name', 'Unknown')}")
+            print("-" * 40)
             for i, msg in enumerate(full_messages):
                 role_emoji = "🤖" if msg["role"] == "assistant" else "👤" if msg["role"] == "user" else "⚙️"
-                print(f"{role_emoji} 消息 {i+1} [{msg['role']}]:")
-                print(f"   {msg['content']}")
+                print(f"{role_emoji} 消息 {i+1} [{msg['role']}] - {len(msg['content'])} 字符:")
+                print(f"   {msg['content'][:200]}{'...' if len(msg['content']) > 200 else ''}")
                 print("-" * 40)
             print("=" * 60)
         elif debug_level == '1':  # 基础调试模式：只显示基本信息
             print("🔍 API调用基础信息：")
-            user_msg = full_messages[-1] if full_messages and full_messages[-1]["role"] == "user" else None
-            if user_msg:
-                print(f"   📤 用户输入长度: {len(user_msg['content'])} 字符")
+            print(f"   📤 用户输入长度: {len(user_input)} 字符")
+            print(f"   📋 完整提示词长度: {total_prompt_length} 字符")
+            print(f"   📝 历史消息数: {len(self.history)} 条")
+            print(f"   🏷️  智能体: {getattr(self, 'name', 'Unknown')}")
             print("-" * 50)
         
         resp = self.chatLLM(
@@ -155,6 +166,18 @@ class MarkdownAgent:
 
             resp = final_result if final_result else {"content": "API调用失败，请检查配置", "total_tokens": 0}
         
+        # 显示API响应统计信息
+        if debug_level in ['1', '2']:
+            response_length = len(resp.get("content", ""))
+            total_tokens = resp.get("total_tokens", 0)
+            print(f"📊 API响应统计:")
+            print(f"   📤 响应内容长度: {response_length} 字符")
+            print(f"   🪙 总token消耗: {total_tokens}")
+            if total_tokens > 0 and total_prompt_length > 0:
+                # 估算token使用比例
+                print(f"   💰 token效率: {total_prompt_length}/{total_tokens} = {total_prompt_length/total_tokens:.2f} 字符/token")
+            print("-" * 50)
+        
         if self.use_memory:
             self.history.append({"role": "user", "content": user_input})
             self.history.append({"role": "assistant", "content": resp["content"]})
@@ -181,9 +204,16 @@ class MarkdownAgent:
         for key in sections.keys():
             sections[key] = "\n".join(sections[key]).strip()
 
+        # 智能解析：处理AI直接把内容放在key位置的情况
         for k in output_keys:
             if (k not in sections) or (len(sections[k]) == 0):
-                raise ValueError(f"fail to parse {k} in output:\n{output}\n\n")
+                # 尝试智能匹配：如果找不到期望的key，尝试从现有sections中匹配
+                matched_key = self._find_best_match_key(k, sections, output)
+                if matched_key:
+                    sections[k] = matched_key
+                    print(f"🔧 智能解析：将 '{matched_key}' 识别为 '{k}'")
+                else:
+                    raise ValueError(f"fail to parse {k} in output:\n{output}\n\n")
 
         # if self.is_speak:
         #     self.speak(
@@ -193,6 +223,39 @@ class MarkdownAgent:
         #         )
         #     )
         return sections
+
+    def _find_best_match_key(self, expected_key: str, sections: dict, output: str) -> str:
+        """智能匹配最合适的key内容"""
+        # 特殊处理：标题生成器的情况
+        if expected_key == "标题":
+            # 查找所有以 # 开头的行，排除 END
+            lines = output.split("\n")
+            for line in lines:
+                if line.startswith("# ") or line.startswith(" # "):
+                    key = line[2:].strip()
+                    if key and key.upper() != "END" and key != "标题":
+                        # 找到了实际的标题内容
+                        if len(key) > 0:  # 只要有内容就接受，不限制长度
+                            # 如果标题过长，截取前50个字符
+                            if len(key) > 50:
+                                print(f"⚠️ 标题过长，截取前50字符：{key[:50]}...")
+                                return key[:50]
+                            return key
+        
+        # 通用智能匹配逻辑
+        for section_key, section_content in sections.items():
+            if section_key.upper() == "END":
+                continue
+            # 如果section key看起来像是实际内容而不是标签
+            if len(section_key) > 5 and (not section_content or len(section_content.strip()) == 0):
+                # 这可能是AI直接把内容放在了key位置
+                # 如果内容过长，也截取一下
+                if len(section_key) > 100:
+                    print(f"⚠️ 内容过长，截取前100字符：{section_key[:100]}...")
+                    return section_key[:100]
+                return section_key
+        
+        return None
 
     def invoke(self, inputs: dict, output_keys: list) -> dict:
         input_content = ""
@@ -212,16 +275,31 @@ class MarkdownAgent:
         if debug_level == '2':
             print("📝 构建的输入内容（完整信息）:")
             print("-" * 40)
+            print(f"📊 输入项统计:")
+            total_input_length = 0
             for k, v in inputs.items():
                 if isinstance(v, str) and len(v) > 0:
-                    print(f"   {k}: {v}")
+                    print(f"   • {k}: {len(v)} 字符")
+                    total_input_length += len(v)
+                    if len(v) > 100:
+                        print(f"     预览: {v[:100]}...")
+                    else:
+                        print(f"     内容: {v}")
+            print(f"📋 总输入长度: {total_input_length} 字符")
+            print(f"📋 构建后长度: {len(input_content)} 字符")
             print("-" * 40)
         elif debug_level == '1':
-            print("📝 构建的输入内容（预览信息）:")
+            print("📝 构建的输入内容（基础信息）:")
             print("-" * 40)
+            print(f"📊 输入项统计:")
+            total_input_length = 0
             for k, v in inputs.items():
                 if isinstance(v, str) and len(v) > 0:
-                    print(f"   {k}: {len(v)} 字符")
+                    print(f"   • {k}: {len(v)} 字符")
+                    total_input_length += len(v)
+            print(f"📋 总输入长度: {total_input_length} 字符")
+            print(f"📋 构建后长度: {len(input_content)} 字符（包含格式化）")
+            print(f"🏷️  智能体: {getattr(self, 'name', 'Unknown')}")
             print("-" * 40)
 
         result = Retryer(self.getOutput)(input_content, output_keys)
@@ -402,6 +480,7 @@ class AIGN:
         self.enable_ending = True
         self.auto_generation_running = False
         self.current_output_file = ""
+        self.compact_mode = True  # 精简模式，默认开启
         
         # 详细大纲相关属性
         self.detailed_outline = ""
@@ -457,6 +536,8 @@ class AIGN:
             name="NovelBeginningWriter",
             temperature=0.80,
         )
+        
+        # 标准版正文生成器和润色器
         self.novel_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=novel_writer_prompt,
@@ -469,6 +550,21 @@ class AIGN:
             name="NovelEmbellisher",
             temperature=0.92,
         )
+        
+        # 精简版正文生成器和润色器
+        from AIGN_Prompt import novel_writer_compact_prompt, novel_embellisher_compact_prompt
+        self.novel_writer_compact = MarkdownAgent(
+            chatLLM=self.chatLLM,
+            sys_prompt=novel_writer_compact_prompt,
+            name="NovelWriterCompact",
+            temperature=0.81,
+        )
+        self.novel_embellisher_compact = MarkdownAgent(
+            chatLLM=self.chatLLM,
+            sys_prompt=novel_embellisher_compact_prompt,
+            name="NovelEmbellisherCompact",
+            temperature=0.92,
+        )
         self.memory_maker = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=memory_maker_prompt,
@@ -479,6 +575,15 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=title_generator_prompt,
             name="TitleGenerator",
+            temperature=0.8,
+        )
+        
+        # JSON版本的标题生成器作为备用方案
+        from AIGN_Prompt import title_generator_json_prompt
+        self.title_generator_json = JSONMarkdownAgent(
+            chatLLM=self.chatLLM,
+            sys_prompt=title_generator_json_prompt,
+            name="TitleGeneratorJSON",
             temperature=0.8,
         )
         self.ending_writer = MarkdownAgent(
@@ -519,13 +624,48 @@ class AIGN:
         # 为所有Agent设置parent_aign引用，用于流式输出跟踪
         agents = [
             self.novel_outline_writer, self.novel_beginning_writer, self.novel_writer,
-            self.novel_embellisher, self.memory_maker, self.title_generator,
-            self.ending_writer, self.storyline_generator, self.character_generator,
-            self.chapter_summary_generator, self.detailed_outline_generator
+            self.novel_embellisher, self.novel_writer_compact, self.novel_embellisher_compact,
+            self.memory_maker, self.title_generator, self.title_generator_json, self.ending_writer, 
+            self.storyline_generator, self.character_generator, self.chapter_summary_generator, 
+            self.detailed_outline_generator
         ]
         for agent in agents:
             agent.parent_aign = self
     
+    def _mark_for_browser_save(self, data_type: str, data: dict):
+        """标记数据需要保存到浏览器"""
+        import time
+        save_item = {
+            "type": data_type,
+            "data": data,
+            "timestamp": time.time(),
+            "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # 添加到保存队列
+        if not hasattr(self, 'browser_save_queue'):
+            self.browser_save_queue = []
+        
+        # 移除相同类型的旧数据
+        self.browser_save_queue = [item for item in self.browser_save_queue if item["type"] != data_type]
+        self.browser_save_queue.append(save_item)
+        
+        print(f"💾 标记保存到浏览器: {data_type}")
+    
+    def get_browser_save_queue(self):
+        """获取浏览器保存队列"""
+        if not hasattr(self, 'browser_save_queue'):
+            self.browser_save_queue = []
+        return self.browser_save_queue
+    
+    def clear_browser_save_queue(self):
+        """清空浏览器保存队列"""
+        if not hasattr(self, 'browser_save_queue'):
+            self.browser_save_queue = []
+        else:
+            self.browser_save_queue.clear()
+        print("🗑️ 浏览器保存队列已清空")
+
     def update_chatllm(self, new_chatllm):
         """更新所有agent的ChatLLM实例"""
         self.chatLLM = new_chatllm
@@ -534,8 +674,11 @@ class AIGN:
         self.novel_beginning_writer.chatLLM = new_chatllm
         self.novel_writer.chatLLM = new_chatllm
         self.novel_embellisher.chatLLM = new_chatllm
+        self.novel_writer_compact.chatLLM = new_chatllm
+        self.novel_embellisher_compact.chatLLM = new_chatllm
         self.memory_maker.chatLLM = new_chatllm
         self.title_generator.chatLLM = new_chatllm
+        self.title_generator_json.chatLLM = new_chatllm
         self.ending_writer.chatLLM = new_chatllm
         self.storyline_generator.chatLLM = new_chatllm
         self.character_generator.chatLLM = new_chatllm
@@ -603,44 +746,176 @@ class AIGN:
         
         self.log_message(f"✅ 大纲生成完成，长度：{len(self.novel_outline)}字符")
         
-        # 自动生成标题
-        self.genNovelTitle()
+        # 自动生成标题（失败时不影响流程）
+        try:
+            print("📚 开始生成小说标题...")
+            self.genNovelTitle()
+            print("✅ 标题生成流程完成")
+        except Exception as e:
+            print(f"⚠️ 标题生成过程中出现异常：{e}")
+            print("📋 使用默认标题并继续流程")
+            self.novel_title = "未命名小说"
+            self.log_message(f"⚠️ 标题生成异常，使用默认标题：{self.novel_title}")
         
-        # 自动生成人物列表
-        self.genCharacterList()
+        # 自动生成人物列表（失败时不影响流程）
+        try:
+            print("👥 开始生成人物列表...")
+            self.genCharacterList()
+            print("✅ 人物列表生成流程完成")
+        except Exception as e:
+            print(f"⚠️ 人物列表生成过程中出现异常：{e}")
+            print("📋 使用默认人物列表并继续流程")
+            self.character_list = "暂未生成人物列表"
+            self.log_message(f"⚠️ 人物列表生成异常，使用默认内容：{self.character_list}")
+        
+        # 标记需要保存大纲到浏览器
+        self._mark_for_browser_save("outline", {
+            "outline": self.novel_outline,
+            "user_idea": self.user_idea,
+            "user_requirements": self.user_requriments,
+            "embellishment_idea": self.embellishment_idea
+        })
         
         return self.novel_outline
     
-    def genNovelTitle(self):
-        """生成小说标题"""
+    def genNovelTitle(self, max_retries=2):
+        """生成小说标题，支持重试机制，失败时不影响后续流程"""
         if not self.getCurrentOutline() or not self.user_idea:
             print("❌ 缺少大纲或用户想法，无法生成标题")
-            return ""
+            self.novel_title = "未命名小说"
+            self.log_message(f"⚠️ 标题生成跳过，使用默认标题：{self.novel_title}")
+            return self.novel_title
             
         print(f"📚 正在生成小说标题...")
         print(f"📋 基于大纲和用户想法生成标题")
         
-        resp = self.title_generator.invoke(
-            inputs={
-                "用户想法": self.user_idea,
-                "写作要求": self.user_requriments,
-                "小说大纲": self.getCurrentOutline()
-            },
-            output_keys=["标题"]
-        )
-        self.novel_title = resp["标题"]
+        inputs = {
+            "用户想法": self.user_idea,
+            "写作要求": self.user_requriments,
+            "小说大纲": self.getCurrentOutline()
+        }
         
-        print(f"✅ 小说标题生成完成：《{self.novel_title}》")
-        print(f"📝 标题长度：{len(self.novel_title)}字符")
+        # 最多重试2次
+        for retry in range(max_retries + 1):
+            attempt_num = retry + 1
+            print(f"🔄 第{attempt_num}次尝试生成标题...")
+            
+            # 方法1：优先使用改进的Markdown格式
+            try:
+                print(f"🔧 方法1：使用改进的Markdown格式生成标题 (尝试{attempt_num})")
+                resp = self.title_generator.invoke(
+                    inputs=inputs,
+                    output_keys=["标题"]
+                )
+                self.novel_title = resp["标题"]
+                
+                print(f"✅ 小说标题生成完成：《{self.novel_title}》")
+                print(f"📝 标题长度：{len(self.novel_title)}字符")
+                print(f"🎯 使用方法：改进的Markdown格式 (尝试{attempt_num})")
+                
+                self.log_message(f"📚 已生成小说标题：{self.novel_title}")
+                return self.novel_title
+                
+            except Exception as e:
+                print(f"⚠️ Markdown格式生成失败 (尝试{attempt_num})：{e}")
+                
+                # 方法2：回退到JSON格式
+                try:
+                    print(f"🔧 方法2：使用JSON格式生成标题 (尝试{attempt_num})")
+                    json_result = self.title_generator_json.invokeJSON(
+                        inputs=inputs,
+                        required_keys=["title"]
+                    )
+                    
+                    self.novel_title = json_result["title"]
+                    generation_reasoning = json_result.get("reasoning", "无理由说明")
+                    
+                    print(f"✅ 小说标题生成完成：《{self.novel_title}》")
+                    print(f"📝 标题长度：{len(self.novel_title)}字符")
+                    print(f"🎯 使用方法：JSON格式 (尝试{attempt_num})")
+                    print(f"💡 创作理由：{generation_reasoning}")
+                    
+                    self.log_message(f"📚 已生成小说标题：{self.novel_title}")
+                    
+                    # 标记需要保存标题到浏览器
+                    self._mark_for_browser_save("title", {
+                        "title": self.novel_title
+                    })
+                    
+                    return self.novel_title
+                    
+                except Exception as e2:
+                    print(f"❌ JSON格式生成也失败 (尝试{attempt_num})：{e2}")
+                    
+                    # 方法3：直接使用智能解析
+                    try:
+                        print(f"🔧 方法3：使用智能解析生成标题 (尝试{attempt_num})")
+                        # 直接查询，然后使用智能解析提取标题
+                        raw_resp = self.title_generator.query(
+                            f"用户想法：{self.user_idea}\n\n"
+                            f"写作要求：{self.user_requriments}\n\n"
+                            f"小说大纲：{self.getCurrentOutline()}\n\n"
+                            f"请基于以上信息生成一个精彩的小说标题。"
+                        )
+                        
+                        raw_content = raw_resp.get("content", "")
+                        # 简单的标题提取
+                        lines = raw_content.split('\n')
+                        extracted_title = None
+                        for line in lines:
+                            line = line.strip()
+                            if line and not line.startswith('#') and len(line) > 3 and len(line) < 50:
+                                # 找到第一个合理的标题候选
+                                extracted_title = line
+                                break
+                        
+                        if extracted_title:
+                            self.novel_title = extracted_title
+                            print(f"✅ 小说标题生成完成：《{self.novel_title}》")
+                            print(f"📝 标题长度：{len(self.novel_title)}字符")
+                            print(f"🎯 使用方法：智能解析 (尝试{attempt_num})")
+                            
+                            self.log_message(f"📚 已生成小说标题：{self.novel_title}")
+                            
+                            # 标记需要保存标题到浏览器
+                            self._mark_for_browser_save("title", {
+                                "title": self.novel_title
+                            })
+                            
+                            return self.novel_title
+                        else:
+                            print(f"❌ 智能解析未找到有效标题 (尝试{attempt_num})")
+                            
+                    except Exception as e3:
+                        print(f"❌ 智能解析失败 (尝试{attempt_num})：{e3}")
+            
+            # 如果还有重试机会，等待一下再重试
+            if retry < max_retries:
+                print(f"⏳ 等待1秒后进行下一次尝试...")
+                import time
+                time.sleep(1)
         
-        self.log_message(f"📚 已生成小说标题：{self.novel_title}")
+        # 所有重试都失败，设置默认标题并继续流程
+        print(f"❌ 经过{max_retries + 1}次尝试，标题生成失败")
+        print(f"📋 使用默认标题，用户可以手动修改")
+        self.novel_title = "未命名小说"
+        self.log_message(f"⚠️ 标题生成失败，使用默认标题：{self.novel_title}")
+        self.log_message(f"💡 用户可以在Web界面的'大纲'标签页手动修改标题")
+        
+        # 标记需要保存标题到浏览器
+        self._mark_for_browser_save("title", {
+            "title": self.novel_title
+        })
+        
         return self.novel_title
     
-    def genCharacterList(self):
-        """生成人物列表"""
+    def genCharacterList(self, max_retries=2):
+        """生成人物列表，支持重试机制，失败时不影响后续流程"""
         if not self.getCurrentOutline() or not self.user_idea:
             print("❌ 缺少大纲或用户想法，无法生成人物列表")
-            return ""
+            self.character_list = "暂未生成人物列表"
+            self.log_message(f"⚠️ 人物列表生成跳过，使用默认内容：{self.character_list}")
+            return self.character_list
             
         print(f"👥 正在生成人物列表...")
         print(f"📋 基于大纲和用户想法分析人物")
@@ -649,7 +924,6 @@ class AIGN:
         
         # 添加重试机制处理人物列表生成错误
         retry_count = 0
-        max_retries = 2
         success = False
         
         while retry_count <= max_retries and not success:
@@ -675,11 +949,16 @@ class AIGN:
                 if retry_count <= max_retries:
                     print(f"❌ 生成人物列表时出错: {error_msg}")
                     print(f"   ⏳ 等待2秒后进行第{retry_count + 1}次重试...")
+                    import time
                     time.sleep(2)
                 else:
                     print(f"❌ 生成人物列表失败，已重试{max_retries}次: {error_msg}")
+                    print(f"📋 使用默认人物列表，用户可以手动修改")
+                    self.character_list = "暂未生成人物列表，用户可以手动添加主要人物信息"
                     self.log_message(f"❌ 生成人物列表失败，已重试{max_retries}次: {error_msg}")
-                    return ""
+                    self.log_message(f"⚠️ 使用默认人物列表：{self.character_list}")
+                    self.log_message(f"💡 用户可以在Web界面的'大纲'标签页手动修改人物列表")
+                    return self.character_list
         
         print(f"✅ 人物列表生成完成，长度：{len(self.character_list)}字符")
         
@@ -711,6 +990,12 @@ class AIGN:
             print(f"   {self.character_list[:300]}{'...' if len(self.character_list) > 300 else ''}")
         
         self.log_message(f"✅ 人物列表生成完成")
+        
+        # 标记需要保存人物列表到浏览器
+        self._mark_for_browser_save("character_list", {
+            "character_list": self.character_list
+        })
+        
         return self.character_list
     
     def genDetailedOutline(self):
@@ -762,6 +1047,12 @@ class AIGN:
         
         # 设置使用详细大纲
         self.use_detailed_outline = True
+        
+        # 标记需要保存详细大纲到浏览器
+        self._mark_for_browser_save("detailed_outline", {
+            "detailed_outline": self.detailed_outline,
+            "target_chapters": self.target_chapter_count
+        })
         
         return self.detailed_outline
     
@@ -918,17 +1209,6 @@ class AIGN:
                 # 更新状态信息
                 self.update_webui_status("批次完成", f"第{start_chapter}-{end_chapter}章故事线生成完成")
                 
-            except Exception as e:
-                error_msg = f"第{start_chapter}-{end_chapter}章故事线生成异常: {str(e)}"
-                print(f"❌ {error_msg}")
-                self.current_generation_status["errors"].append(error_msg)
-                self.failed_batches.append({
-                    "start_chapter": start_chapter,
-                    "end_chapter": end_chapter,
-                    "error": str(e)
-                })
-                continue
-                
                 # 更新字符数统计
                 total_chars = 0
                 for chapter in batch_storyline["chapters"]:
@@ -959,9 +1239,27 @@ class AIGN:
                         completion_message += f" 等{len(chapter_titles)}章"
                 
                 self.update_webui_status("批次完成", completion_message)
+                
+            except Exception as e:
+                error_msg = f"第{start_chapter}-{end_chapter}章故事线生成异常: {str(e)}"
+                print(f"❌ {error_msg}")
+                self.current_generation_status["errors"].append(error_msg)
+                self.failed_batches.append({
+                    "start_chapter": start_chapter,
+                    "end_chapter": end_chapter,
+                    "error": str(e)
+                })
+                continue
         
         # 生成完成总结
         self._generate_storyline_summary()
+        
+        # 标记需要保存故事线到浏览器
+        self._mark_for_browser_save("storyline", {
+            "storyline": self.storyline,
+            "target_chapters": self.target_chapter_count,
+            "actual_chapters": len(self.storyline.get('chapters', []))
+        })
         
         return self.storyline
     
@@ -989,28 +1287,46 @@ class AIGN:
         if inputs.get('详细大纲'):
             prompt += f"**详细大纲:**\n{inputs['详细大纲']}\n\n"
         
-        # 明确JSON格式要求
+        # 明确JSON格式要求和章节数量要求
+        expected_count = end_chapter - start_chapter + 1
         prompt += f"## 生成要求:\n"
         prompt += f"请为第{start_chapter}章到第{end_chapter}章生成详细的故事线。\n"
+        prompt += f"**重要：必须生成完整的{expected_count}章内容，一章都不能少！**\n"
         prompt += f"必须严格按照JSON格式输出，不要包含任何其他文本。\n"
         prompt += f"确保每章都有有意义的标题和详细的剧情梗概。\n\n"
         
-        prompt += f"输出格式示例:\n"
+        prompt += f"输出格式示例（必须包含所有{expected_count}章）:\n"
         prompt += f"```json\n"
         prompt += f'{{\n'
         prompt += f'  "chapters": [\n'
-        prompt += f'    {{\n'
-        prompt += f'      "chapter_number": {start_chapter},\n'
-        prompt += f'      "title": "有意义的章节标题",\n'
-        prompt += f'      "plot_summary": "详细的剧情梗概"\n'
-        prompt += f'    }}\n'
-        prompt += f'  ],\n'
+        
+        # 生成多个章节的示例
+        for i in range(min(3, expected_count)):  # 最多显示3个示例章节
+            chapter_num = start_chapter + i
+            if i > 0:
+                prompt += f',\n'
+            prompt += f'    {{\n'
+            prompt += f'      "chapter_number": {chapter_num},\n'
+            prompt += f'      "title": "第{chapter_num}章标题",\n'
+            prompt += f'      "plot_summary": "第{chapter_num}章的详细剧情梗概",\n'
+            prompt += f'      "key_events": ["关键事件1", "关键事件2", "关键事件3"],\n'
+            prompt += f'      "character_development": "人物发展描述",\n'
+            prompt += f'      "chapter_mood": "章节情绪氛围"\n'
+            prompt += f'    }}'
+        
+        # 如果有更多章节，用省略号表示
+        if expected_count > 3:
+            prompt += f',\n    // ... 继续生成第{start_chapter + 3}章到第{end_chapter}章，总共{expected_count}章'
+        
+        prompt += f'\n  ],\n'
         prompt += f'  "batch_info": {{\n'
         prompt += f'    "start_chapter": {start_chapter},\n'
-        prompt += f'    "end_chapter": {end_chapter}\n'
+        prompt += f'    "end_chapter": {end_chapter},\n'
+        prompt += f'    "total_chapters": {expected_count}\n'
         prompt += f'  }}\n'
         prompt += f'}}\n'
-        prompt += f"```"
+        prompt += f"```\n\n"
+        prompt += f"**再次强调：必须生成{expected_count}章完整内容！**"
         
         return prompt
     
@@ -1054,12 +1370,59 @@ class AIGN:
         chapters = batch_storyline["chapters"]
         expected_count = end_chapter - start_chapter + 1
         
-        # 章节数量验证
+        # 章节数量验证（优化：允许一定的灵活性）
         if len(chapters) == 0:
             return {"valid": False, "error": "故事线不能为空"}
         
+        # 计算缺失的章节数
+        missing_count = expected_count - len(chapters)
+        
         if len(chapters) != expected_count:
-            return {"valid": False, "error": f"章节数量不符合预期，期望{expected_count}章，实际{len(chapters)}章"}
+            # 如果章节数量不匹配，优先尝试智能修复
+            if missing_count > 0 and missing_count <= 3:
+                # 缺失1-3章，尝试补充缺失章节
+                print(f"⚠️ 章节数量不足，期望{expected_count}章，实际{len(chapters)}章，缺失{missing_count}章")
+                print(f"🔧 尝试智能补充缺失章节...")
+                
+                # 找出缺失的章节号
+                existing_chapters = set()
+                for chapter in chapters:
+                    ch_num = chapter.get("chapter_number", chapter.get("chapter", 0))
+                    if start_chapter <= ch_num <= end_chapter:
+                        existing_chapters.add(ch_num)
+                
+                missing_chapter_nums = []
+                for i in range(start_chapter, end_chapter + 1):
+                    if i not in existing_chapters:
+                        missing_chapter_nums.append(i)
+                
+                # 为缺失的章节创建基础结构
+                for missing_num in missing_chapter_nums:
+                    placeholder_chapter = {
+                        "chapter_number": missing_num,
+                        "title": f"第{missing_num}章",
+                        "plot_summary": f"第{missing_num}章的剧情发展（需要后续补充具体内容）",
+                        "key_events": [f"第{missing_num}章关键事件"],
+                        "character_development": "人物发展",
+                        "chapter_mood": "章节氛围"
+                    }
+                    chapters.append(placeholder_chapter)
+                    print(f"🔧 已补充第{missing_num}章的占位结构")
+                
+                # 按章节号排序
+                chapters.sort(key=lambda x: x.get("chapter_number", 0))
+                batch_storyline["chapters"] = chapters
+                
+                print(f"✅ 智能修复完成，现在包含{len(chapters)}章")
+                
+                # 继续正常验证流程
+            else:
+                # 缺失章节太多或超出预期，返回错误
+                if missing_count > 3:
+                    return {"valid": False, "error": f"章节数量严重不足，期望{expected_count}章，实际{len(chapters)}章，缺失{missing_count}章（>3章）"}
+                elif len(chapters) > expected_count:
+                    extra_count = len(chapters) - expected_count
+                    return {"valid": False, "error": f"章节数量超出预期，期望{expected_count}章，实际{len(chapters)}章，多出{extra_count}章"}
         
         # 章节内容验证
         found_chapters = set()
@@ -1105,6 +1468,11 @@ class AIGN:
         # 生成验证摘要
         warning_count = len(validation_issues) - len(critical_issues)
         summary = f"验证通过 ({len(chapters)}章)"
+        
+        # 检查是否进行了智能修复（检查最终章节数是否与期望匹配）
+        if len(chapters) == expected_count and missing_count > 0:
+            summary += f", 智能修复了{missing_count}章"
+        
         if warning_count > 0:
             summary += f", {warning_count}个警告"
         
@@ -1194,6 +1562,22 @@ class AIGN:
         
         self.log_message(f"🎉 故事线生成完成，共{len(self.storyline['chapters'])}章，包含章节标题")
     
+    def format_time_duration(self, seconds):
+        """格式化时间为友好的显示格式（几小时几分钟）"""
+        if seconds <= 0:
+            return "0分钟"
+        
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        
+        if hours > 0:
+            if minutes > 0:
+                return f"{hours}小时{minutes}分钟"
+            else:
+                return f"{hours}小时"
+        else:
+            return f"{minutes}分钟"
+
     def getCurrentChapterStoryline(self, chapter_number):
         """获取当前章节的故事线"""
         if not self.storyline or "chapters" not in self.storyline:
@@ -1238,6 +1622,10 @@ class AIGN:
         next_storyline = "\n".join(next_chapters) if next_chapters else ""
         
         return prev_storyline, next_storyline
+
+    def getCompactStorylines(self, chapter_number):
+        """获取精简模式下的前后2章故事线"""
+        return self.getSurroundingStorylines(chapter_number, range_size=2)
 
     def genBeginning(self, user_requriments=None, embellishment_idea=None):
         if user_requriments:
@@ -1682,13 +2070,41 @@ class AIGN:
         if embellishment_idea:
             self.embellishment_idea = embellishment_idea
 
-        # 调试信息：显示页面传入的写作要求
+        # 调试信息：显示页面传入的写作要求，根据调试等级控制详细程度
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            debug_level = int(config_manager.get_debug_level())
+        except Exception:
+            debug_level = 1
+
         print("📋 页面写作要求调试信息:")
-        print(f"   • 写作要求参数: {user_requriments}")
-        print(f"   • 润色想法参数: {embellishment_idea}")
-        print(f"   • 当前存储的写作要求: {self.user_requriments}")
-        print(f"   • 当前存储的润色想法: {self.embellishment_idea}")
-        print(f"   • 当前存储的用户想法: {self.user_idea}")
+        
+        if debug_level >= 2:
+            # 详细模式：显示完整内容
+            print(f"   • 写作要求参数: {user_requriments}")
+            print(f"   • 润色想法参数: {embellishment_idea}")
+            print(f"   • 当前存储的写作要求: {self.user_requriments}")
+            print(f"   • 当前存储的润色想法: {self.embellishment_idea}")
+            print(f"   • 当前存储的用户想法: {self.user_idea}")
+        elif debug_level == 1:
+            # 基础模式：只显示预览
+            def preview_text(text, max_length=100):
+                if not text:
+                    return "空"
+                if len(text) <= max_length:
+                    return text
+                return text[:max_length] + "..."
+            
+            print(f"   • 写作要求参数: {preview_text(user_requriments)}")
+            print(f"   • 润色想法参数: {preview_text(embellishment_idea)}")
+            print(f"   • 当前存储的写作要求: {preview_text(self.user_requriments)}")
+            print(f"   • 当前存储的润色想法: {preview_text(self.embellishment_idea)}")
+            print(f"   • 当前存储的用户想法: {preview_text(self.user_idea)}")
+        else:
+            # 调试等级为0，不显示详细信息
+            print(f"   • 调试级别为0，不显示详细信息")
+        
         print("-" * 50)
 
         # 使用重试机制执行段落生成
@@ -1732,17 +2148,36 @@ class AIGN:
             # 获取增强的上下文信息
             enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
             
-            inputs = {
-                "大纲": self.getCurrentOutline(),
-                "人物列表": self.character_list,
-                "前文记忆": self.writing_memory,
-                "临时设定": self.temp_setting,
-                "计划": self.writing_plan,
-                "写作要求": self.user_requriments,
-                "润色想法": self.embellishment_idea,
-                "上文内容": self.getLastParagraph(),
-                "是否最终章": "否"
-            }
+            # 根据精简模式决定输入参数
+            if getattr(self, 'compact_mode', False):
+                # 精简模式：结尾阶段也使用精简输入
+                print("📦 使用精简模式生成结尾阶段...")
+                compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
+                inputs = {
+                    "大纲": self.getCurrentOutline(),
+                    "写作要求": self.user_requriments,
+                    "前文记忆": self.writing_memory,
+                    "临时设定": self.temp_setting,
+                    "计划": self.writing_plan,
+                    "本章故事线": str(current_chapter_storyline),
+                    "前2章故事线": compact_prev_storyline,
+                    "后2章故事线": compact_next_storyline,
+                    "是否最终章": "否"
+                }
+            else:
+                # 标准模式：包含全部信息
+                print("📝 使用标准模式生成结尾阶段...")
+                inputs = {
+                    "大纲": self.getCurrentOutline(),
+                    "人物列表": self.character_list,
+                    "前文记忆": self.writing_memory,
+                    "临时设定": self.temp_setting,
+                    "计划": self.writing_plan,
+                    "写作要求": self.user_requriments,
+                    "润色想法": self.embellishment_idea,
+                    "上文内容": self.getLastParagraph(),
+                    "是否最终章": "否"
+                }
             
             # 调试信息：显示即将发送给大模型的关键输入参数，根据调试级别控制详细程度
             try:
@@ -1754,7 +2189,10 @@ class AIGN:
             
             if debug_level >= 2:
                 print("🎯 关键输入参数检查（结尾阶段）:")
-                key_params = ["写作要求", "润色想法"]
+                if getattr(self, 'compact_mode', False):
+                    key_params = ["大纲", "写作要求", "前文记忆"]
+                else:
+                    key_params = ["写作要求", "润色想法"]
                 for param in key_params:
                     value = inputs.get(param, "")
                     if value:
@@ -1762,16 +2200,21 @@ class AIGN:
                     else:
                         print(f"   ❌ {param}: 空")
             else:
-                print("🎯 关键输入参数检查（结尾阶段，简化显示）: 写作要求✅, 润色想法✅")
+                if getattr(self, 'compact_mode', False):
+                    print("🎯 关键输入参数检查（结尾阶段，精简模式）: 大纲✅, 写作要求✅, 前文记忆✅")
+                else:
+                    print("🎯 关键输入参数检查（结尾阶段，简化显示）: 写作要求✅, 润色想法✅")
             print("-" * 50)
             
             # 添加详细大纲和基础大纲上下文
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
-            if self.novel_outline and self.novel_outline != self.getCurrentOutline():
-                inputs["基础大纲"] = self.novel_outline
-                print(f"📋 已加入基础大纲上下文")
+            if not getattr(self, 'compact_mode', False):
+                # 仅在非精简模式下添加基础大纲
+                if self.novel_outline and self.novel_outline != self.getCurrentOutline():
+                    inputs["基础大纲"] = self.novel_outline
+                    print(f"📋 已加入基础大纲上下文")
         elif is_final_chapter:
             # 最终章
             print(f"🎯 正在生成最终章（第{self.chapter_count + 1}章）...")
@@ -1788,17 +2231,36 @@ class AIGN:
             # 获取增强的上下文信息
             enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
             
-            inputs = {
-                "大纲": self.getCurrentOutline(),
-                "人物列表": self.character_list,
-                "前文记忆": self.writing_memory,
-                "临时设定": self.temp_setting,
-                "计划": self.writing_plan,
-                "写作要求": self.user_requriments,
-                "润色想法": self.embellishment_idea,
-                "上文内容": self.getLastParagraph(),
-                "是否最终章": "是"
-            }
+            # 根据精简模式决定输入参数
+            if getattr(self, 'compact_mode', False):
+                # 精简模式：最终章也使用精简输入
+                print("📦 使用精简模式生成最终章...")
+                compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
+                inputs = {
+                    "大纲": self.getCurrentOutline(),
+                    "写作要求": self.user_requriments,
+                    "前文记忆": self.writing_memory,
+                    "临时设定": self.temp_setting,
+                    "计划": self.writing_plan,
+                    "本章故事线": str(current_chapter_storyline),
+                    "前2章故事线": compact_prev_storyline,
+                    "后2章故事线": compact_next_storyline,
+                    "是否最终章": "是"
+                }
+            else:
+                # 标准模式：包含全部信息
+                print("📝 使用标准模式生成最终章...")
+                inputs = {
+                    "大纲": self.getCurrentOutline(),
+                    "人物列表": self.character_list,
+                    "前文记忆": self.writing_memory,
+                    "临时设定": self.temp_setting,
+                    "计划": self.writing_plan,
+                    "写作要求": self.user_requriments,
+                    "润色想法": self.embellishment_idea,
+                    "上文内容": self.getLastParagraph(),
+                    "是否最终章": "是"
+                }
             
             # 调试信息：显示即将发送给大模型的关键输入参数，根据调试级别控制详细程度
             try:
@@ -1810,7 +2272,10 @@ class AIGN:
             
             if debug_level >= 2:
                 print("🎯 关键输入参数检查（最终章）:")
-                key_params = ["写作要求", "润色想法"]
+                if getattr(self, 'compact_mode', False):
+                    key_params = ["大纲", "写作要求", "前文记忆"]
+                else:
+                    key_params = ["写作要求", "润色想法"]
                 for param in key_params:
                     value = inputs.get(param, "")
                     if value:
@@ -1818,16 +2283,21 @@ class AIGN:
                     else:
                         print(f"   ❌ {param}: 空")
             else:
-                print("🎯 关键输入参数检查（最终章，简化显示）: 写作要求✅, 润色想法✅")
+                if getattr(self, 'compact_mode', False):
+                    print("🎯 关键输入参数检查（最终章，精简模式）: 大纲✅, 写作要求✅, 前文记忆✅")
+                else:
+                    print("🎯 关键输入参数检查（最终章，简化显示）: 写作要求✅, 润色想法✅")
             print("-" * 50)
             
             # 添加详细大纲和基础大纲上下文
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
-            if self.novel_outline and self.novel_outline != self.getCurrentOutline():
-                inputs["基础大纲"] = self.novel_outline
-                print(f"📋 已加入基础大纲上下文")
+            if not getattr(self, 'compact_mode', False):
+                # 仅在非精简模式下添加基础大纲
+                if self.novel_outline and self.novel_outline != self.getCurrentOutline():
+                    inputs["基础大纲"] = self.novel_outline
+                    print(f"📋 已加入基础大纲上下文")
         else:
             # 正常章节
             print(f"📝 正在生成第{self.chapter_count + 1}章（正常章节）...")
@@ -1835,14 +2305,18 @@ class AIGN:
             print(f"   • 用户想法: {'✅' if self.user_idea else '❌'}")
             print(f"   • 写作要求: {'✅' if self.user_requriments else '❌'}")
             print(f"   • 润色想法: {'✅' if self.embellishment_idea else '❌'}")
-            writer = self.novel_writer
+            
+            # 根据精简模式选择使用的writer
+            if getattr(self, 'compact_mode', False):
+                print("📦 使用精简版正文生成器")
+                writer = self.novel_writer_compact
+            else:
+                print("📝 使用标准版正文生成器")
+                writer = self.novel_writer
             
             # 获取当前章节和前后章节的故事线
             current_chapter_storyline = self.getCurrentChapterStoryline(self.chapter_count + 1)
             prev_storyline, next_storyline = self.getSurroundingStorylines(self.chapter_count + 1)
-            
-            # 获取增强的上下文信息
-            enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
             
             # 获取调试级别并根据级别显示不同详细程度的信息
             try:
@@ -1852,92 +2326,166 @@ class AIGN:
             except Exception:
                 debug_level = 1
 
-            # 显示故事线使用情况，根据调试级别控制显示详细程度
-            if debug_level >= 2:
-                # 详细模式：显示完整信息
-                print(f"📖 故事线上下文信息：")
-                if current_chapter_storyline:
-                    if isinstance(current_chapter_storyline, dict):
-                        ch_title = current_chapter_storyline.get("title", "无标题")
-                        ch_summary = current_chapter_storyline.get("plot_summary", "无梗概")
-                        print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
-                        print(f"   • 章节梗概：{ch_summary}")
+            # 根据精简模式决定上下文信息获取和显示方式
+            if getattr(self, 'compact_mode', False):
+                # 精简模式：获取精简版上下文信息
+                compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
+                
+                # 显示精简版上下文信息
+                if debug_level >= 2:
+                    print(f"📖 故事线上下文信息 (精简模式详细)：")
+                    if current_chapter_storyline:
+                        if isinstance(current_chapter_storyline, dict):
+                            ch_title = current_chapter_storyline.get("title", "无标题")
+                            ch_summary = current_chapter_storyline.get("plot_summary", "无梗概")
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
+                            print(f"   • 章节梗概：{ch_summary}")
+                        else:
+                            print(f"   • 当前章节故事线：{str(current_chapter_storyline)}")
                     else:
-                        print(f"   • 当前章节故事线：{str(current_chapter_storyline)}")
+                        print(f"   • 当前章节故事线：无")
+                    
+                    if compact_prev_storyline:
+                        print(f"   • 前2章故事线：{compact_prev_storyline}")
+                    else:
+                        print(f"   • 前2章故事线：无")
+                    
+                    if compact_next_storyline:
+                        print(f"   • 后2章故事线：{compact_next_storyline}")
+                    else:
+                        print(f"   • 后2章故事线：无")
                 else:
-                    print(f"   • 当前章节故事线：无")
-                
-                if enhanced_context["prev_chapters_summary"]:
-                    prev_lines = enhanced_context["prev_chapters_summary"].split('\n')
-                    print(f"   • 前五章总结：{len(prev_lines)}章")
-                    if prev_lines:
-                        print(f"     - 最近章节：{prev_lines[-1][:80]}{'...' if len(prev_lines[-1]) > 80 else ''}")
-                else:
-                    print(f"   • 前五章总结：无")
-                
-                if enhanced_context["next_chapters_outline"]:
-                    next_lines = enhanced_context["next_chapters_outline"].split('\n')
-                    print(f"   • 后五章梗概：{len(next_lines)}章")
-                    if next_lines:
-                        print(f"     - 下一章节：{next_lines[0][:80]}{'...' if len(next_lines[0]) > 80 else ''}")
-                else:
-                    print(f"   • 后五章梗概：无")
-                
-                if enhanced_context["last_chapter_content"]:
-                    last_ch_preview = enhanced_context["last_chapter_content"]
-                    print(f"   • 上一章原文：{last_ch_preview}")
-                else:
-                    print(f"   • 上一章原文：无")
+                    # 精简模式简化显示
+                    print(f"📖 故事线上下文信息 (精简模式)：")
+                    if current_chapter_storyline:
+                        if isinstance(current_chapter_storyline, dict):
+                            ch_title = current_chapter_storyline.get("title", "无标题")
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
+                        else:
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章")
+                    else:
+                        print(f"   • 当前章节：第{self.chapter_count + 1}章 (无故事线)")
+                    
+                    if compact_prev_storyline:
+                        print(f"   • 前2章故事线：已加载")
+                    else:
+                        print(f"   • 前2章故事线：无")
+                    
+                    if compact_next_storyline:
+                        print(f"   • 后2章故事线：已加载")
+                    else:
+                        print(f"   • 后2章故事线：无")
             else:
-                # 简化模式：只显示摘要信息
-                print(f"📖 故事线上下文信息 (简化显示)：")
-                if current_chapter_storyline:
-                    if isinstance(current_chapter_storyline, dict):
-                        ch_title = current_chapter_storyline.get("title", "无标题")
-                        print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
+                # 标准模式：获取完整上下文信息
+                enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
+                
+                # 显示完整上下文信息
+                if debug_level >= 2:
+                    # 详细模式：显示完整信息
+                    print(f"📖 故事线上下文信息：")
+                    if current_chapter_storyline:
+                        if isinstance(current_chapter_storyline, dict):
+                            ch_title = current_chapter_storyline.get("title", "无标题")
+                            ch_summary = current_chapter_storyline.get("plot_summary", "无梗概")
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
+                            print(f"   • 章节梗概：{ch_summary}")
+                        else:
+                            print(f"   • 当前章节故事线：{str(current_chapter_storyline)}")
                     else:
-                        print(f"   • 当前章节：第{self.chapter_count + 1}章")
+                        print(f"   • 当前章节故事线：无")
+                    
+                    if enhanced_context["prev_chapters_summary"]:
+                        prev_lines = enhanced_context["prev_chapters_summary"].split('\n')
+                        print(f"   • 前五章总结：{len(prev_lines)}章")
+                        if prev_lines:
+                            print(f"     - 最近章节：{prev_lines[-1][:80]}{'...' if len(prev_lines[-1]) > 80 else ''}")
+                    else:
+                        print(f"   • 前五章总结：无")
+                    
+                    if enhanced_context["next_chapters_outline"]:
+                        next_lines = enhanced_context["next_chapters_outline"].split('\n')
+                        print(f"   • 后五章梗概：{len(next_lines)}章")
+                        if next_lines:
+                            print(f"     - 下一章节：{next_lines[0][:80]}{'...' if len(next_lines[0]) > 80 else ''}")
+                    else:
+                        print(f"   • 后五章梗概：无")
+                    
+                    if enhanced_context["last_chapter_content"]:
+                        last_ch_preview = enhanced_context["last_chapter_content"]
+                        print(f"   • 上一章原文：{last_ch_preview}")
+                    else:
+                        print(f"   • 上一章原文：无")
                 else:
-                    print(f"   • 当前章节：第{self.chapter_count + 1}章 (无故事线)")
-                
-                if enhanced_context["prev_chapters_summary"]:
-                    prev_lines = enhanced_context["prev_chapters_summary"].split('\n')
-                    print(f"   • 前五章总结：{len(prev_lines)}章")
-                else:
-                    print(f"   • 前五章总结：无")
-                
-                if enhanced_context["next_chapters_outline"]:
-                    next_lines = enhanced_context["next_chapters_outline"].split('\n')
-                    print(f"   • 后五章梗概：{len(next_lines)}章")
-                else:
-                    print(f"   • 后五章梗概：无")
-                
-                if enhanced_context["last_chapter_content"]:
-                    print(f"   • 上一章原文：第{self.chapter_count}章")
-                else:
-                    print(f"   • 上一章原文：无")
+                    # 简化模式：只显示摘要信息
+                    print(f"📖 故事线上下文信息 (简化显示)：")
+                    if current_chapter_storyline:
+                        if isinstance(current_chapter_storyline, dict):
+                            ch_title = current_chapter_storyline.get("title", "无标题")
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
+                        else:
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章")
+                    else:
+                        print(f"   • 当前章节：第{self.chapter_count + 1}章 (无故事线)")
+                    
+                    if enhanced_context["prev_chapters_summary"]:
+                        prev_lines = enhanced_context["prev_chapters_summary"].split('\n')
+                        print(f"   • 前五章总结：{len(prev_lines)}章")
+                    else:
+                        print(f"   • 前五章总结：无")
+                    
+                    if enhanced_context["next_chapters_outline"]:
+                        next_lines = enhanced_context["next_chapters_outline"].split('\n')
+                        print(f"   • 后五章梗概：{len(next_lines)}章")
+                    else:
+                        print(f"   • 后五章梗概：无")
+                    
+                    if enhanced_context["last_chapter_content"]:
+                        print(f"   • 上一章原文：第{self.chapter_count}章")
+                    else:
+                        print(f"   • 上一章原文：无")
             
-            inputs = {
-                "用户想法": self.user_idea,
-                "大纲": self.getCurrentOutline(),
-                "人物列表": self.character_list,
-                "前文记忆": self.writing_memory,
-                "临时设定": self.temp_setting,
-                "计划": self.writing_plan,
-                "写作要求": self.user_requriments,
-                "润色想法": self.embellishment_idea,
-                "上文内容": self.getLastParagraph(),
-                "本章故事线": str(current_chapter_storyline),
-                "前五章总结": enhanced_context["prev_chapters_summary"],
-                "后五章梗概": enhanced_context["next_chapters_outline"],
-                "上一章原文": enhanced_context["last_chapter_content"],
-            }
+            # 根据精简模式决定输入参数
+            if getattr(self, 'compact_mode', False):
+                # 精简模式：生成正文时只包含：详细大纲；写作要求；各种记忆，设定，计划；前2章后2章的故事线
+                print("📦 使用精简模式生成正文...")
+                # 使用前面已经获取的精简版故事线
+                inputs = {
+                    "大纲": self.getCurrentOutline(),
+                    "写作要求": self.user_requriments,
+                    "前文记忆": self.writing_memory,
+                    "临时设定": self.temp_setting,
+                    "计划": self.writing_plan,
+                    "本章故事线": str(current_chapter_storyline),
+                    "前2章故事线": compact_prev_storyline,
+                    "后2章故事线": compact_next_storyline,
+                }
+            else:
+                # 标准模式：包含全部信息
+                print("📝 使用标准模式生成正文...")
+                inputs = {
+                    "用户想法": self.user_idea,
+                    "大纲": self.getCurrentOutline(),
+                    "人物列表": self.character_list,
+                    "前文记忆": self.writing_memory,
+                    "临时设定": self.temp_setting,
+                    "计划": self.writing_plan,
+                    "写作要求": self.user_requriments,
+                    "润色想法": self.embellishment_idea,
+                    "上文内容": self.getLastParagraph(),
+                    "本章故事线": str(current_chapter_storyline),
+                    "前五章总结": enhanced_context["prev_chapters_summary"],
+                    "后五章梗概": enhanced_context["next_chapters_outline"],
+                    "上一章原文": enhanced_context["last_chapter_content"],
+                }
             
             # 调试信息：显示即将发送给大模型的关键输入参数，根据调试级别控制详细程度
             if debug_level >= 2:
                 # 详细模式：显示完整参数内容
                 print("🎯 关键输入参数检查:")
-                key_params = ["用户想法", "写作要求", "润色想法"]
+                if getattr(self, 'compact_mode', False):
+                    key_params = ["大纲", "写作要求", "前文记忆"]
+                else:
+                    key_params = ["用户想法", "写作要求", "润色想法"]
                 for param in key_params:
                     if param == "润色想法":
                         value = self.embellishment_idea
@@ -1951,7 +2499,10 @@ class AIGN:
             else:
                 # 简化模式：只显示参数是否存在
                 print("🎯 关键输入参数检查 (简化显示):")
-                key_params = ["用户想法", "写作要求", "润色想法"]
+                if getattr(self, 'compact_mode', False):
+                    key_params = ["大纲", "写作要求", "前文记忆"]
+                else:
+                    key_params = ["用户想法", "写作要求", "润色想法"]
                 param_status = []
                 for param in key_params:
                     if param == "润色想法":
@@ -1969,9 +2520,11 @@ class AIGN:
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
-            if self.novel_outline and self.novel_outline != self.getCurrentOutline():
-                inputs["基础大纲"] = self.novel_outline
-                print(f"📋 已加入基础大纲上下文")
+            if not getattr(self, 'compact_mode', False):
+                # 仅在非精简模式下添加基础大纲
+                if self.novel_outline and self.novel_outline != self.getCurrentOutline():
+                    inputs["基础大纲"] = self.novel_outline
+                    print(f"📋 已加入基础大纲上下文")
 
         resp = writer.invoke(
             inputs=inputs,
@@ -1985,40 +2538,91 @@ class AIGN:
         # 润色（除非是最终章且已经包含"（全文完）"）
         if not (is_final_chapter and "（全文完）" in next_paragraph):
             print(f"✨ 正在润色段落...")
-            embellish_inputs = {
-                "大纲": self.getCurrentOutline(),
-                "人物列表": self.character_list,
-                "临时设定": next_temp_setting,
-                "计划": next_writing_plan,
-                "润色要求": self.embellishment_idea,
-                "上文": self.getLastParagraph(),
-                "要润色的内容": next_paragraph,
-                "前五章总结": enhanced_context["prev_chapters_summary"],
-                "后五章梗概": enhanced_context["next_chapters_outline"],
-                "上一章原文": enhanced_context["last_chapter_content"],
-                "本章故事线": str(current_chapter_storyline),
-            }
+            # 根据精简模式决定润色输入参数
+            if getattr(self, 'compact_mode', False):
+                # 精简模式：润色阶段只包含原始内容、详细大纲、润色要求、前2章后2章的故事线
+                print("📦 使用精简模式润色...")
+                # 使用前面已经获取的精简版故事线
+                embellish_inputs = {
+                    "大纲": self.getCurrentOutline(),
+                    "润色要求": self.embellishment_idea,
+                    "要润色的内容": next_paragraph,
+                    "前2章故事线": compact_prev_storyline,
+                    "后2章故事线": compact_next_storyline,
+                    "本章故事线": str(current_chapter_storyline),
+                }
+            else:
+                # 标准模式：包含全部信息
+                print("📝 使用标准模式润色...")
+                embellish_inputs = {
+                    "大纲": self.getCurrentOutline(),
+                    "人物列表": self.character_list,
+                    "临时设定": next_temp_setting,
+                    "计划": next_writing_plan,
+                    "润色要求": self.embellishment_idea,
+                    "上文": self.getLastParagraph(),
+                    "要润色的内容": next_paragraph,
+                    "前五章总结": enhanced_context["prev_chapters_summary"],
+                    "后五章梗概": enhanced_context["next_chapters_outline"],
+                    "上一章原文": enhanced_context["last_chapter_content"],
+                    "本章故事线": str(current_chapter_storyline),
+                }
             
             # 调试信息：显示润色阶段的关键输入参数
-            print("🎨 润色阶段关键参数检查:")
-            key_params = ["润色要求"]
-            for param in key_params:
-                value = embellish_inputs.get(param, "")
-                if value:
-                    print(f"   ✅ {param}: {value}")
-                else:
-                    print(f"   ❌ {param}: 空")
-            print("-" * 50)
+            try:
+                from dynamic_config_manager import get_config_manager
+                config_manager = get_config_manager()
+                debug_level = int(config_manager.get_debug_level())
+            except Exception:
+                debug_level = 1
+            
+            print("🎨 润色阶段参数检查:")
+            if debug_level >= 2:
+                # 详细模式：显示完整参数内容
+                print("📊 润色输入参数统计:")
+                total_input_length = 0
+                for param, value in embellish_inputs.items():
+                    if isinstance(value, str) and len(value) > 0:
+                        print(f"   • {param}: {len(value)} 字符")
+                        total_input_length += len(value)
+                        if param == "润色要求" and value:
+                            print(f"     润色要求: {value}")
+                        elif param == "要润色的内容" and len(value) > 100:
+                            print(f"     预览: {value[:100]}...")
+                print(f"📋 润色总输入长度: {total_input_length} 字符")
+                print("-" * 50)
+            else:
+                # 简化模式：只显示关键参数
+                key_params = ["润色要求", "要润色的内容", "大纲"]
+                param_status = []
+                for param in key_params:
+                    value = embellish_inputs.get(param, "")
+                    if value:
+                        param_status.append(f"{param}✅({len(value)}字符)")
+                    else:
+                        param_status.append(f"{param}❌")
+                print(f"   • {' | '.join(param_status)}")
+                print("-" * 50)
             
             # 添加详细大纲和基础大纲上下文到润色过程
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 embellish_inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 润色阶段已加入详细大纲上下文")
-            if self.novel_outline and self.novel_outline != self.getCurrentOutline():
-                embellish_inputs["基础大纲"] = self.novel_outline
-                print(f"📋 润色阶段已加入基础大纲上下文")
+            if not getattr(self, 'compact_mode', False):
+                # 仅在非精简模式下添加基础大纲
+                if self.novel_outline and self.novel_outline != self.getCurrentOutline():
+                    embellish_inputs["基础大纲"] = self.novel_outline
+                    print(f"📋 润色阶段已加入基础大纲上下文")
                 
-            resp = self.novel_embellisher.invoke(
+            # 根据精简模式选择使用的润色器
+            if getattr(self, 'compact_mode', False):
+                print("📦 使用精简版润色器")
+                embellisher = self.novel_embellisher_compact
+            else:
+                print("📝 使用标准版润色器")
+                embellisher = self.novel_embellisher
+            
+            resp = embellisher.invoke(
                 inputs=embellish_inputs,
                 output_keys=["润色结果"],
             )
@@ -2507,6 +3111,7 @@ class AIGN:
             try:
                 start_time = time.time()
                 print(f"🚀 开始自动生成小说，目标章节数: {self.target_chapter_count}")
+                print(f"📦 精简模式: {'✅ 启用' if getattr(self, 'compact_mode', False) else '❌ 禁用'}")
                 
                 # 在自动生成开始时，更新ChatLLM实例以使用当前配置的提供商
                 self._refresh_chatllm_for_auto_generation()
@@ -2589,7 +3194,7 @@ class AIGN:
                         estimated_remaining_time = avg_time_per_chapter * remaining_chapters
 
                         progress_msg = f"📊 进度: {self.chapter_count}/{self.target_chapter_count} ({progress:.1f}%)"
-                        time_msg = f"⏱️  预计剩余时间: {estimated_remaining_time/60:.1f} 分钟"
+                        time_msg = f"⏱️  预计剩余时间: {self.format_time_duration(estimated_remaining_time)}"
                         print(progress_msg)
                         print(time_msg)
 
@@ -2785,7 +3390,7 @@ class AIGN:
                 avg_time_per_chapter = elapsed / generation_status['current_chapter']
                 remaining_chapters = generation_status['target_chapters'] - generation_status['current_chapter']
                 estimated_remaining = avg_time_per_chapter * remaining_chapters
-                time_stats['estimated_remaining'] = f"{int(estimated_remaining//3600):02d}:{int((estimated_remaining%3600)//60):02d}:{int(estimated_remaining%60):02d}"
+                time_stats['estimated_remaining'] = self.format_time_duration(estimated_remaining)
             else:
                 time_stats['estimated_remaining'] = "计算中..."
         else:

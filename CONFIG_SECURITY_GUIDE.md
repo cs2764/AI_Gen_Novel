@@ -200,7 +200,7 @@ PROXY_CONFIG = {
     'http': 'http://proxy.example.com:8080',
     'https': 'https://proxy.example.com:8080',
     'verify_ssl': True,  # 验证SSL证书
-    'timeout': 30,       # 设置超时
+    'timeout': 300,      # 设置超时
 }
 ```
 

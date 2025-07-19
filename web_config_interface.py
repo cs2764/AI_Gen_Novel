@@ -22,7 +22,7 @@ class WebConfigInterface:
         self.default_ideas_manager = get_default_ideas_manager()
         self._test_lock = threading.Lock()
         # 添加模型刷新的超时控制
-        self._refresh_timeout = 10  # 10秒超时
+        self._refresh_timeout = 300  # 300秒超时
     
     def get_provider_choices(self):
         """获取提供商选择列表"""
@@ -535,7 +535,8 @@ class WebConfigInterface:
                                 choices=self.get_model_choices(self.config_manager.get_current_provider()),
                                 label="模型",
                                 value=self.config_manager.get_current_config().model_name if self.config_manager.get_current_config() else "",
-                                interactive=True
+                                interactive=True,
+                                allow_custom_value=True
                             )
                             
                             # Fireworks自定义模型输入框（默认隐藏）

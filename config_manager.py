@@ -115,7 +115,7 @@ TEMPERATURE_SETTINGS = {
 }
 
 NETWORK_SETTINGS = {
-    "timeout": 60,
+    "timeout": 300,
     "max_retries": 3,
     "retry_delay": 2.0
 }

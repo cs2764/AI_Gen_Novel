@@ -24,6 +24,9 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
         top_p=None,
         max_tokens=None,
         stream=False,
+        response_format=None,
+        tools=None,
+        tool_choice=None,
     ) -> dict:
         # 如果设置了系统提示词，合并到第一个用户消息的开头
         if system_prompt and messages:
@@ -37,28 +40,48 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
             else:
                 # 如果没有用户消息，创建一个包含系统提示词的用户消息
                 messages.append({"role": "user", "content": system_prompt})
+        
+        # 构建请求参数
+        params = {
+            "model": model_name,
+            "messages": messages,
+        }
+        
+        if temperature is not None:
+            params["temperature"] = temperature
+        if top_p is not None:
+            params["top_p"] = top_p
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
+        
+        # 添加JSON格式化输出支持 (LM Studio)
+        if response_format is not None:
+            params["response_format"] = response_format
+            print(f"🔧 LM Studio使用结构化输出: {response_format.get('type', 'unknown')}")
+        
+        # 添加tool calling支持 (LM Studio)
+        if tools is not None:
+            params["tools"] = tools
+            if tool_choice is not None:
+                params["tool_choice"] = tool_choice
+            print(f"🔧 LM Studio使用工具调用: {len(tools)}个工具")
+        
         try:
             if not stream:
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=temperature,
-                    top_p=top_p,
-                    max_tokens=max_tokens,
-                )
+                response = client.chat.completions.create(**params)
                 return {
                     "content": response.choices[0].message.content,
                     "total_tokens": response.usage.total_tokens if response.usage else 0,
                 }
             else:
-                responses = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=temperature,
-                    top_p=top_p,
-                    max_tokens=max_tokens,
-                    stream=True,
-                )
+                # 对于流式输出，不支持结构化输出
+                stream_params = params.copy()
+                stream_params["stream"] = True
+                if "response_format" in stream_params:
+                    del stream_params["response_format"]
+                    print("⚠️  LM Studio流式输出不支持结构化输出，已自动移除")
+                
+                responses = client.chat.completions.create(**stream_params)
 
                 def respGenerator():
                     content = ""

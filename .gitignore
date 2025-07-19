@@ -1,4 +1,7 @@
-__pycache__
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 runs
 test.py
 novel_record.md
@@ -112,13 +115,12 @@ core.*
 [0-9]*.[0-9]*.[0-9]*
 version_info.txt
 
-# 新增：忽略中文临时文件
-手动安装命令.txt
-新功能使用说明.md
-*说明*.md
-*使用*.md
-*安装*.txt
-*命令*.txt
+# 新增：忽略中文临时文件（保留有用的文档）
+# 注意：手动安装命令.txt 和 新功能使用说明.md 是有用的用户文档，不应忽略
+*临时*.md
+*测试*.md
+*debug*.txt
+*temp*.txt
 
 # 新增：忽略Gradio相关文件
 .gradio/

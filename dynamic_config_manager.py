@@ -93,15 +93,17 @@ class DynamicConfigManager:
                 base_url="https://openrouter.ai/api/v1",
                 models=[
                     "openai/gpt-4", "openai/gpt-4-turbo", "openai/gpt-3.5-turbo",
-                    "deepseek/deepseek-chat", "deepseek/deepseek-coder",
+                    "deepseek/deepseek-chat", "deepseek/deepseek-coder", "deepseek/deepseek-r1",
                     "google/gemini-pro", "google/gemini-1.5-pro", "google/gemini-2.0-flash-exp",
-                    "qwen/qwen-2.5-72b-instruct", "qwen/qwen-2-72b-instruct",
-                    "grok/grok-beta", "x-ai/grok-beta"
+                    "qwen/qwen-2.5-72b-instruct", "qwen/qwen-2-72b-instruct", "qwen/qwen3-32b", "qwen/qwen3-14b",
+                    "grok/grok-beta", "x-ai/grok-beta", "meta-llama/llama-3.3-70b-instruct"
                 ],
                 provider_routing={
-                    "order": ["Lambda", "DeepInfra"],  # 优先使用Lambda，然后是DeepInfra
+                    # 优先使用支持fp8量化的提供商以获得最佳性能
+                    "order": ["Lambda", "DeepInfra"],
                     "allow_fallbacks": True,  # 允许回退到其他提供商
-                    "sort": "price"  # 在同优先级内按价格排序
+                    "sort": "throughput",  # 优先按吞吐量排序，fp8量化提供商通常有更高吞吐量
+                    "quantizations": ["fp8"]  # 首选fp8量化（如果提供商支持）
                 }
             ),
             "claude": ProviderConfig(

@@ -29,8 +29,8 @@ class EnhancedStorylineGenerator:
 
     def _supports_advanced_features(self):
         """检查当前提供商是否支持高级功能（structured outputs和tool calling）"""
-        # 只有OpenRouter支持这些高级功能
-        return self.provider_name == "openrouter"
+        # OpenRouter和LM Studio都支持JSON Schema格式化输出
+        return self.provider_name in ["openrouter", "lmstudio"]
 
     def _save_error_data(self, error_type: str, original_messages: List[Dict[str, str]],
                         response_content: str, error_details: str, attempt_number: int = 1):
@@ -147,8 +147,8 @@ class EnhancedStorylineGenerator:
         except Exception as e:
             print(f"⚠️ 记录成功案例失败: {e}")
         
-    def get_storyline_schema(self) -> Dict[str, Any]:
-        """获取故事线的JSON Schema"""
+    def get_storyline_schema(self, expected_count: int = 10) -> Dict[str, Any]:
+        """获取故事线的JSON Schema，动态设置章节数量约束"""
         return {
             "type": "json_schema",
             "json_schema": {
@@ -158,6 +158,8 @@ class EnhancedStorylineGenerator:
                     "properties": {
                         "chapters": {
                             "type": "array",
+                            "minItems": expected_count,
+                            "maxItems": expected_count,
                             "items": {
                                 "type": "object",
                                 "properties": {
@@ -187,23 +189,121 @@ class EnhancedStorylineGenerator:
                     "required": ["chapters", "batch_info"]
                 },
                 "strict": True
-            }
+                        }
         }
     
-    def get_storyline_tools(self) -> List[Dict[str, Any]]:
-        """获取故事线生成的工具定义"""
+    def _extract_chapter_count_from_messages(self, messages: List[Dict[str, str]]) -> int:
+        """从提示词中提取期望的章节数量"""
+        if not messages:
+            return 10  # 默认值
+        
+        content = messages[-1]["content"]
+        
+        # 查找"请为第X章到第Y章"的模式
+        import re
+        
+        # 匹配"请为第X章到第Y章"或"第X-Y章"或"章节范围：X-Y章"的模式
+        patterns = [
+            r'请为第(\d+)章到第(\d+)章',
+            r'第(\d+)-(\d+)章',
+            r'章节范围[：:]\s*(\d+)-(\d+)章',
+            r'start_chapter["\']:\s*(\d+).*?end_chapter["\']:\s*(\d+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                start = int(match.group(1))
+                end = int(match.group(2))
+                expected_count = end - start + 1
+                print(f"📝 从提示词中提取到章节范围: 第{start}-{end}章，共{expected_count}章")
+                return expected_count
+        
+        # 如果没找到明确的章节范围，尝试查找单独的数字
+        chapter_mentions = re.findall(r'(\d+)章', content)
+        if len(chapter_mentions) >= 2:
+            try:
+                numbers = [int(x) for x in chapter_mentions]
+                if len(set(numbers)) > 1:  # 有不同的数字
+                    start = min(numbers)
+                    end = max(numbers)
+                    expected_count = end - start + 1
+                    print(f"📝 从章节提及中推断章节范围: 第{start}-{end}章，共{expected_count}章")
+                    return expected_count
+            except ValueError:
+                pass
+        
+        print("⚠️ 无法从提示词中提取章节数量，使用默认值10章")
+        return 10
+    
+    def _debug_chapter_count(self, data: Dict[str, Any], expected_count: int, method_name: str) -> None:
+        """调试章节数量信息"""
+        actual_chapters = data.get("chapters", [])
+        actual_count = len(actual_chapters)
+        
+        print(f"📊 {method_name}生成章节数量: 期望{expected_count}章，实际{actual_count}章")
+        
+        # 如果章节数量不符合预期，显示详细调试信息
+        if actual_count != expected_count:
+            print(f"⚠️ 章节数量不符合预期！")
+            print("🔍 调试信息 - 返回的原始数据:")
+            print("="*80)
+            import json
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+            print("="*80)
+            
+            if actual_count == 0:
+                print("❌ 没有生成任何章节")
+            elif actual_count < expected_count:
+                missing_count = expected_count - actual_count
+                print(f"❌ 缺失{missing_count}章")
+                
+                # 显示实际生成的章节号
+                if actual_chapters:
+                    chapter_nums = [ch.get('chapter_number', 'unknown') for ch in actual_chapters]
+                    print(f"📝 实际生成的章节号: {chapter_nums}")
+                    
+                    # 分析章节号是否连续
+                    if len(chapter_nums) > 1:
+                        sorted_nums = sorted([n for n in chapter_nums if isinstance(n, int)])
+                        if sorted_nums:
+                            gaps = []
+                            for i in range(1, len(sorted_nums)):
+                                if sorted_nums[i] - sorted_nums[i-1] > 1:
+                                    gaps.append((sorted_nums[i-1] + 1, sorted_nums[i] - 1))
+                            if gaps:
+                                print(f"📝 发现章节号间隙: {gaps}")
+            elif actual_count > expected_count:
+                extra_count = actual_count - expected_count
+                print(f"❌ 多生成了{extra_count}章")
+                
+                # 显示所有章节号
+                chapter_nums = [ch.get('chapter_number', 'unknown') for ch in actual_chapters]
+                print(f"📝 生成的章节号: {chapter_nums}")
+                
+                # 显示重复的章节号
+                from collections import Counter
+                counter = Counter(chapter_nums)
+                duplicates = {k: v for k, v in counter.items() if v > 1}
+                if duplicates:
+                    print(f"📝 发现重复章节号: {duplicates}")
+
+    def get_storyline_tools(self, expected_count: int = 10) -> List[Dict[str, Any]]:
+        """获取故事线生成的工具定义，动态设置章节数量约束"""
         return [
             {
                 "type": "function",
                 "function": {
                     "name": "generate_storyline_batch",
-                    "description": "生成一批故事线章节",
+                    "description": f"生成一批故事线章节（必须生成{expected_count}章）",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "chapters": {
                                 "type": "array",
-                                "description": "章节列表",
+                                "description": f"章节列表（必须包含{expected_count}章）",
+                                "minItems": expected_count,
+                                "maxItems": expected_count,
                                 "items": {
                                     "type": "object",
                                     "properties": {
@@ -455,26 +555,39 @@ class EnhancedStorylineGenerator:
             return None, f"provider_{self.provider_name}_not_supported_structured_outputs"
 
         try:
-            print("🔧 尝试使用OpenRouter Structured Outputs生成故事线...")
+            print(f"🔧 尝试使用{self.provider_name.upper()} Structured Outputs生成故事线...")
+            
+            # 从提示词中提取章节范围信息
+            expected_count = self._extract_chapter_count_from_messages(messages)
+            print(f"🔢 期望生成章节数: {expected_count}")
 
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
-                response_format=self.get_storyline_schema()
+                response_format=self.get_storyline_schema(expected_count)
             )
             
             if response.get("content"):
                 try:
                     data = json.loads(response["content"])
+                    
                     print("✅ Structured Outputs成功生成JSON格式")
+                    # 使用统一的调试方法检查章节数量
+                    self._debug_chapter_count(data, expected_count, "Structured Outputs")
+                    
                     return data, "structured_output_success"
                 except json.JSONDecodeError as e:
                     print(f"⚠️ Structured Outputs返回内容无法解析: {e}")
+                    print("🔍 调试信息 - 原始响应内容:")
+                    print("="*80)
+                    print(response.get("content", ""))
+                    print("="*80)
                     self._save_error_data("structured_output_json_parse_error", messages,
                                         response.get("content", ""), str(e))
                     return None, f"structured_output_json_error: {e}"
             else:
                 print("⚠️ Structured Outputs未返回内容")
+                print(f"🔍 完整响应: {response}")
                 self._save_error_data("structured_output_no_content", messages, "", "No content returned")
                 return None, "structured_output_no_content"
 
@@ -495,12 +608,16 @@ class EnhancedStorylineGenerator:
             return None, f"provider_{self.provider_name}_not_supported_tool_calling"
 
         try:
-            print("🔧 尝试使用OpenRouter Tool Calling生成故事线...")
+            print(f"🔧 尝试使用{self.provider_name.upper()} Tool Calling生成故事线...")
+            
+            # 从提示词中提取章节范围信息
+            expected_count = self._extract_chapter_count_from_messages(messages)
+            print(f"🔢 期望生成章节数: {expected_count}")
 
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
-                tools=self.get_storyline_tools(),
+                tools=self.get_storyline_tools(expected_count),
                 tool_choice={"type": "function", "function": {"name": "generate_storyline_batch"}}
             )
             
@@ -509,20 +626,38 @@ class EnhancedStorylineGenerator:
                     if tool_call.function.name == "generate_storyline_batch":
                         try:
                             data = json.loads(tool_call.function.arguments)
+                            
                             print("✅ Tool Calling成功生成JSON格式")
+                            # 使用统一的调试方法检查章节数量
+                            self._debug_chapter_count(data, expected_count, "Tool Calling")
+                            
                             return data, "tool_calling_success"
                         except json.JSONDecodeError as e:
                             print(f"⚠️ Tool Calling参数无法解析: {e}")
+                            print("🔍 调试信息 - 原始函数参数:")
+                            print("="*80)
+                            print(tool_call.function.arguments)
+                            print("="*80)
                             self._save_error_data("tool_calling_json_parse_error", messages,
                                                 tool_call.function.arguments, str(e))
                             return None, f"tool_calling_json_error: {e}"
 
                 print("⚠️ Tool Calling未返回预期的函数调用")
+                print("🔍 调试信息 - 实际返回的工具调用:")
+                print("="*80)
+                for i, tool_call in enumerate(response.get("tool_calls", [])):
+                    print(f"工具调用 {i+1}: {tool_call.function.name}")
+                    print(f"参数: {tool_call.function.arguments[:500]}...")
+                print("="*80)
                 self._save_error_data("tool_calling_no_expected_function", messages,
                                     str(response.get("tool_calls", [])), "No expected function call")
                 return None, "tool_calling_no_expected_function"
             else:
                 print("⚠️ Tool Calling未返回工具调用")
+                print("🔍 调试信息 - 完整响应:")
+                print("="*80)
+                print(json.dumps(response, ensure_ascii=False, indent=2))
+                print("="*80)
                 self._save_error_data("tool_calling_no_tools", messages,
                                     str(response), "No tool calls returned")
                 return None, "tool_calling_no_tools"
@@ -565,6 +700,9 @@ class EnhancedStorylineGenerator:
                         data = json.loads(response["content"])
                         if self._validate_storyline_structure(data):
                             print(f"✅ 传统方法第{retry+1}次尝试成功")
+                            # 从消息中提取期望章节数以便调试
+                            expected_count = self._extract_chapter_count_from_messages(messages)
+                            self._debug_chapter_count(data, expected_count, f"传统方法(第{retry+1}次)")
                             return data, f"traditional_success_attempt_{retry+1}"
                         else:
                             print(f"⚠️ JSON格式正确但结构不符合要求")
@@ -579,6 +717,9 @@ class EnhancedStorylineGenerator:
                     fixed_data = self.fix_json_format(response["content"])
                     if fixed_data and self._validate_storyline_structure(fixed_data):
                         print(f"✅ 增强JSON修复成功，第{retry+1}次尝试")
+                        # 从消息中提取期望章节数以便调试
+                        expected_count = self._extract_chapter_count_from_messages(messages)
+                        self._debug_chapter_count(fixed_data, expected_count, f"增强JSON修复(第{retry+1}次)")
                         # 记录成功案例
                         self._log_successful_generation("enhanced_json_repair", retry + 1, fixed_data)
                         return fixed_data, f"enhanced_json_repair_success_attempt_{retry+1}"
