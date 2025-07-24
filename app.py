@@ -6,45 +6,8 @@ from datetime import datetime
 
 from version import get_version
 
-# 标题验证函数
-def is_valid_title(title):
-    """检查标题是否为有效的已生成内容"""
-    if not title or not title.strip():
-        return False
-    
-    title = title.strip()
-    
-    # 过滤无效标题
-    invalid_titles = [
-        "未命名小说",
-        "测试标题", 
-        "test",
-        "demo",
-        "示例",
-        "例子",
-        "标题",
-        "title",
-        "小说"
-    ]
-    
-    # 检查是否为无效标题
-    if title.lower() in [t.lower() for t in invalid_titles]:
-        return False
-        
-    # 检查是否过短
-    if len(title) < 2:
-        return False
-        
-    # 检查是否为明显的占位符
-    placeholder_patterns = [
-        "xxx", "test", "demo", "placeholder", "占位符", "临时"
-    ]
-    title_lower = title.lower()
-    for pattern in placeholder_patterns:
-        if pattern in title_lower:
-            return False
-            
-    return True
+# 从工具模块导入函数避免循环导入
+from utils import is_valid_title
 
 # Cookie存储管理器
 class CookieStorageManager:
@@ -2673,21 +2636,21 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
             print(f"⚠️  配置界面创建失败: {e}")
             config_components = {}
         
-        # 数据管理区域
-        with gr.Accordion("💾 数据管理", open=False):
-            gr.Markdown("### 浏览器数据存储")
-            gr.Markdown("**数据会自动保存到您的浏览器中，每个用户的数据相互独立**")
+        # 浏览器存储管理（轻量级）- 与主数据管理标签页分离
+        with gr.Accordion("🍪 浏览器存储", open=False):
+            gr.Markdown("### 🍪 浏览器Cookies存储")
+            gr.Markdown("**轻量级的cookies数据存储，主要的数据管理功能在下方的📁数据管理标签页中**")
             
             try:
                 from browser_storage_manager import create_browser_storage_interface
                 storage_components = create_browser_storage_interface()
             except Exception as e:
-                print(f"⚠️  数据管理界面创建失败: {e}")
+                print(f"⚠️  浏览器存储界面创建失败: {e}")
                 # 简单的备用界面
                 with gr.Row():
                     gr.Textbox(
-                        label="数据管理状态",
-                        value="数据管理功能暂不可用",
+                        label="浏览器存储状态",
+                        value="浏览器存储功能暂不可用",
                         interactive=False,
                         lines=3
                     )

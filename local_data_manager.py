@@ -64,13 +64,13 @@ def format_storage_info(storage_info: Dict[str, Any]) -> str:
 
 
 def get_export_filename(aign_instance=None) -> str:
-    """生成导出文件名，优先使用小说标题"""
+    """生成导出文件名，优先使用小说标题，并明确标识为导出数据"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # 尝试从AIGN实例获取有效标题
     if aign_instance:
         try:
-            from app import is_valid_title
+            from utils import is_valid_title
             title = getattr(aign_instance, 'novel_title', '')
             if title and is_valid_title(title):
                 # 清理标题中的无效字符，生成安全的文件名
@@ -82,12 +82,12 @@ def get_export_filename(aign_instance=None) -> str:
                 safe_title = re.sub(r'_+', '_', safe_title)
                 # 去除开头和结尾的下划线
                 safe_title = safe_title.strip('_')
-                return f"{safe_title}_{timestamp}.json"
+                return f"小说导出备份_{safe_title}_{timestamp}.json"
         except Exception:
             pass
     
-    # 默认文件名
-    return f"ai_novel_data_{timestamp}.json"
+    # 默认文件名，明确标识为导出的数据
+    return f"AI小说数据导出_{timestamp}.json"
 
 
 def create_data_management_interface(aign) -> Tuple:
@@ -156,9 +156,10 @@ def create_data_management_interface(aign) -> Tuple:
                         export_btn = gr.Button("📤 导出数据", variant="primary")
                         refresh_filename_btn = gr.Button("🔄 刷新文件名", variant="secondary", size="sm")
                     download_file = gr.File(
-                        label="📥 下载导出文件",
-                        visible=False,
-                        interactive=False
+                        label="📥 点击下载导出的文件",
+                        visible=True,
+                        interactive=False,
+                        show_label=True
                     )
                     export_result = gr.Textbox(
                         label="导出结果",
@@ -335,7 +336,14 @@ def create_data_management_interface(aign) -> Tuple:
                 # 验证文件确实被创建
                 if os.path.exists(export_path):
                     file_size = os.path.getsize(export_path)
-                    result_message = f"✅ 数据导出成功！\n📁 文件路径: {export_path}\n📊 文件大小: {file_size:,} 字节\n💡 可以直接点击下方的文件进行下载"
+                    # 读取文件内容以计算数据项目数量
+                    try:
+                        with open(export_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            data_count = len(data) if isinstance(data, dict) else 0
+                        result_message = f"✅ 数据导出成功！\n📁 文件路径: {export_path}\n📊 文件大小: {file_size:,} 字节\n📦 包含数据: {data_count} 项\n💡 文件已生成，请点击下方的下载按钮获取文件"
+                    except:
+                        result_message = f"✅ 数据导出成功！\n📁 文件路径: {export_path}\n📊 文件大小: {file_size:,} 字节\n💡 文件已生成，请点击下方的下载按钮获取文件"
                     
                     # 返回结果消息和文件路径供下载
                     return result_message, export_path
@@ -419,7 +427,7 @@ def create_data_management_interface(aign) -> Tuple:
             # 检查是否有有效标题
             title = getattr(aign_instance, 'novel_title', '')
             if title and title != "未命名小说":
-                from app import is_valid_title
+                from utils import is_valid_title
                 if is_valid_title(title):
                     result_msg = f"✅ 文件名已更新（基于标题：《{title}》）"
                 else:

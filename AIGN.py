@@ -690,7 +690,7 @@ class AIGN:
                 title_data = all_data["title"]
                 saved_title = title_data.get("title", "")
                 # 导入验证函数
-                from app import is_valid_title
+                from utils import is_valid_title
                 # 只加载有效的标题
                 if saved_title and is_valid_title(saved_title):
                     self.novel_title = saved_title
