@@ -236,10 +236,7 @@ class MarkdownAgent:
                     if key and key.upper() != "END" and key != "标题":
                         # 找到了实际的标题内容
                         if len(key) > 0:  # 只要有内容就接受，不限制长度
-                            # 如果标题过长，截取前50个字符
-                            if len(key) > 50:
-                                print(f"⚠️ 标题过长，截取前50字符：{key[:50]}...")
-                                return key[:50]
+
                             return key
         
         # 通用智能匹配逻辑
@@ -249,10 +246,6 @@ class MarkdownAgent:
             # 如果section key看起来像是实际内容而不是标签
             if len(section_key) > 5 and (not section_content or len(section_content.strip()) == 0):
                 # 这可能是AI直接把内容放在了key位置
-                # 如果内容过长，也截取一下
-                if len(section_key) > 100:
-                    print(f"⚠️ 内容过长，截取前100字符：{section_key[:100]}...")
-                    return section_key[:100]
                 return section_key
         
         return None
@@ -452,6 +445,11 @@ class AIGN:
         self.temp_setting = ""
         self.writing_memory = ""
         
+        # 初始化本地自动保存管理器
+        from auto_save_manager import get_auto_save_manager
+        self.auto_save_manager = get_auto_save_manager()
+        print("💾 本地自动保存管理器已初始化")
+        
         # 全局状态历史，用于保留所有生成步骤的状态信息
         self.global_status_history = []
         
@@ -506,6 +504,9 @@ class AIGN:
         self.current_stream_chars = 0
         self.current_stream_operation = ""
         self.stream_start_time = 0
+        
+        # 生成控制标志
+        self.stop_generation = False
         
         # 调试信息说明 - 从配置文件读取
         debug_level = '1'  # 默认值
@@ -632,39 +633,169 @@ class AIGN:
         for agent in agents:
             agent.parent_aign = self
     
-    def _mark_for_browser_save(self, data_type: str, data: dict):
-        """标记数据需要保存到浏览器"""
-        import time
-        save_item = {
-            "type": data_type,
-            "data": data,
-            "timestamp": time.time(),
-            "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
-        # 添加到保存队列
-        if not hasattr(self, 'browser_save_queue'):
-            self.browser_save_queue = []
-        
-        # 移除相同类型的旧数据
-        self.browser_save_queue = [item for item in self.browser_save_queue if item["type"] != data_type]
-        self.browser_save_queue.append(save_item)
-        
-        print(f"💾 标记保存到浏览器: {data_type}")
+    def _save_to_local(self, data_type: str, **kwargs):
+        """保存数据到本地文件"""
+        try:
+            if data_type == "outline":
+                return self.auto_save_manager.save_outline(
+                    kwargs.get("outline", ""),
+                    kwargs.get("user_idea", ""),
+                    kwargs.get("user_requirements", ""),
+                    kwargs.get("embellishment_idea", "")
+                )
+            elif data_type == "title":
+                return self.auto_save_manager.save_title(kwargs.get("title", ""))
+            elif data_type == "character_list":
+                return self.auto_save_manager.save_character_list(kwargs.get("character_list", ""))
+            elif data_type == "detailed_outline":
+                return self.auto_save_manager.save_detailed_outline(
+                    kwargs.get("detailed_outline", ""),
+                    kwargs.get("target_chapters", 0)
+                )
+            elif data_type == "storyline":
+                return self.auto_save_manager.save_storyline(
+                    kwargs.get("storyline", {}),
+                    kwargs.get("target_chapters", 0)
+                )
+            elif data_type == "user_settings":
+                return self.auto_save_manager.save_user_settings(kwargs.get("settings", {}))
+            else:
+                print(f"⚠️ 未知的数据类型: {data_type}")
+                return False
+        except Exception as e:
+            print(f"❌ 保存 {data_type} 到本地失败: {e}")
+            return False
     
-    def get_browser_save_queue(self):
-        """获取浏览器保存队列"""
-        if not hasattr(self, 'browser_save_queue'):
-            self.browser_save_queue = []
-        return self.browser_save_queue
+    def load_from_local(self):
+        """从本地文件加载所有数据"""
+        print("🔄 开始从本地文件加载数据...")
+        try:
+            # 加载所有数据
+            all_data = self.auto_save_manager.load_all()
+            
+            loaded_items = []
+            
+            # 加载大纲相关数据
+            if all_data["outline"]:
+                outline_data = all_data["outline"]
+                self.novel_outline = outline_data.get("outline", "")
+                self.user_idea = outline_data.get("user_idea", "")
+                self.user_requriments = outline_data.get("user_requirements", "")
+                self.embellishment_idea = outline_data.get("embellishment_idea", "")
+                if self.novel_outline:
+                    loaded_items.append(f"大纲 ({len(self.novel_outline)}字符)")
+            
+            # 加载标题
+            if all_data["title"]:
+                title_data = all_data["title"]
+                saved_title = title_data.get("title", "")
+                # 导入验证函数
+                from app import is_valid_title
+                # 只加载有效的标题
+                if saved_title and is_valid_title(saved_title):
+                    self.novel_title = saved_title
+                    loaded_items.append(f"标题: {self.novel_title}")
+                elif saved_title:
+                    print(f"⚠️ 跳过无效标题: '{saved_title}'，将使用默认标题")
+                    self.novel_title = ""  # 重置为空，以便后续可以重新生成
+            
+            # 加载人物列表
+            if all_data["character_list"]:
+                char_data = all_data["character_list"]
+                self.character_list = char_data.get("character_list", "")
+                if self.character_list:
+                    loaded_items.append(f"人物列表 ({len(self.character_list)}字符)")
+            
+            # 加载详细大纲
+            if all_data["detailed_outline"]:
+                detail_data = all_data["detailed_outline"]
+                self.detailed_outline = detail_data.get("detailed_outline", "")
+                if self.detailed_outline:
+                    loaded_items.append(f"详细大纲 ({len(self.detailed_outline)}字符)")
+                    self.use_detailed_outline = True
+            
+            # 加载故事线
+            if all_data["storyline"]:
+                story_data = all_data["storyline"]
+                self.storyline = story_data.get("storyline", {})
+                if self.storyline and isinstance(self.storyline, dict):
+                    chapters = self.storyline.get("chapters", [])
+                    if chapters:
+                        target_chapters = story_data.get("target_chapters", len(chapters))
+                        loaded_items.append(f"故事线 ({len(chapters)}/{target_chapters}章)")
+            
+            # 加载用户设置
+            if all_data["user_settings"]:
+                user_settings = all_data["user_settings"]
+                settings = user_settings.get("settings", {})
+                # 加载用户设置相关的属性
+                if "target_chapter_count" in settings:
+                    self.target_chapter_count = settings["target_chapter_count"]
+                    loaded_items.append(f"目标章节数: {self.target_chapter_count}章")
+                if "compact_mode" in settings:
+                    self.compact_mode = settings["compact_mode"]
+                if "enable_chapters" in settings:
+                    self.enable_chapters = settings["enable_chapters"]
+                if "enable_ending" in settings:
+                    self.enable_ending = settings["enable_ending"]
+            
+            if loaded_items:
+                print(f"✅ 本地数据加载完成，已加载 {len(loaded_items)} 项:")
+                for item in loaded_items:
+                    print(f"   • {item}")
+                return loaded_items
+            else:
+                print("ℹ️ 没有找到本地保存的数据")
+                return []
+                
+        except Exception as e:
+            print(f"❌ 从本地加载数据失败: {e}")
+            return []
     
-    def clear_browser_save_queue(self):
-        """清空浏览器保存队列"""
-        if not hasattr(self, 'browser_save_queue'):
-            self.browser_save_queue = []
+    def get_local_storage_info(self):
+        """获取本地存储信息"""
+        return self.auto_save_manager.get_storage_info()
+    
+    def export_local_data(self, export_path: str = None):
+        """导出本地数据"""
+        if export_path is None:
+            import time
+            export_path = f"export_data_{int(time.time())}.json"
+        
+        return self.auto_save_manager.export_all_data(export_path)
+    
+    def import_local_data(self, import_path: str):
+        """导入本地数据"""
+        success = self.auto_save_manager.import_all_data(import_path)
+        if success:
+            # 导入成功后重新加载数据到内存
+            self.load_from_local()
+        return success
+    
+    def delete_local_data(self, data_types: list = None):
+        """删除本地数据"""
+        if data_types is None:
+            return self.auto_save_manager.delete_all_data()
         else:
-            self.browser_save_queue.clear()
-        print("🗑️ 浏览器保存队列已清空")
+            return self.auto_save_manager.delete_specific_data(data_types)
+    
+    def save_user_settings(self):
+        """保存用户设置到本地文件"""
+        try:
+            settings = {
+                "target_chapter_count": self.target_chapter_count,
+                "compact_mode": getattr(self, 'compact_mode', True),
+                "enable_chapters": getattr(self, 'enable_chapters', True),
+                "enable_ending": getattr(self, 'enable_ending', True)
+            }
+            
+            result = self._save_to_local("user_settings", settings=settings)
+            if result:
+                print(f"💾 用户设置已自动保存 (目标章节数: {self.target_chapter_count}章)")
+            return result
+        except Exception as e:
+            print(f"❌ 保存用户设置失败: {e}")
+            return False
 
     def update_chatllm(self, new_chatllm):
         """更新所有agent的ChatLLM实例"""
@@ -715,6 +846,24 @@ class AIGN:
             print(f"⚠️  刷新ChatLLM失败: {e}")
             print("🔄 将继续使用原有ChatLLM实例进行自动生成")
 
+    def _get_current_model_info(self):
+        """获取当前使用的模型信息"""
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            current_provider = config_manager.get_current_provider()
+            current_config = config_manager.get_current_config()
+            
+            if current_config:
+                provider_name = current_provider.upper()
+                model_name = current_config.model_name
+                return f"{provider_name} - {model_name}"
+            else:
+                return "未知模型"
+        except Exception as e:
+            print(f"⚠️ 获取模型信息失败: {e}")
+            return "未知模型"
+
     def updateNovelContent(self):
         self.novel_content = ""
         for paragraph in self.paragraph_list:
@@ -725,11 +874,19 @@ class AIGN:
         if user_idea:
             self.user_idea = user_idea
         
+        # 重置停止标志
+        self.stop_generation = False
+        
         print(f"📋 正在生成小说大纲...")
         print(f"💭 用户想法：{self.user_idea}")
         
         self.log_message(f"📋 正在生成小说大纲...")
         self.log_message(f"💭 用户想法：{self.user_idea}")
+        
+        # 检查是否需要停止
+        if self.stop_generation:
+            print("⚠️ 检测到停止信号，中断大纲生成")
+            return ""
         
         resp = self.novel_outline_writer.invoke(
             inputs={
@@ -740,6 +897,11 @@ class AIGN:
         )
         self.novel_outline = resp["大纲"]
         
+        # 检查是否需要停止
+        if self.stop_generation:
+            print("⚠️ 检测到停止信号，中断后续生成")
+            return self.novel_outline
+        
         print(f"✅ 大纲生成完成，长度：{len(self.novel_outline)}字符")
         print(f"📖 大纲预览（前500字符）：")
         print(f"   {self.novel_outline[:500]}{'...' if len(self.novel_outline) > 500 else ''}")
@@ -747,34 +909,41 @@ class AIGN:
         self.log_message(f"✅ 大纲生成完成，长度：{len(self.novel_outline)}字符")
         
         # 自动生成标题（失败时不影响流程）
-        try:
-            print("📚 开始生成小说标题...")
-            self.genNovelTitle()
-            print("✅ 标题生成流程完成")
-        except Exception as e:
-            print(f"⚠️ 标题生成过程中出现异常：{e}")
-            print("📋 使用默认标题并继续流程")
-            self.novel_title = "未命名小说"
-            self.log_message(f"⚠️ 标题生成异常，使用默认标题：{self.novel_title}")
+        if not self.stop_generation:
+            try:
+                print("📚 开始生成小说标题...")
+                self.genNovelTitle()
+                print("✅ 标题生成流程完成")
+            except Exception as e:
+                print(f"⚠️ 标题生成过程中出现异常：{e}")
+                print("📋 使用默认标题并继续流程")
+                self.novel_title = "未命名小说"
+                self.log_message(f"⚠️ 标题生成异常，使用默认标题：{self.novel_title}")
         
         # 自动生成人物列表（失败时不影响流程）
-        try:
-            print("👥 开始生成人物列表...")
-            self.genCharacterList()
-            print("✅ 人物列表生成流程完成")
-        except Exception as e:
-            print(f"⚠️ 人物列表生成过程中出现异常：{e}")
-            print("📋 使用默认人物列表并继续流程")
-            self.character_list = "暂未生成人物列表"
-            self.log_message(f"⚠️ 人物列表生成异常，使用默认内容：{self.character_list}")
+        if not self.stop_generation:
+            try:
+                print("👥 开始生成人物列表...")
+                self.genCharacterList()
+                print("✅ 人物列表生成流程完成")
+            except Exception as e:
+                print(f"⚠️ 人物列表生成过程中出现异常：{e}")
+                print("📋 使用默认人物列表并继续流程")
+                self.character_list = "暂未生成人物列表"
+                self.log_message(f"⚠️ 人物列表生成异常，使用默认内容：{self.character_list}")
         
-        # 标记需要保存大纲到浏览器
-        self._mark_for_browser_save("outline", {
-            "outline": self.novel_outline,
-            "user_idea": self.user_idea,
-            "user_requirements": self.user_requriments,
-            "embellishment_idea": self.embellishment_idea
-        })
+        # 自动保存大纲到本地文件
+        if not self.stop_generation:
+            self._save_to_local("outline",
+                outline=self.novel_outline,
+                user_idea=self.user_idea,
+                user_requirements=self.user_requriments,
+                embellishment_idea=self.embellishment_idea
+            )
+        
+        # 大纲生成完成后立即保存元数据（不保存小说文件）
+        print(f"💾 大纲生成完成，保存元数据...")
+        self.saveMetadataOnlyAfterOutline()
         
         return self.novel_outline
     
@@ -814,6 +983,13 @@ class AIGN:
                 print(f"🎯 使用方法：改进的Markdown格式 (尝试{attempt_num})")
                 
                 self.log_message(f"📚 已生成小说标题：{self.novel_title}")
+                
+                # 自动保存标题到本地文件
+                self._save_to_local("title", title=self.novel_title)
+                
+                # 标题生成成功后立即初始化输出文件名
+                self.initOutputFile()
+                
                 return self.novel_title
                 
             except Exception as e:
@@ -837,57 +1013,55 @@ class AIGN:
                     
                     self.log_message(f"📚 已生成小说标题：{self.novel_title}")
                     
-                    # 标记需要保存标题到浏览器
-                    self._mark_for_browser_save("title", {
-                        "title": self.novel_title
-                    })
+                    # 自动保存标题到本地文件
+                    self._save_to_local("title", title=self.novel_title)
+                    
+                    # 标题生成成功后立即初始化输出文件名
+                    self.initOutputFile()
                     
                     return self.novel_title
                     
                 except Exception as e2:
                     print(f"❌ JSON格式生成也失败 (尝试{attempt_num})：{e2}")
                     
-                    # 方法3：直接使用智能解析
+                    # 方法3：使用简化的直接调用，避免重复提示词
                     try:
-                        print(f"🔧 方法3：使用智能解析生成标题 (尝试{attempt_num})")
-                        # 直接查询，然后使用智能解析提取标题
-                        raw_resp = self.title_generator.query(
-                            f"用户想法：{self.user_idea}\n\n"
-                            f"写作要求：{self.user_requriments}\n\n"
-                            f"小说大纲：{self.getCurrentOutline()}\n\n"
-                            f"请基于以上信息生成一个精彩的小说标题。"
+                        print(f"🔧 方法3：使用简化调用生成标题 (尝试{attempt_num})")
+                        # 使用简化的输入，避免重复发送系统提示词
+                        simplified_inputs = {
+                            "用户想法": self.user_idea,
+                            "小说大纲": self.getCurrentOutline()
+                        }
+                        
+                        # 如果有写作要求且不为空，才添加
+                        if self.user_requriments and self.user_requriments.strip():
+                            simplified_inputs["写作要求"] = self.user_requriments
+                        
+                        # 直接使用invoke方法，避免重复系统提示词
+                        raw_resp = self.title_generator.invoke(
+                            inputs=simplified_inputs,
+                            output_keys=["标题"]
                         )
                         
-                        raw_content = raw_resp.get("content", "")
-                        # 简单的标题提取
-                        lines = raw_content.split('\n')
-                        extracted_title = None
-                        for line in lines:
-                            line = line.strip()
-                            if line and not line.startswith('#') and len(line) > 3 and len(line) < 50:
-                                # 找到第一个合理的标题候选
-                                extracted_title = line
-                                break
+                        # 获取标题结果
+                        self.novel_title = raw_resp["标题"]
                         
-                        if extracted_title:
-                            self.novel_title = extracted_title
-                            print(f"✅ 小说标题生成完成：《{self.novel_title}》")
-                            print(f"📝 标题长度：{len(self.novel_title)}字符")
-                            print(f"🎯 使用方法：智能解析 (尝试{attempt_num})")
-                            
-                            self.log_message(f"📚 已生成小说标题：{self.novel_title}")
-                            
-                            # 标记需要保存标题到浏览器
-                            self._mark_for_browser_save("title", {
-                                "title": self.novel_title
-                            })
-                            
-                            return self.novel_title
-                        else:
-                            print(f"❌ 智能解析未找到有效标题 (尝试{attempt_num})")
+                        print(f"✅ 小说标题生成完成：《{self.novel_title}》")
+                        print(f"📝 标题长度：{len(self.novel_title)}字符")
+                        print(f"🎯 使用方法：简化调用 (尝试{attempt_num})")
+                        
+                        self.log_message(f"📚 已生成小说标题：{self.novel_title}")
+                        
+                        # 自动保存标题到本地文件
+                        self._save_to_local("title", title=self.novel_title)
+                        
+                        # 标题生成成功后立即初始化输出文件名
+                        self.initOutputFile()
+                        
+                        return self.novel_title
                             
                     except Exception as e3:
-                        print(f"❌ 智能解析失败 (尝试{attempt_num})：{e3}")
+                        print(f"❌ 简化调用失败 (尝试{attempt_num})：{e3}")
             
             # 如果还有重试机会，等待一下再重试
             if retry < max_retries:
@@ -902,10 +1076,11 @@ class AIGN:
         self.log_message(f"⚠️ 标题生成失败，使用默认标题：{self.novel_title}")
         self.log_message(f"💡 用户可以在Web界面的'大纲'标签页手动修改标题")
         
-        # 标记需要保存标题到浏览器
-        self._mark_for_browser_save("title", {
-            "title": self.novel_title
-        })
+        # 自动保存标题到本地文件
+        self._save_to_local("title", title=self.novel_title)
+        
+        # 即使是默认标题也要初始化输出文件名
+        self.initOutputFile()
         
         return self.novel_title
     
@@ -991,10 +1166,8 @@ class AIGN:
         
         self.log_message(f"✅ 人物列表生成完成")
         
-        # 标记需要保存人物列表到浏览器
-        self._mark_for_browser_save("character_list", {
-            "character_list": self.character_list
-        })
+        # 自动保存人物列表到本地文件
+        self._save_to_local("character_list", character_list=self.character_list)
         
         return self.character_list
     
@@ -1048,11 +1221,15 @@ class AIGN:
         # 设置使用详细大纲
         self.use_detailed_outline = True
         
-        # 标记需要保存详细大纲到浏览器
-        self._mark_for_browser_save("detailed_outline", {
-            "detailed_outline": self.detailed_outline,
-            "target_chapters": self.target_chapter_count
-        })
+        # 自动保存详细大纲到本地文件
+        self._save_to_local("detailed_outline",
+            detailed_outline=self.detailed_outline,
+            target_chapters=self.target_chapter_count
+        )
+        
+        # 详细大纲生成完成后更新元数据
+        print(f"💾 详细大纲生成完成，更新元数据...")
+        self.updateMetadataAfterDetailedOutline()
         
         return self.detailed_outline
     
@@ -1254,12 +1431,15 @@ class AIGN:
         # 生成完成总结
         self._generate_storyline_summary()
         
-        # 标记需要保存故事线到浏览器
-        self._mark_for_browser_save("storyline", {
-            "storyline": self.storyline,
-            "target_chapters": self.target_chapter_count,
-            "actual_chapters": len(self.storyline.get('chapters', []))
-        })
+        # 自动保存故事线到本地文件
+        self._save_to_local("storyline",
+            storyline=self.storyline,
+            target_chapters=self.target_chapter_count
+        )
+        
+        # 故事线生成完成后更新元数据
+        print(f"💾 故事线生成完成，更新元数据...")
+        self.updateMetadataAfterStoryline()
         
         return self.storyline
     
@@ -1761,9 +1941,13 @@ class AIGN:
                 except Exception as e:
                     print(f"⚠️  故事线生成失败: {e}")
         
-        # 初始化输出文件
-        self.initOutputFile()
-        self.saveToFile()
+        # 初始化输出文件（如果还没有初始化的话）
+        if not hasattr(self, 'current_output_file') or not self.current_output_file:
+            self.initOutputFile()
+        
+        # 开始生成正文，保存小说文件（元数据已在大纲阶段保存）
+        print(f"📖 开始生成正文，保存小说文件...")
+        self.saveNovelFileOnly()
 
         return beginning
 
@@ -2690,8 +2874,11 @@ class AIGN:
             
         # 确保最终章以"（全文完）"结尾
         if is_final_chapter and not next_paragraph.strip().endswith("（全文完）"):
-            next_paragraph = next_paragraph.strip() + "\n\n（全文完）"
+            # 获取当前使用的模型名称
+            model_info = self._get_current_model_info()
+            next_paragraph = next_paragraph.strip() + f"\n\n（全文完）\n\n——————————————————————————————\n生成模型：{model_info}"
             print("🎉 小说创作完成！")
+            print(f"📊 使用模型：{model_info}")
 
         self.paragraph_list.append(next_paragraph)
         self.writing_plan = next_writing_plan
@@ -2703,7 +2890,8 @@ class AIGN:
         self.updateMemory()
         self.updateNovelContent()
         self.recordNovel()
-        self.saveToFile()
+        # 在生成章节过程中保存元数据
+        self.saveToFile(save_metadata=True)
         
         # 生成章节总结并更新故事线
         if self.enable_chapters and self.chapter_count > 0:
@@ -2753,7 +2941,7 @@ class AIGN:
         print(f"📄 输出文件路径：{self.current_output_file}")
         print(f"📄 元数据文件将保存为：{os.path.splitext(self.current_output_file)[0]}_metadata.json")
     
-    def saveToFile(self):
+    def saveToFile(self, save_metadata=True):
         """保存小说内容到文件"""
         if not self.current_output_file:
             return
@@ -2768,11 +2956,219 @@ class AIGN:
                 
             print(f"💾 已保存到文件: {self.current_output_file}")
             
-            # 保存元数据到同名文件
-            self.saveMetadataToFile()
+            # 只在指定时才保存元数据
+            if save_metadata:
+                self.saveMetadataToFile()
+            else:
+                print(f"📄 跳过元数据保存")
             
         except Exception as e:
             print(f"❌ 保存文件失败: {e}")
+    
+    def saveNovelFileOnly(self):
+        """仅保存小说内容文件，不保存元数据"""
+        if not self.current_output_file:
+            print("❌ 没有输出文件路径，无法保存小说文件")
+            return
+            
+        try:
+            with open(self.current_output_file, "w", encoding="utf-8") as f:
+                if self.novel_title:
+                    f.write(f"{self.novel_title}\n")
+                    f.write("=" * len(self.novel_title) + "\n\n")
+                
+                f.write(self.novel_content)
+                
+            print(f"📖 已保存小说文件: {self.current_output_file}")
+            
+        except Exception as e:
+            print(f"❌ 保存小说文件失败: {e}")
+            
+    def saveMetadataOnlyAfterOutline(self):
+        """在大纲生成完成后保存元数据（不保存小说文件）"""
+        # 即使没有小说文件，也要生成元数据文件路径
+        if not hasattr(self, 'current_output_file') or not self.current_output_file:
+            if self.novel_title:
+                self.initOutputFile()
+            else:
+                print("❌ 没有小说标题，无法生成元数据文件路径")
+                return
+        
+        # 生成元数据文件名
+        base_name = os.path.splitext(self.current_output_file)[0]
+        metadata_file = f"{base_name}_metadata.json"
+        
+        try:
+            import json
+            
+            # 准备元数据（大纲阶段的数据）
+            metadata = {
+                "novel_info": {
+                    "title": self.novel_title or "未命名小说",
+                    "target_chapter_count": getattr(self, 'target_chapter_count', 0),
+                    "current_chapter_count": 0,  # 还没有开始写正文
+                    "enable_chapters": getattr(self, 'enable_chapters', True),
+                    "enable_ending": getattr(self, 'enable_ending', True),
+                    "created_time": datetime.now().isoformat(),
+                    "output_file": self.current_output_file,
+                    "stage": "outline_completed"  # 标记当前阶段
+                },
+                "user_input": {
+                    "user_idea": self.user_idea or "",
+                    "user_requirements": self.user_requriments or "",
+                    "embellishment_idea": self.embellishment_idea or ""
+                },
+                "generated_content": {
+                    "novel_outline": self.novel_outline or "",
+                    "detailed_outline": getattr(self, 'detailed_outline', "") or "",
+                    "use_detailed_outline": getattr(self, 'use_detailed_outline', False),
+                    "current_outline": self.getCurrentOutline(),
+                    "character_list": self.character_list or "",
+                    "storyline": getattr(self, 'storyline', {}) or {},
+                    "writing_plan": "",  # 还没有开始写作
+                    "temp_setting": "",  # 还没有开始写作
+                    "writing_memory": ""  # 还没有开始写作
+                },
+                "statistics": {
+                    "total_paragraphs": 0,  # 还没有正文内容
+                    "content_length": 0,    # 还没有正文内容
+                    "original_outline_length": len(self.novel_outline) if self.novel_outline else 0,
+                    "detailed_outline_length": len(getattr(self, 'detailed_outline', '') or ''),
+                    "current_outline_length": len(self.getCurrentOutline()),
+                    "character_list_length": len(self.character_list) if self.character_list else 0,
+                    "storyline_chapters": len(getattr(self, 'storyline', {}).get("chapters", [])) if hasattr(self, 'storyline') and isinstance(getattr(self, 'storyline'), dict) else 0
+                }
+            }
+            
+            # 保存到JSON文件
+            with open(metadata_file, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+            
+            print(f"📄 元数据已保存到: {metadata_file}")
+            print(f"📊 大纲阶段元数据统计:")
+            print(f"   • 小说标题: {metadata['novel_info']['title']}")
+            print(f"   • 创建时间: {metadata['novel_info']['created_time']}")
+            print(f"   • 生成阶段: {metadata['novel_info']['stage']}")
+            print(f"   • 原始大纲长度: {metadata['statistics']['original_outline_length']} 字符")
+            print(f"   • 详细大纲长度: {metadata['statistics']['detailed_outline_length']} 字符")
+            print(f"   • 人物列表长度: {metadata['statistics']['character_list_length']} 字符")
+            
+        except Exception as e:
+            print(f"❌ 保存大纲阶段元数据失败: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def updateMetadataAfterDetailedOutline(self):
+        """在详细大纲生成完成后更新元数据"""
+        if not hasattr(self, 'current_output_file') or not self.current_output_file:
+            print("❌ 没有输出文件路径，无法更新元数据")
+            return
+        
+        # 生成元数据文件名
+        base_name = os.path.splitext(self.current_output_file)[0]
+        metadata_file = f"{base_name}_metadata.json"
+        
+        try:
+            import json
+            
+            # 尝试加载现有的元数据
+            existing_metadata = {}
+            if os.path.exists(metadata_file):
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    existing_metadata = json.load(f)
+                print(f"📄 加载现有元数据文件进行更新")
+            else:
+                print(f"📄 没有找到现有元数据文件，创建新的")
+            
+            # 更新详细大纲相关数据
+            if 'generated_content' not in existing_metadata:
+                existing_metadata['generated_content'] = {}
+            if 'statistics' not in existing_metadata:
+                existing_metadata['statistics'] = {}
+            if 'novel_info' not in existing_metadata:
+                existing_metadata['novel_info'] = {}
+                
+            # 更新生成内容
+            existing_metadata['generated_content']['detailed_outline'] = self.detailed_outline
+            existing_metadata['generated_content']['use_detailed_outline'] = True
+            existing_metadata['generated_content']['current_outline'] = self.getCurrentOutline()
+            
+            # 更新统计信息
+            existing_metadata['statistics']['detailed_outline_length'] = len(self.detailed_outline)
+            existing_metadata['statistics']['current_outline_length'] = len(self.getCurrentOutline())
+            
+            # 更新小说信息
+            existing_metadata['novel_info']['target_chapter_count'] = getattr(self, 'target_chapter_count', 0)
+            existing_metadata['novel_info']['stage'] = "detailed_outline_completed"
+            
+            # 保存更新后的元数据
+            with open(metadata_file, "w", encoding="utf-8") as f:
+                json.dump(existing_metadata, f, ensure_ascii=False, indent=2)
+            
+            print(f"📄 元数据已更新: {metadata_file}")
+            print(f"📊 详细大纲阶段更新:")
+            print(f"   • 详细大纲长度: {len(self.detailed_outline)} 字符")
+            print(f"   • 目标章节数: {getattr(self, 'target_chapter_count', 0)}")
+            print(f"   • 当前使用大纲: 详细大纲")
+            
+        except Exception as e:
+            print(f"❌ 更新详细大纲元数据失败: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def updateMetadataAfterStoryline(self):
+        """在故事线生成完成后更新元数据"""
+        if not hasattr(self, 'current_output_file') or not self.current_output_file:
+            print("❌ 没有输出文件路径，无法更新元数据")
+            return
+        
+        # 生成元数据文件名
+        base_name = os.path.splitext(self.current_output_file)[0]
+        metadata_file = f"{base_name}_metadata.json"
+        
+        try:
+            import json
+            
+            # 尝试加载现有的元数据
+            existing_metadata = {}
+            if os.path.exists(metadata_file):
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    existing_metadata = json.load(f)
+                print(f"📄 加载现有元数据文件进行更新")
+            else:
+                print(f"📄 没有找到现有元数据文件，创建新的")
+            
+            # 确保必要的结构存在
+            if 'generated_content' not in existing_metadata:
+                existing_metadata['generated_content'] = {}
+            if 'statistics' not in existing_metadata:
+                existing_metadata['statistics'] = {}
+            if 'novel_info' not in existing_metadata:
+                existing_metadata['novel_info'] = {}
+                
+            # 更新故事线相关数据
+            existing_metadata['generated_content']['storyline'] = self.storyline
+            
+            # 更新统计信息
+            chapter_count = len(self.storyline.get('chapters', [])) if isinstance(self.storyline, dict) else 0
+            existing_metadata['statistics']['storyline_chapters'] = chapter_count
+            
+            # 更新小说信息
+            existing_metadata['novel_info']['stage'] = "storyline_completed"
+            
+            # 保存更新后的元数据
+            with open(metadata_file, "w", encoding="utf-8") as f:
+                json.dump(existing_metadata, f, ensure_ascii=False, indent=2)
+            
+            print(f"📄 元数据已更新: {metadata_file}")
+            print(f"📊 故事线阶段更新:")
+            print(f"   • 故事线章节数: {chapter_count}")
+            print(f"   • 生成阶段: 故事线完成")
+            
+        except Exception as e:
+            print(f"❌ 更新故事线元数据失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     def saveMetadataToFile(self):
         """保存文章相关的所有元数据到单独文件"""
@@ -2795,7 +3191,8 @@ class AIGN:
                     "enable_chapters": self.enable_chapters,
                     "enable_ending": self.enable_ending,
                     "created_time": datetime.now().isoformat(),
-                    "output_file": self.current_output_file
+                    "output_file": self.current_output_file,
+                    "stage": "content_generation"  # 标记当前阶段为正文生成
                 },
                 "user_input": {
                     "user_idea": self.user_idea,
@@ -3283,8 +3680,8 @@ class AIGN:
                     completion_msg = f"🎉 自动生成完成！共生成 {self.chapter_count} 章，总耗时: {total_time/60:.1f} 分钟"
                     print(completion_msg)
                     self._sync_to_webui(completion_msg)
-                    # 确保最后一章内容被保存
-                    self.saveToFile()
+                    # 确保最后一章内容和元数据被保存
+                    self.saveToFile(save_metadata=True)
                     # 生成EPUB格式文件
                     self.saveToEpub()
                 else:

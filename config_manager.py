@@ -246,12 +246,13 @@ NETWORK_SETTINGS = {
             sys.exit(1)
 
 
-def get_chatllm(allow_incomplete: bool = True):
+def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = True):
     """
     根据配置获取ChatLLM实例（优先使用动态配置）
     
     Args:
         allow_incomplete: 是否允许不完整的配置
+        include_system_prompt: 是否包含系统提示词（避免重复）
     
     Returns:
         Callable: ChatLLM函数
@@ -288,13 +289,17 @@ def get_chatllm(allow_incomplete: bool = True):
                     'api_key': current_config.api_key,
                     'model_name': current_config.model_name,
                     'base_url': current_config.base_url,
-                    'system_prompt': current_config.system_prompt
+                    'system_prompt': current_config.system_prompt if include_system_prompt else ""
                 }
             else:
                 # 动态配置无效，回退到静态配置
                 config = load_config(allow_incomplete=allow_incomplete)
                 provider = config['provider']
                 provider_config = config['config']
+                # 如果不包含系统提示词，清空它
+                if not include_system_prompt:
+                    provider_config = provider_config.copy()  # 避免修改原始配置
+                    provider_config['system_prompt'] = ""
 
                 # 如果静态配置也无效且允许不完整配置，返回提示函数
                 if allow_incomplete and config.get('incomplete', False):
@@ -343,6 +348,10 @@ def get_chatllm(allow_incomplete: bool = True):
         config = load_config(allow_incomplete=allow_incomplete)
         provider = config['provider']
         provider_config = config['config']
+        # 如果不包含系统提示词，清空它
+        if not include_system_prompt:
+            provider_config = provider_config.copy()  # 避免修改原始配置
+            provider_config['system_prompt'] = ""
 
         # 如果静态配置不完整且允许不完整配置，返回友好提示函数
         if config.get('incomplete', False):

@@ -53,6 +53,9 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
             params["top_p"] = top_p
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
+        else:
+            # LM Studio默认设置较大的max_tokens以避免截断
+            params["max_tokens"] = 4096  # 适合故事线生成的大小
         
         # 添加JSON格式化输出支持 (LM Studio)
         if response_format is not None:
@@ -63,16 +66,42 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
         if tools is not None:
             params["tools"] = tools
             if tool_choice is not None:
-                params["tool_choice"] = tool_choice
+                # LM Studio只支持字符串格式的tool_choice: "none", "auto", "required"
+                if isinstance(tool_choice, dict):
+                    print(f"⚠️ LM Studio不支持对象格式的tool_choice，将转换为'auto'")
+                    params["tool_choice"] = "auto"
+                else:
+                    params["tool_choice"] = tool_choice
+                print(f"🔧 LM Studio使用tool_choice: {params['tool_choice']}")
             print(f"🔧 LM Studio使用工具调用: {len(tools)}个工具")
         
         try:
             if not stream:
                 response = client.chat.completions.create(**params)
-                return {
-                    "content": response.choices[0].message.content,
-                    "total_tokens": response.usage.total_tokens if response.usage else 0,
-                }
+                
+                # 处理工具调用响应
+                if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+                    tool_calls_data = []
+                    for tool_call in response.choices[0].message.tool_calls:
+                        tool_calls_data.append({
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments
+                            }
+                        })
+                    
+                    result = {
+                        "content": response.choices[0].message.content,
+                        "total_tokens": response.usage.total_tokens if response.usage else 0,
+                        "tool_calls": tool_calls_data
+                    }
+                    print(f"🔧 LM Studio返回工具调用: {len(tool_calls_data)}个")
+                    return result
+                else:
+                    return {
+                        "content": response.choices[0].message.content,
+                        "total_tokens": response.usage.total_tokens if response.usage else 0,
+                    }
             else:
                 # 对于流式输出，不支持结构化输出
                 stream_params = params.copy()

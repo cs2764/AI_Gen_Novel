@@ -6,6 +6,46 @@ from datetime import datetime
 
 from version import get_version
 
+# 标题验证函数
+def is_valid_title(title):
+    """检查标题是否为有效的已生成内容"""
+    if not title or not title.strip():
+        return False
+    
+    title = title.strip()
+    
+    # 过滤无效标题
+    invalid_titles = [
+        "未命名小说",
+        "测试标题", 
+        "test",
+        "demo",
+        "示例",
+        "例子",
+        "标题",
+        "title",
+        "小说"
+    ]
+    
+    # 检查是否为无效标题
+    if title.lower() in [t.lower() for t in invalid_titles]:
+        return False
+        
+    # 检查是否过短
+    if len(title) < 2:
+        return False
+        
+    # 检查是否为明显的占位符
+    placeholder_patterns = [
+        "xxx", "test", "demo", "placeholder", "占位符", "临时"
+    ]
+    title_lower = title.lower()
+    for pattern in placeholder_patterns:
+        if pattern in title_lower:
+            return False
+            
+    return True
+
 # Cookie存储管理器
 class CookieStorageManager:
     def __init__(self):
@@ -281,6 +321,7 @@ config_is_valid = check_config_valid()
 try:
     from AIGN import AIGN
     from config_manager import get_chatllm, update_aign_settings
+    from local_data_manager import create_data_management_interface
     from web_config_interface import get_web_config_interface
     from dynamic_config_manager import get_config_manager
     from default_ideas_manager import get_default_ideas_manager
@@ -387,7 +428,8 @@ def make_middle_chat():
             carrier.history = carrier.history[-16:]
         try:
             # 动态获取当前配置的ChatLLM实例，确保使用最新的提供商配置
-            current_chatllm = get_chatllm(allow_incomplete=True)
+            # 重要：不包含系统提示词，避免与MarkdownAgent的历史记录重复
+            current_chatllm = get_chatllm(allow_incomplete=True, include_system_prompt=False)
             
             # 初始化变量，防止引用错误
             output_text = ""
@@ -482,23 +524,30 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
         has_existing_content = False
         existing_content_list = []
         
-        if aign.novel_outline:
+
+        
+        if aign.novel_outline and len(aign.novel_outline.strip()) > 0:
             has_existing_content = True
             existing_content_list.append(f"原始大纲 ({len(aign.novel_outline)}字符)")
-        if aign.novel_title:
+        
+        if aign.novel_title and is_valid_title(aign.novel_title):
             has_existing_content = True
             existing_content_list.append(f"小说标题 ('{aign.novel_title}')")
-        if aign.character_list:
+        
+        if aign.character_list and len(aign.character_list.strip()) > 0:
             has_existing_content = True
             existing_content_list.append(f"人物列表 ({len(aign.character_list)}字符)")
-        if hasattr(aign, 'detailed_outline') and aign.detailed_outline:
+        
+        if hasattr(aign, 'detailed_outline') and aign.detailed_outline and len(aign.detailed_outline.strip()) > 0:
             has_existing_content = True
             existing_content_list.append(f"详细大纲 ({len(aign.detailed_outline)}字符)")
+        
         if hasattr(aign, 'storyline') and aign.storyline and aign.storyline.get('chapters'):
             chapter_count = len(aign.storyline['chapters'])
             has_existing_content = True
             existing_content_list.append(f"故事线 ({chapter_count}章)")
-        if aign.novel_content:
+        
+        if aign.novel_content and len(aign.novel_content.strip()) > 0:
             has_existing_content = True
             existing_content_list.append(f"小说正文 ({len(aign.novel_content)}字符)")
         
@@ -536,6 +585,9 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
                     aign.novel_outline,  # 保持现有内容显示
                     aign.novel_title,
                     aign.character_list,
+                    getattr(aign, 'current_output_file', '') or '',  # 添加输出文件路径
+                    "",  # 导出文件名（确认阶段不更新）
+                    "",  # 导出文件名状态消息
                     gr.Button(visible=True),  # 保持按钮原样，通过状态信息提示用户
                     "",  # browser_save_data
                     ""   # browser_save_trigger
@@ -559,6 +611,24 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
             aign.storyline = {"chapters": []}
         # 注意：不清空novel_content，因为用户可能希望保留已写的正文
         
+        # 清空输出文件路径，避免使用旧的文件路径
+        aign.current_output_file = ""
+        
+        # 删除本地保存的相关数据文件，避免界面重新加载旧数据
+        try:
+            data_types_to_delete = ["outline", "title", "character_list", "detailed_outline", "storyline"]
+            success = aign.delete_local_data(data_types_to_delete)
+            if success:
+                debug_print("✅ 已删除本地保存的相关数据文件", 1)
+            else:
+                debug_print("⚠️ 删除本地数据文件失败", 1)
+                # 如果删除失败，强制清空内存中的数据，确保不会显示旧内容
+                debug_print("🔄 强制清空内存数据...", 1)
+        except Exception as e:
+            debug_print(f"⚠️ 删除本地数据文件时出错: {e}", 1)
+            # 出错时也要确保内存数据已清空
+            debug_print("🔄 确保内存数据已清空...", 1)
+        
         aign.user_idea = user_idea
         aign.user_requriments = user_requriments
         aign.embellishment_idea = embellishment_idea
@@ -566,10 +636,16 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
         carrier, middle_chat = make_middle_chat()
         carrier.history = []
         
-        # 直接更新ChatLLM，不再需要wrapped_chatLLM
+        # 直接更新ChatLLM，并清空Agent历史记录，确保重新生成时不受旧对话影响
         aign.novel_outline_writer.chatLLM = middle_chat
         aign.title_generator.chatLLM = middle_chat
         aign.character_generator.chatLLM = middle_chat
+        
+        # 重要：清空Agent的历史记录，避免旧对话影响新生成
+        aign.novel_outline_writer.clear_memory()
+        aign.title_generator.clear_memory()
+        aign.character_generator.clear_memory()
+        debug_print("🧹 已清空相关Agent的历史记录，确保重新生成的纯净性", 1)
         
         debug_print(f"✅ ChatLLM已更新，准备启动生成线程", 1)
     except Exception as e:
@@ -580,6 +656,9 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
             f"❌ 初始化失败: {str(e)}",
             "生成失败",
             "",
+            "",  # 输出文件路径（初始化失败时为空）
+            "",  # 导出文件名
+            "",  # 导出文件名状态消息
             gr.Button(visible=True),
             "",  # browser_save_data
             ""   # browser_save_trigger
@@ -593,7 +672,7 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
 
         # 使用计数器控制yield频率，避免过度更新UI
         update_counter = 0
-        max_wait_time = 300  # 最大等待时间5分钟
+        max_wait_time = 600  # 最大等待时间10分钟
         start_time = time.time()
         
         # 使用全局状态历史，保留之前的生成状态
@@ -604,8 +683,16 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
         while gen_ouline_thread.is_alive():
             # 检查是否超时
             if time.time() - start_time > max_wait_time:
-                debug_print("⚠️ 大纲生成超时，可能出现问题", 1)
+                debug_print("⚠️ 大纲生成超时，强制停止线程", 1)
                 status_history.append(["系统", "⚠️ 生成超时，请检查网络连接或API配置"])
+                # 尝试强制停止线程（虽然Python无法真正杀死线程，但可以设置标志）
+                try:
+                    # 设置停止标志，如果AIGN支持的话
+                    if hasattr(aign, 'stop_generation'):
+                        aign.stop_generation = True
+                        debug_print("✅ 已设置停止生成标志", 1)
+                except Exception as e:
+                    debug_print(f"⚠️ 设置停止标志失败: {e}", 1)
                 break
                 
             # 更频繁地更新UI以显示实时进度
@@ -638,6 +725,9 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
                     "生成中...",  # 大纲显示区域只显示状态
                     "生成中...",  # 标题显示区域只显示状态
                     "生成中...",  # 人物显示区域只显示状态
+                    getattr(aign, 'current_output_file', '') or '',  # 输出文件路径
+                    "",  # 导出文件名（生成中时不更新）
+                    "",  # 导出文件名状态消息
                     gr.Button(visible=False),
                     "",  # browser_save_data
                     ""   # browser_save_trigger
@@ -647,8 +737,12 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
             time.sleep(STREAM_INTERVAL)
         
         # 等待线程完全结束
-        gen_ouline_thread.join(timeout=5)
-        debug_print(f"✅ 大纲生成线程已结束", 1)
+        gen_ouline_thread.join(timeout=30)
+        if gen_ouline_thread.is_alive():
+            debug_print(f"⚠️ 大纲生成线程仍在运行，可能由于超时未能正常结束", 1)
+            status_history.append(["系统", "⚠️ 生成线程未能正常结束，但界面已恢复"])
+        else:
+            debug_print(f"✅ 大纲生成线程已结束", 1)
         
         # 检查生成结果并生成总结
         if aign.novel_outline:
@@ -681,6 +775,31 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
             title_display = "生成失败"
             character_display = "生成失败"
             
+        # 获取输出文件路径（标题生成后自动设置）
+        output_file_path = getattr(aign, 'current_output_file', '') or ''
+        if output_file_path:
+            debug_print(f"📄 输出文件路径已设置: {output_file_path}", 1)
+        else:
+            debug_print("⚠️ 输出文件路径未设置", 1)
+        
+        # 生成数据管理界面的导出文件名（标题生成后自动设置）
+        export_filename_value = ""
+        export_filename_message = ""
+        if data_management_components and isinstance(data_management_components, dict):
+            try:
+                from local_data_manager import get_export_filename
+                export_filename_value = get_export_filename(aign)
+                
+                # 检查是否有有效标题
+                if aign.novel_title and is_valid_title(aign.novel_title):
+                    export_filename_message = f"✅ 导出文件名已自动设置（基于标题：《{aign.novel_title}》）"
+                    debug_print(f"📤 导出文件名已设置: {export_filename_value}", 1)
+                else:
+                    export_filename_message = "⚠️ 使用时间戳文件名（标题无效或未设置）"
+            except Exception as e:
+                debug_print(f"⚠️ 设置导出文件名失败: {e}", 1)
+                export_filename_message = f"❌ 设置导出文件名失败: {e}"
+        
         # 最终更新
         result = [
             aign,
@@ -688,25 +807,15 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
             outline_display,
             title_display,
             character_display,
+            output_file_path,  # 添加输出文件路径
+            export_filename_value,  # 添加数据管理导出文件名
+            export_filename_message,  # 添加导出文件名状态消息
             gr.Button(visible=True),  # 重新启用按钮
+            "",  # browser_save_data
+            ""   # browser_save_trigger
         ]
         
-        # 触发浏览器保存
-        try:
-            save_queue = aign.get_browser_save_queue()
-            if save_queue:
-                # 构建保存数据的JavaScript触发器
-                import json
-                save_data = json.dumps(save_queue, ensure_ascii=False)
-                result.append(save_data)  # 添加到browser_save_data
-                result.append("trigger_save")  # 添加到browser_save_trigger
-            else:
-                result.append("")  # browser_save_data
-                result.append("")  # browser_save_trigger
-        except Exception as e:
-            debug_print(f"⚠️ 浏览器保存触发失败: {e}", 1)
-            result.append("")  # browser_save_data
-            result.append("")  # browser_save_trigger
+        # 数据已自动保存到本地文件
             
         yield result
     
@@ -718,6 +827,9 @@ def gen_ouline_button_clicked(aign, user_idea, user_requriments, embellishment_i
             aign.novel_outline or f"❌ 生成出错: {str(e)}",
             aign.novel_title or "生成失败",
             aign.character_list or "",
+            getattr(aign, 'current_output_file', '') or '',  # 输出文件路径
+            "",  # 导出文件名
+            "",  # 导出文件名状态消息
             gr.Button(visible=True),
             "",  # browser_save_data
             ""   # browser_save_trigger
@@ -740,20 +852,25 @@ def gen_detailed_outline_button_clicked(aign, user_idea, user_requriments, embel
     aign.embellishment_idea = embellishment_idea
     aign.novel_outline = novel_outline
     aign.target_chapter_count = target_chapters
+    
+    # 自动保存用户设置
+    aign.save_user_settings()
 
     carrier, middle_chat = make_middle_chat()
     # 初始化状态
     carrier.history = []
     
-    # 直接更新ChatLLM
+    # 直接更新ChatLLM并清空历史记录
     aign.detailed_outline_generator.chatLLM = middle_chat
+    aign.detailed_outline_generator.clear_memory()
+    debug_print("🧹 已清空详细大纲生成器的历史记录", 1)
 
     gen_detailed_outline_thread = threading.Thread(target=aign.genDetailedOutline)
     gen_detailed_outline_thread.start()
 
     # 使用计数器控制yield频率，避免过度更新UI
     update_counter = 0
-    max_wait_time = 300  # 最大等待时间5分钟
+    max_wait_time = 600  # 最大等待时间10分钟
     start_time = time.time()
     
     # 使用全局状态历史，保留之前的生成状态
@@ -818,23 +935,11 @@ def gen_detailed_outline_button_clicked(aign, user_idea, user_requriments, embel
         format_status_output(status_history),
         detailed_outline_display,
         gr.Button(visible=True),  # 重新启用按钮，允许重新生成
+        "",  # browser_save_data
+        ""   # browser_save_trigger
     ]
     
-    # 触发浏览器保存
-    try:
-        save_queue = aign.get_browser_save_queue()
-        if save_queue:
-            import json
-            save_data = json.dumps(save_queue, ensure_ascii=False)
-            result.append(save_data)  # browser_save_data
-            result.append("trigger_save")  # browser_save_trigger
-        else:
-            result.append("")  # browser_save_data
-            result.append("")  # browser_save_trigger
-    except Exception as e:
-        debug_print(f"⚠️ 浏览器保存触发失败: {e}", 1)
-        result.append("")  # browser_save_data
-        result.append("")  # browser_save_trigger
+    # 数据已自动保存到本地文件
         
     yield result
 
@@ -862,10 +967,17 @@ def gen_beginning_button_clicked(
         aign.global_status_history = []
     status_history = aign.global_status_history
     
-    # 直接更新ChatLLM
+    # 直接更新ChatLLM并清空历史记录
     aign.novel_beginning_writer.chatLLM = middle_chat
     aign.novel_embellisher.chatLLM = middle_chat
+    aign.novel_beginning_writer.clear_memory()
+    aign.novel_embellisher.clear_memory()
+    debug_print("🧹 已清空开头生成器的历史记录", 1)
 
+    # 添加开头生成开始的状态信息
+    status_history.append(["开头生成开始", f"📖 开始生成小说开头..."])
+    debug_print("📖 手动生成开头：开始生成", 1)
+    
     gen_beginning_thread = threading.Thread(
         target=aign.genBeginning,
         args=(user_requriments, embellishment_idea)
@@ -874,17 +986,33 @@ def gen_beginning_button_clicked(
 
     # 使用计数器控制yield频率，避免过度更新UI
     update_counter = 0
-    max_wait_time = 300  # 最大等待时间5分钟
+    max_wait_time = 600  # 最大等待时间10分钟
     start_time = time.time()
     
     while gen_beginning_thread.is_alive():
         # 检查是否超时
         if time.time() - start_time > max_wait_time:
             debug_print("⚠️ 开头生成超时，可能出现问题", 1)
+            status_history.append(["系统警告", "⚠️ 开头生成超时，可能出现问题"])
             break
             
         # 只在特定间隔更新UI，减少界面卡顿
         if update_counter % 4 == 0:  # 每2秒更新一次UI (0.5 * 4)
+            elapsed_time = int(time.time() - start_time)
+            content_chars = len(aign.novel_content) if aign.novel_content else 0
+            
+            # 根据生成进度显示不同状态
+            if content_chars == 0:
+                status_text = f"📖 正在生成开头内容...\n   • 状态: 正在创作故事开头\n   • 内容长度: {content_chars} 字符\n   • 已耗时: {elapsed_time} 秒"
+            else:
+                status_text = f"✨ 正在润色开头内容...\n   • 状态: 优化文字表达\n   • 内容长度: {content_chars} 字符\n   • 已耗时: {elapsed_time} 秒"
+            
+            # 更新现有信息而不是创建新的
+            if not status_history or status_history[-1][0] != "开头生成进度":
+                status_history.append(["开头生成进度", status_text])
+            else:
+                status_history[-1] = ["开头生成进度", status_text]
+            
             yield [
                 aign,
                 format_status_output(status_history),
@@ -898,6 +1026,23 @@ def gen_beginning_button_clicked(
         update_counter += 1
         time.sleep(STREAM_INTERVAL)
         
+    # 等待线程完全结束
+    gen_beginning_thread.join(timeout=30)
+    debug_print("✅ 开头生成线程已结束", 1)
+    
+    # 最终状态更新
+    final_content_chars = len(aign.novel_content) if aign.novel_content else 0
+    elapsed_time = int(time.time() - start_time)
+    
+    if final_content_chars > 0:
+        final_status = f"✅ 开头生成完成！\n   • 内容长度: {final_content_chars} 字符\n   • 总耗时: {elapsed_time} 秒\n   • 输出文件: {aign.current_output_file if aign.current_output_file else '未设置'}"
+        status_history.append(["开头生成完成", final_status])
+        debug_print(f"✅ 手动开头生成完成：{final_content_chars}字符", 1)
+    else:
+        final_status = "❌ 开头生成失败，请检查配置和网络连接"
+        status_history.append(["开头生成失败", final_status])
+        debug_print("❌ 手动开头生成失败", 1)
+    
     # 最终更新
     yield [
         aign,
@@ -946,13 +1091,33 @@ def gen_next_paragraph_button_clicked(
         aign.global_status_history = []
     status_history = aign.global_status_history
     
-    # 直接更新ChatLLM
+    # 直接更新ChatLLM并清空历史记录
     aign.novel_writer.chatLLM = middle_chat
     aign.novel_embellisher.chatLLM = middle_chat
     aign.novel_writer_compact.chatLLM = middle_chat
     aign.novel_embellisher_compact.chatLLM = middle_chat
     aign.memory_maker.chatLLM = middle_chat
+    
+    # 清空相关Agent的历史记录
+    aign.novel_writer.clear_memory()
+    aign.novel_embellisher.clear_memory()
+    aign.novel_writer_compact.clear_memory()
+    aign.novel_embellisher_compact.clear_memory()
+    aign.memory_maker.clear_memory()
+    debug_print("🧹 已清空章节生成器的历史记录", 1)
 
+    # 计算即将生成的章节号
+    next_chapter = aign.chapter_count + 1 if aign.enable_chapters else aign.chapter_count
+    
+    # 添加章节生成开始的状态信息
+    if aign.enable_chapters:
+        start_msg = f"📝 开始生成第{next_chapter}章..."
+    else:
+        start_msg = f"📝 开始生成下一段落..."
+    
+    status_history.append(["章节生成开始", start_msg])
+    debug_print(f"📝 手动生成：{start_msg}", 1)
+    
     gen_next_paragraph_thread = threading.Thread(
         target=aign.genNextParagraph,
         args=(user_requriments, embellishment_idea)
@@ -961,17 +1126,42 @@ def gen_next_paragraph_button_clicked(
 
     # 使用计数器控制yield频率，避免过度更新UI
     update_counter = 0
-    max_wait_time = 300  # 最大等待时间5分钟
+    max_wait_time = 600  # 最大等待时间10分钟
     start_time = time.time()
+    initial_content_length = len(aign.novel_content) if aign.novel_content else 0
     
     while gen_next_paragraph_thread.is_alive():
         # 检查是否超时
         if time.time() - start_time > max_wait_time:
             debug_print("⚠️ 段落生成超时，可能出现问题", 1)
+            status_history.append(["系统警告", "⚠️ 段落生成超时，可能出现问题"])
             break
             
         # 只在特定间隔更新UI，减少界面卡顿
         if update_counter % 4 == 0:  # 每2秒更新一次UI (0.5 * 4)
+            elapsed_time = int(time.time() - start_time)
+            current_content_length = len(aign.novel_content) if aign.novel_content else 0
+            new_content_chars = current_content_length - initial_content_length
+            
+            # 根据生成进度显示不同状态
+            mode_info = "精简模式" if getattr(aign, 'compact_mode', False) else "标准模式"
+            if new_content_chars == 0:
+                if aign.enable_chapters:
+                    status_text = f"📝 正在生成第{next_chapter}章内容... ({mode_info})\n   • 状态: 正在创作章节内容\n   • 新增内容: {new_content_chars} 字符\n   • 已耗时: {elapsed_time} 秒"
+                else:
+                    status_text = f"📝 正在生成段落内容... ({mode_info})\n   • 状态: 正在创作段落内容\n   • 新增内容: {new_content_chars} 字符\n   • 已耗时: {elapsed_time} 秒"
+            else:
+                if aign.enable_chapters:
+                    status_text = f"✨ 正在润色第{next_chapter}章内容... ({mode_info})\n   • 状态: 优化文字表达\n   • 新增内容: {new_content_chars} 字符\n   • 已耗时: {elapsed_time} 秒"
+                else:
+                    status_text = f"✨ 正在润色段落内容... ({mode_info})\n   • 状态: 优化文字表达\n   • 新增内容: {new_content_chars} 字符\n   • 已耗时: {elapsed_time} 秒"
+            
+            # 更新现有信息而不是创建新的
+            if not status_history or status_history[-1][0] != "章节生成进度":
+                status_history.append(["章节生成进度", status_text])
+            else:
+                status_history[-1] = ["章节生成进度", status_text]
+            
             yield [
                 aign,
                 format_status_output(status_history),
@@ -984,6 +1174,28 @@ def gen_next_paragraph_button_clicked(
         
         update_counter += 1
         time.sleep(STREAM_INTERVAL)
+        
+    # 等待线程完全结束
+    gen_next_paragraph_thread.join(timeout=30)
+    debug_print("✅ 段落生成线程已结束", 1)
+    
+    # 最终状态更新
+    final_content_length = len(aign.novel_content) if aign.novel_content else 0
+    new_content_chars = final_content_length - initial_content_length
+    elapsed_time = int(time.time() - start_time)
+    current_chapter = aign.chapter_count if aign.enable_chapters else "段落"
+    
+    if new_content_chars > 0:
+        if aign.enable_chapters:
+            final_status = f"✅ 第{current_chapter}章生成完成！\n   • 新增内容: {new_content_chars} 字符\n   • 当前总章节: {current_chapter} 章\n   • 总耗时: {elapsed_time} 秒"
+        else:
+            final_status = f"✅ 段落生成完成！\n   • 新增内容: {new_content_chars} 字符\n   • 总内容长度: {final_content_length} 字符\n   • 总耗时: {elapsed_time} 秒"
+        status_history.append(["章节生成完成", final_status])
+        debug_print(f"✅ 手动章节生成完成：新增{new_content_chars}字符", 1)
+    else:
+        final_status = "❌ 章节生成失败，请检查配置和网络连接"
+        status_history.append(["章节生成失败", final_status])
+        debug_print("❌ 手动章节生成失败", 1)
         
     # 最终更新
     yield [
@@ -1127,6 +1339,9 @@ def gen_storyline_button_clicked(aign, user_idea, user_requriments, embellishmen
     aign.target_chapter_count = target_chapters
     debug_print(f"📋 已设置目标章节数: {target_chapters}", 1)
     
+    # 自动保存用户设置
+    aign.save_user_settings()
+    
     # 显示使用的大纲类型
     if aign.detailed_outline and aign.detailed_outline != aign.novel_outline:
         debug_print(f"📖 使用详细大纲生成故事线 (长度: {len(aign.detailed_outline)}字符)", 1)
@@ -1144,8 +1359,10 @@ def gen_storyline_button_clicked(aign, user_idea, user_requriments, embellishmen
     # 添加故事线生成开始的标记，但不清空之前的状态
     status_history.append(["故事线生成开始", f"🚀 开始生成故事线... (目标: {target_chapters}章)"])
     
-    # 直接更新ChatLLM
+    # 直接更新ChatLLM并清空历史记录
     aign.storyline_generator.chatLLM = middle_chat
+    aign.storyline_generator.clear_memory()
+    debug_print("🧹 已清空故事线生成器的历史记录", 1)
     
     # 启动故事线生成线程
     debug_print("🚀 启动故事线生成线程...", 1)
@@ -1269,7 +1486,9 @@ def gen_storyline_button_clicked(aign, user_idea, user_requriments, embellishmen
             aign,
             format_status_output(status_history),
             status_text,
-            storyline_display
+            storyline_display,
+            "",  # browser_save_data
+            ""   # browser_save_trigger
         ]
         debug_print(f"✅ 故事线生成完成!", 1)
         debug_print(f"📊 生成统计:", 1)
@@ -1303,27 +1522,146 @@ def gen_storyline_button_clicked(aign, user_idea, user_requriments, embellishmen
         aign,
         format_status_output(status_history),
         status_text,
-        storyline_display
+        storyline_display,
+        "",  # browser_save_data
+        ""   # browser_save_trigger
     ]
     
-    # 触发浏览器保存
-    try:
-        save_queue = aign.get_browser_save_queue()
-        if save_queue:
-            import json
-            save_data = json.dumps(save_queue, ensure_ascii=False)
-            result.append(save_data)  # browser_save_data
-            result.append("trigger_save")  # browser_save_trigger
-        else:
-            result.append("")
-            result.append("")
-    except Exception as e:
-        debug_print(f"⚠️ 浏览器保存触发失败: {e}", 1)
-        result.append("")
-        result.append("")
+    # 数据已自动保存到本地文件
         
     return result
 
+
+def fix_duplicate_chapters_button_clicked(aign, status_output):
+    """修复重复章节按钮点击处理"""
+    debug_print("="*60, 1)
+    debug_print("🔧 开始修复重复章节...", 1)
+    
+    try:
+        # 内联修复重复章节功能
+        def fix_runtime_storyline_duplicates(aign_instance):
+            """修复故事线中的重复章节"""
+            if not aign_instance.storyline or not aign_instance.storyline.get('chapters'):
+                return {'success': False, 'error': '没有故事线数据'}
+            
+            chapters = aign_instance.storyline['chapters']
+            chapter_numbers = [ch.get('chapter_number', ch.get('chapter', 0)) for ch in chapters]
+            
+            # 统计重复章节
+            from collections import Counter
+            counter = Counter(chapter_numbers)
+            duplicates = {k: v for k, v in counter.items() if v > 1}
+            
+            if not duplicates:
+                return {'success': True, 'duplicates_fixed': 0, 'removed_count': 0, 'final_count': len(chapters)}
+            
+            # 修复重复章节：保留第一个，删除后续重复的
+            seen_chapters = set()
+            fixed_chapters = []
+            removed_count = 0
+            
+            for chapter in chapters:
+                ch_num = chapter.get('chapter_number', chapter.get('chapter', 0))
+                if ch_num not in seen_chapters:
+                    seen_chapters.add(ch_num)
+                    fixed_chapters.append(chapter)
+                else:
+                    removed_count += 1
+            
+            # 按章节号排序
+            fixed_chapters.sort(key=lambda x: x.get('chapter_number', x.get('chapter', 0)))
+            
+            # 更新故事线
+            aign_instance.storyline['chapters'] = fixed_chapters
+            
+            return {
+                'success': True,
+                'duplicates_fixed': len(duplicates),
+                'removed_count': removed_count,
+                'final_count': len(fixed_chapters)
+            }
+        
+        # 检查AIGN实例状态
+        if not aign:
+            debug_print("❌ 没有AIGN实例", 1)
+            return [aign, "❌ 没有AIGN实例", "❌ 系统错误"]
+        
+        if not aign.storyline or not aign.storyline.get('chapters'):
+            debug_print("❌ 没有故事线数据", 1)
+            return [aign, "❌ 没有故事线数据，请先生成故事线", "❌ 没有数据"]
+        
+        # 显示修复前状态
+        debug_print("📊 修复前状态:", 1)
+        chapters = aign.storyline.get('chapters', [])
+        chapter_numbers = [ch.get('chapter_number', ch.get('chapter', 0)) for ch in chapters]
+        from collections import Counter
+        counter = Counter(chapter_numbers)
+        duplicates = {k: v for k, v in counter.items() if v > 1}
+        
+        debug_print(f"   • 总章节数: {len(chapters)}", 1)
+        debug_print(f"   • 唯一章节: {len(set(chapter_numbers))}", 1)
+        debug_print(f"   • 重复章节: {len(duplicates)} 个", 1)
+        
+        if duplicates:
+            for ch_num, count in sorted(duplicates.items()):
+                debug_print(f"     第{ch_num}章: {count}个副本", 1)
+        
+        # 执行修复
+        result = fix_runtime_storyline_duplicates(aign)
+        
+        if result.get('success'):
+            duplicates_fixed = result.get('duplicates_fixed', 0)
+            removed_count = result.get('removed_count', 0)
+            final_count = result.get('final_count', 0)
+            
+            if duplicates_fixed > 0:
+                debug_print(f"✅ 修复完成！修复了 {duplicates_fixed} 个重复章节", 1)
+                debug_print(f"   删除了 {removed_count} 个重复副本", 1)
+                debug_print(f"   最终章节数: {final_count}", 1)
+                
+                status_text = f"✅ 重复章节修复完成\\n"
+                status_text += f"📊 修复统计:\\n"
+                status_text += f"   • 修复章节: {duplicates_fixed} 个\\n"
+                status_text += f"   • 删除重复: {removed_count} 个\\n"
+                status_text += f"   • 最终章节: {final_count} 个"
+                
+                # 更新故事线显示
+                storyline_display = format_storyline_display(aign.storyline)
+                
+                return [
+                    aign,
+                    status_text,
+                    f"✅ 修复了 {duplicates_fixed} 个重复章节，删除 {removed_count} 个副本",
+                    storyline_display
+                ]
+            else:
+                debug_print("✅ 没有发现重复章节，无需修复", 1)
+                return [
+                    aign, 
+                    "✅ 故事线结构正常，没有重复章节",
+                    "✅ 无需修复",
+                    format_storyline_display(aign.storyline)
+                ]
+        else:
+            error_msg = result.get('error', '未知错误')
+            debug_print(f"❌ 修复失败: {error_msg}", 1)
+            return [
+                aign,
+                f"❌ 修复重复章节失败: {error_msg}",
+                "❌ 修复失败",
+                format_storyline_display(aign.storyline) if aign.storyline else "没有故事线数据"
+            ]
+            
+    except Exception as e:
+        debug_print(f"❌ 修复重复章节异常: {str(e)}", 1)
+        import traceback
+        traceback.print_exc()
+        return [
+            aign,
+            f"❌ 修复重复章节异常: {str(e)}",
+            "❌ 系统异常",
+            format_storyline_display(aign.storyline) if aign.storyline else "没有故事线数据"
+        ]
 
 def repair_storyline_button_clicked(aign, target_chapters, status_output):
     """修复故事线按钮点击处理"""
@@ -1391,6 +1729,9 @@ def repair_storyline_button_clicked(aign, target_chapters, status_output):
     # 设置目标章节数
     aign.target_chapter_count = target_chapters
     
+    # 自动保存用户设置
+    aign.save_user_settings()
+    
     carrier, middle_chat = make_middle_chat()
     carrier.history = []
     
@@ -1408,7 +1749,7 @@ def repair_storyline_button_clicked(aign, target_chapters, status_output):
     
     # 流式更新界面
     update_counter = 0
-    max_wait_time = 300  # 5分钟超时
+    max_wait_time = 600  # 10分钟超时
     start_time = time.time()
     
     while repair_thread.is_alive():
@@ -1754,10 +2095,10 @@ def auto_generate_button_clicked(aign, target_chapters, enable_chapters, enable_
     
     # 增强版状态检查和诊断
     diagnosis = []
-    has_outline = bool(aign.novel_outline)
-    has_title = bool(aign.novel_title)
-    has_characters = bool(aign.character_list)
-    has_detailed_outline = bool(getattr(aign, 'detailed_outline', ''))
+    has_outline = bool(aign.novel_outline and len(aign.novel_outline.strip()) > 0)
+    has_title = bool(aign.novel_title and is_valid_title(aign.novel_title))
+    has_characters = bool(aign.character_list and len(aign.character_list.strip()) > 0)
+    has_detailed_outline = bool(getattr(aign, 'detailed_outline', '') and len(getattr(aign, 'detailed_outline', '').strip()) > 0)
     has_storyline = bool(aign.storyline and aign.storyline.get('chapters'))
     
     diagnosis.append("📊 自动生成准备状态检查:")
@@ -1767,11 +2108,23 @@ def auto_generate_button_clicked(aign, target_chapters, enable_chapters, enable_
     diagnosis.append(f"   • 详细大纲: {'✅' if has_detailed_outline else '⚠️ 缺失（建议生成）'}")
     diagnosis.append(f"   • 故事线: {'✅' if has_storyline else '⚠️ 缺失（建议生成）'}")
     
-    # 检查保存队列状态
-    save_queue = aign.get_browser_save_queue()
-    diagnosis.append(f"\n💾 浏览器保存队列: {len(save_queue)}项")
-    for item in save_queue:
-        diagnosis.append(f"   • {item['type']}: {item['readable_time']}")
+    # 检查本地存储状态
+    try:
+        storage_info = aign.get_local_storage_info()
+        total_size = storage_info.get("total_size", 0)
+        saved_files = sum(1 for file_info in storage_info.get("files", {}).values() if file_info.get("exists", False))
+        diagnosis.append(f"\n💾 本地数据存储: {saved_files}个文件, {total_size}字节")
+        
+        file_type_names = {
+            "outline": "大纲", "title": "标题", "character_list": "人物列表",
+            "detailed_outline": "详细大纲", "storyline": "故事线"
+        }
+        
+        for file_type, file_info in storage_info.get("files", {}).items():
+            if file_type in file_type_names and file_info.get("exists", False):
+                diagnosis.append(f"   • {file_type_names[file_type]}: ✅ {file_info.get('readable_time', '未知时间')}")
+    except Exception as e:
+        diagnosis.append(f"\n💾 本地存储状态: ❌ 检查失败 ({e})")
     
     diagnosis_text = "\n".join(diagnosis)
     debug_print("🔍 自动生成诊断结果:", 1)
@@ -1801,6 +2154,9 @@ def auto_generate_button_clicked(aign, target_chapters, enable_chapters, enable_
     aign.enable_ending = enable_ending
     aign.target_chapter_count = target_chapters
     aign.compact_mode = compact_mode
+    
+    # 自动保存用户设置
+    aign.save_user_settings()
     
     # 设置写作要求和润色要求
     if user_requriments:
@@ -2042,20 +2398,49 @@ def reload_chatllm(aign_instance=None):
 
 
 css = """
+/* 主界面布局优化 - 移除高度限制，允许整页滚动 */
 #row1 {
     min-width: 200px;
-    max-height: 700px;
-    overflow: auto;
+    min-height: 800px;
+    /* 移除max-height限制，让内容自然展开 */
 }
 #row2 {
     min-width: 300px;
-    max-height: 700px;
-    overflow: auto;
+    min-height: 800px;
+    /* 移除max-height限制，让内容自然展开 */
 }
 #row3 {
     min-width: 200px;
-    max-height: 700px;
-    overflow: auto;
+    min-height: 800px;
+    /* 移除max-height限制，让内容自然展开 */
+}
+
+/* 确保页面可以整体滚动 */
+body {
+    overflow-y: auto;
+}
+
+/* 优化文本框高度，确保内容完整显示 */
+#status_output {
+    min-height: 500px;
+    max-height: none;
+}
+
+#novel_content {
+    min-height: 600px;
+    max-height: none;
+}
+
+/* 优化标签页内容的显示 */
+.gradio-container {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* 确保按钮区域始终可见 */
+.gradio-button {
+    margin: 8px 4px;
+    min-height: 40px;
 }
 """
 
@@ -2072,6 +2457,19 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
             'writing_plan': '', 'temp_setting': '', 'writing_memory': '', 'current_output_file': ''
         })()
     
+    # 自动加载本地保存的数据
+    try:
+        if hasattr(aign_instance, 'load_from_local'):
+            loaded_items = aign_instance.load_from_local()
+            if loaded_items:
+                debug_print(f"📂 启动时自动加载了本地数据: {len(loaded_items)}项", 1)
+            else:
+                debug_print("📂 启动时未找到本地保存的数据", 1)
+        else:
+            debug_print("⚠️ AIGN实例不支持本地数据加载", 1)
+    except Exception as e:
+        debug_print(f"⚠️ 启动时自动加载本地数据失败: {e}", 1)
+    
     aign = gr.State(aign_instance)
     
     def get_current_default_values():
@@ -2084,6 +2482,93 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
         except Exception as e:
             debug_print(f"⚠️  获取默认想法配置失败: {e}", 1)
             return {"user_idea": "", "user_requirements": "", "embellishment_idea": ""}
+    
+    def get_loaded_data_values():
+        """获取启动时加载的本地数据，用于界面初始化"""
+        try:
+            # 获取当前AIGN实例中的数据
+            outline = getattr(aign_instance, 'novel_outline', '') or ''
+            title = getattr(aign_instance, 'novel_title', '') or ''
+            character_list = getattr(aign_instance, 'character_list', '') or ''
+            detailed_outline = getattr(aign_instance, 'detailed_outline', '') or ''
+            user_idea = getattr(aign_instance, 'user_idea', '') or ''
+            user_requirements = getattr(aign_instance, 'user_requriments', '') or ''
+            embellishment_idea = getattr(aign_instance, 'embellishment_idea', '') or ''
+            target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
+            
+            # 处理故事线数据
+            storyline = getattr(aign_instance, 'storyline', {})
+            storyline_text = ""
+            storyline_status = "未生成"
+            if storyline and isinstance(storyline, dict) and storyline.get('chapters'):
+                chapters = storyline['chapters']
+                storyline_status = f"已生成 {len(chapters)} 章"
+                storyline_text = f"📚 故事线概览 ({len(chapters)}章)\n\n"
+                for i, chapter in enumerate(chapters[:10], 1):  # 只显示前10章避免界面过长
+                    title_text = chapter.get('title', f'第{i}章')
+                    summary = chapter.get('plot_summary', '暂无梗概')
+                    storyline_text += f"【第{i}章】{title_text}\n{summary}\n\n"
+                
+                if len(chapters) > 10:
+                    storyline_text += f"... 还有 {len(chapters) - 10} 章内容 ..."
+            else:
+                storyline_text = "点击'生成故事线'按钮后，这里将显示每章的详细梗概...\n\n💡 提示：生成大量章节时，为避免界面卡顿，生成过程中仅显示最新章节，完成后将显示全部内容"
+            
+            # 生成启动状态消息
+            loaded_items = []
+            if outline:
+                loaded_items.append(f"大纲 ({len(outline)}字符)")
+            if title:
+                loaded_items.append(f"标题: {title}")
+            if character_list:
+                loaded_items.append(f"人物列表 ({len(character_list)}字符)")
+            if detailed_outline:
+                loaded_items.append(f"详细大纲 ({len(detailed_outline)}字符)")
+            if storyline and isinstance(storyline, dict) and storyline.get('chapters'):
+                loaded_items.append(f"故事线 ({len(storyline['chapters'])}章)")
+            
+            status_message = ""
+            if loaded_items:
+                status_message = f"📂 启动时自动加载了本地数据 ({len(loaded_items)}项):\n"
+                for item in loaded_items:
+                    status_message += f"✅ {item}\n"
+                status_message += "\n💡 您可以继续之前的创作或重新生成内容\n🚀 准备继续创作..."
+            else:
+                status_message = "📱 欢迎使用AI网络小说生成器！\n\n🚀 准备开始生成..."
+            
+            # 如果有本地加载的数据，优先使用；否则使用默认值
+            default_values = get_current_default_values()
+            
+            return {
+                "outline": outline,
+                "title": title,
+                "character_list": character_list,
+                "detailed_outline": detailed_outline,
+                "storyline": storyline_text,
+                "storyline_status": storyline_status,
+                "status_message": status_message,
+                "user_idea": user_idea if user_idea else default_values.get("user_idea", ""),
+                "user_requirements": user_requirements if user_requirements else default_values.get("user_requirements", ""),
+                "embellishment_idea": embellishment_idea if embellishment_idea else default_values.get("embellishment_idea", ""),
+                "target_chapters": target_chapters
+            }
+        except Exception as e:
+            debug_print(f"⚠️ 获取加载数据失败: {e}", 1)
+            # 如果获取失败，返回默认值
+            default_values = get_current_default_values()
+            return {
+                "outline": "",
+                "title": "",
+                "character_list": "",
+                "detailed_outline": "",
+                "storyline": "点击'生成故事线'按钮后，这里将显示每章的详细梗概...\n\n💡 提示：生成大量章节时，为避免界面卡顿，生成过程中仅显示最新章节，完成后将显示全部内容",
+                "storyline_status": "未生成",
+                "status_message": "📱 欢迎使用AI网络小说生成器！\n\n🚀 准备开始生成...",
+                "user_idea": default_values.get("user_idea", ""),
+                "user_requirements": default_values.get("user_requirements", ""),
+                "embellishment_idea": default_values.get("embellishment_idea", ""),
+                "target_chapters": 20
+            }
     
     def update_default_ideas_on_load():
         """页面加载时更新默认想法文本框"""
@@ -2231,25 +2716,24 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
                 if current_config_valid:
                     with gr.Accordion("💭 创意输入 - 使用说明", open=False):
                         gr.Markdown("输入你的想法，让AI帮你创作精彩的小说！")
-                    # 动态获取当前的默认想法配置
-                    current_defaults = get_current_default_values()
-                    default_user_idea = current_defaults.get("user_idea") or r"主角独自一人在异世界冒险，它爆种时会大喊一句：原神，启动！！！"
+                    # 获取启动时加载的本地数据或默认配置
+                    loaded_data = get_loaded_data_values()
                     user_idea_text = gr.Textbox(
-                        default_user_idea,
+                        loaded_data["user_idea"] or r"主角独自一人在异世界冒险，它爆种时会大喊一句：原神，启动！！！",
                         label="想法",
-                        lines=4,
+                        lines=8,
                         interactive=True,
                     )
                     user_requriments_text = gr.Textbox(
-                        current_defaults.get("user_requirements", ""),
+                        loaded_data["user_requirements"],
                         label="写作要求",
-                        lines=4,
+                        lines=8,
                         interactive=True,
                     )
                     embellishment_idea_text = gr.Textbox(
-                        current_defaults.get("embellishment_idea", ""),
+                        loaded_data["embellishment_idea"],
                         label="润色要求",
-                        lines=4,
+                        lines=8,
                         interactive=True,
                     )
                     gen_ouline_button = gr.Button("生成大纲")
@@ -2258,19 +2742,19 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
                     user_idea_text = gr.Textbox(
                         "请先配置API密钥",
                         label="想法",
-                        lines=4,
+                        lines=8,
                         interactive=False,
                     )
                     user_requriments_text = gr.Textbox(
                         "请先配置API密钥",
                         label="写作要求",
-                        lines=4,
+                        lines=8,
                         interactive=False,
                     )
                     embellishment_idea_text = gr.Textbox(
                         "请先配置API密钥",
                         label="润色要求",
-                        lines=4,
+                        lines=8,
                         interactive=False,
                     )
                     gen_ouline_button = gr.Button("生成大纲", interactive=False)
@@ -2287,21 +2771,25 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
 💡 **使用提示**：原始大纲生成后，建议先检查并完善内容，再进入自动生成阶段。
                     """)
                 novel_outline_text = gr.Textbox(
-                    label="原始大纲", lines=15, interactive=True
+                    loaded_data["outline"],
+                    label="原始大纲", lines=30, interactive=True
                 )
                 novel_title_text = gr.Textbox(
+                    loaded_data["title"],
                     label="小说标题", lines=1, interactive=True
                 )
                 character_list_text = gr.Textbox(
-                    label="人物列表", lines=8, interactive=True
+                    loaded_data["character_list"],
+                    label="人物列表", lines=16, interactive=True
                 )
                 target_chapters_slider = gr.Slider(
-                    minimum=5, maximum=500, value=20, step=1,
+                    minimum=5, maximum=500, value=loaded_data["target_chapters"], step=1,
                     label="目标章节数", interactive=True
                 )
                 gen_detailed_outline_button = gr.Button("生成详细大纲", variant="secondary")
                 detailed_outline_text = gr.Textbox(
-                    label="详细大纲", lines=15, interactive=True
+                    loaded_data["detailed_outline"],
+                    label="详细大纲", lines=30, interactive=True
                 )
                 gen_beginning_button = gr.Button("生成开头")
             with gr.Tab("状态"):
@@ -2319,13 +2807,13 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
                     """)
                 writing_memory_text = gr.Textbox(
                     label="记忆",
-                    lines=6,
+                    lines=12,
                     interactive=True,
-                    max_lines=8,
+                    max_lines=16,
                 )
-                writing_plan_text = gr.Textbox(label="计划", lines=6, interactive=True)
+                writing_plan_text = gr.Textbox(label="计划", lines=12, interactive=True)
                 temp_setting_text = gr.Textbox(
-                    label="临时设定", lines=5, interactive=True
+                    label="临时设定", lines=10, interactive=True
                 )
                 # TODO
                 # gen_next_paragraph_button = gr.Button("撤销生成")
@@ -2357,13 +2845,14 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
                 with gr.Row():
                     gen_storyline_button = gr.Button("生成故事线", variant="secondary")
                     repair_storyline_button = gr.Button("修复故事线", variant="secondary")
+                    fix_duplicates_button = gr.Button("🔄 修复重复章节", variant="secondary")
                     gen_storyline_status = gr.Textbox(
-                        label="故事线状态", value="未生成", interactive=False
+                        label="故事线状态", value=loaded_data["storyline_status"], interactive=False
                     )
                 # 故事线显示区域
                 storyline_text = gr.Textbox(
-                    label="故事线内容", lines=8, interactive=False,
-                    placeholder="点击'生成故事线'按钮后，这里将显示每章的详细梗概...\n\n💡 提示：生成大量章节时，为避免界面卡顿，生成过程中仅显示最新章节，完成后将显示全部内容"
+                    loaded_data["storyline"],
+                    label="故事线内容", lines=16, interactive=False
                 )
                 # 精简模式选项
                 with gr.Row():
@@ -2380,7 +2869,7 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
                     refresh_progress_btn = gr.Button("🔄 刷新进度", variant="secondary", size="sm")
                 gr.Markdown("💡 **提示**: 点击'🔄 刷新进度'按钮查看最新生成状态")
                 progress_text = gr.Textbox(
-                    label="生成进度", lines=4, interactive=False
+                    label="生成进度", lines=8, interactive=False
                 )
                 output_file_text = gr.Textbox(
                     label="输出文件路径", lines=1, interactive=False
@@ -2390,24 +2879,16 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
             # 使用Textbox代替Chatbot来显示状态信息
             status_output = gr.Textbox(
                 label="生成状态和日志", 
-                lines=20, 
-                max_lines=25,
+                lines=40, 
+                max_lines=50,
                 interactive=False,
-                value="""📱 欢迎使用AI网络小说生成器！
-
-💡 使用提示：
-- 在【📝 开始】标签输入创意想法后点击【生成大纲】开始
-- 生成过程中的详细状态信息将在这里实时显示
-- 支持浏览器自动保存，创作过程不会丢失
-- 如需恢复之前的创作，请前往【⚙️ 配置设置】→【数据管理】
-
-🚀 准备开始生成...""",
+                value=loaded_data["status_message"],
                 elem_id="status_output"
             )
         with gr.Column(scale=2, elem_id="row3"):
             novel_content_text = gr.Textbox(
                 label="📚 小说正文", 
-                lines=32, 
+                lines=64, 
                 interactive=True,
                 placeholder="📖 生成的小说内容将在这里实时显示...\n\n💡 提示：可以直接编辑内容，支持自动保存到浏览器",
                 elem_id="novel_content",
@@ -2427,7 +2908,7 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
         
         browser_save_status = gr.Textbox(
             label="保存状态", 
-            lines=4, 
+            lines=8, 
             interactive=False,
             value="""🍪 Cookies保存状态: 暂无数据
 
@@ -2464,13 +2945,29 @@ with gr.Blocks(css=css, title="AI网络小说生成器") as demo:
         
         browser_load_input = gr.Textbox(
             label="Cookies数据 (JSON格式)", 
-            lines=4, 
+            lines=8, 
             placeholder='点击此处查看获取cookies数据的详细说明...',
             interactive=True,
             info="💡 提示：如果文本框为空点击加载数据，会显示获取cookies数据的详细步骤"
         )
         
         load_data_button = gr.Button("📥 加载数据", variant="secondary")
+    
+    # 添加数据管理Tab
+    try:
+        data_management_components = create_data_management_interface(aign)
+    except Exception as e:
+        print(f"⚠️ 数据管理界面创建失败: {e}")
+        data_management_components = None
+    
+    # 手动保存按钮的特殊绑定 - 需要接收目标章节数
+    if data_management_components and 'manual_save_btn' in data_management_components:
+        data_management_components['manual_save_btn'].click(
+            fn=data_management_components['manual_save_handler'],
+            inputs=[aign, target_chapters_slider],
+            outputs=[data_management_components['storage_status']]
+        )
+
     
     # 隐藏的组件用于处理浏览器保存和加载触发
     browser_save_trigger = gr.Textbox(visible=False)
@@ -2750,7 +3247,10 @@ console.log('📊 Cookies数据:', JSON.stringify(data, null, 2));
     gen_ouline_button.click(
         gen_ouline_button_clicked,
         [aign, user_idea_text, user_requriments_text, embellishment_idea_text, status_output],
-        [aign, status_output, novel_outline_text, novel_title_text, character_list_text, gen_ouline_button, browser_save_data, browser_save_trigger],
+        [aign, status_output, novel_outline_text, novel_title_text, character_list_text, output_file_text, 
+         data_management_components['export_filename'] if data_management_components else gr.Textbox(visible=False),
+         data_management_components['export_result'] if data_management_components else gr.Textbox(visible=False),
+         gen_ouline_button, browser_save_data, browser_save_trigger],
     )
     gen_detailed_outline_button.click(
         gen_detailed_outline_button_clicked,
@@ -2817,6 +3317,13 @@ console.log('📊 Cookies数据:', JSON.stringify(data, null, 2));
         [aign, status_output, gen_storyline_status, storyline_text]
     )
     
+    # 修复重复章节按钮的事件绑定
+    fix_duplicates_button.click(
+        fix_duplicate_chapters_button_clicked,
+        [aign, status_output],
+        [aign, status_output, gen_storyline_status, storyline_text]
+    )
+    
     # 自动生成相关的事件绑定
     auto_generate_button.click(
         auto_generate_button_clicked,
@@ -2878,8 +3385,22 @@ console.log('📊 Cookies数据:', JSON.stringify(data, null, 2));
         # 更新故事线显示
         storyline_display = format_storyline_display(aign_instance.storyline) if aign_instance.storyline else "暂无故事线内容"
         
+        # 获取标题信息
+        title_value = getattr(aign_instance, 'novel_title', '') or ''
+        debug_print(f"📚 页面加载时获取标题: '{title_value}'", 1)
+        
+        # 更新数据管理界面的导出文件名
+        export_filename_value = ""
+        if data_management_components and isinstance(data_management_components, dict):
+            try:
+                from local_data_manager import get_export_filename
+                export_filename_value = get_export_filename(aign_instance)
+            except Exception as e:
+                debug_print(f"⚠️ 页面加载时设置导出文件名失败: {e}", 1)
+        
         # 确保类型一致：将tuple转换为list后合并
-        return progress_info + list(default_ideas_info) + [getattr(aign_instance, 'detailed_outline', ''), storyline_display]
+        # 注意：需要在适当位置插入标题值
+        return progress_info + list(default_ideas_info) + [getattr(aign_instance, 'detailed_outline', ''), title_value, storyline_display, export_filename_value]
     
     # 页面加载时更新提供商信息
     def on_page_load_provider_info():
@@ -2890,7 +3411,8 @@ console.log('📊 Cookies数据:', JSON.stringify(data, null, 2));
     demo.load(
         on_page_load_main,
         [aign],
-        [progress_text, output_file_text, novel_content_text, user_idea_text, user_requriments_text, embellishment_idea_text, detailed_outline_text, storyline_text]
+        [progress_text, output_file_text, novel_content_text, user_idea_text, user_requriments_text, embellishment_idea_text, detailed_outline_text, novel_title_text, storyline_text,
+         data_management_components['export_filename'] if data_management_components else gr.Textbox(visible=False)]
     )
 
     # 页面加载时更新提供商信息
@@ -2973,5 +3495,5 @@ if __name__ == "__main__":
         show_error=True
     )
 else:
-    # For import use - basic launch for 3.x compatibility
-    demo.launch(share=False)
+    # For import use - do not auto launch when imported as module
+    pass

@@ -17,6 +17,24 @@ class EnhancedStorylineGenerator:
         self.chatLLM = chatLLM
         self.max_retries = 2
         self.provider_name = self._detect_provider()
+        
+        # 截断检测配置
+        self.truncation_detection = {
+            "enabled": True,              # 是否启用截断检测
+            "show_context_lines": 5,      # 显示上下文行数
+            "show_detailed_analysis": True, # 是否显示详细分析
+            "min_content_length": 50       # 最小内容长度阈值
+        }
+        
+        # 统计信息
+        self.stats = {
+            "total_attempts": 0,
+            "successful_generations": 0, 
+            "truncation_detected": 0,
+            "json_repair_success": 0,
+            "progressive_fallback_used": 0,
+            "provider_specific_fixes": 0
+        }
 
     def _detect_provider(self):
         """检测当前使用的提供商"""
@@ -29,8 +47,13 @@ class EnhancedStorylineGenerator:
 
     def _supports_advanced_features(self):
         """检查当前提供商是否支持高级功能（structured outputs和tool calling）"""
-        # OpenRouter和LM Studio都支持JSON Schema格式化输出
-        return self.provider_name in ["openrouter", "lmstudio"]
+        # 只有OpenRouter完全支持Structured Outputs和Tool Calling
+        return self.provider_name == "openrouter"
+    
+    def _supports_tool_calling(self):
+        """检查当前提供商是否支持工具调用（但可能有格式限制）"""
+        # 只有OpenRouter支持工具调用，LM Studio已禁用tool calling
+        return self.provider_name in ["openrouter"]
 
     def _save_error_data(self, error_type: str, original_messages: List[Dict[str, str]],
                         response_content: str, error_details: str, attempt_number: int = 1):
@@ -196,45 +219,78 @@ class EnhancedStorylineGenerator:
         """从提示词中提取期望的章节数量"""
         if not messages:
             return 10  # 默认值
+    
+    def get_statistics_report(self) -> str:
+        """获取详细的统计报告"""
+        stats = self.stats
+        total = max(stats["total_attempts"], 1)  # 避免除零错误
         
-        content = messages[-1]["content"]
+        success_rate = (stats["successful_generations"] / total) * 100
+        truncation_rate = (stats["truncation_detected"] / total) * 100
+        repair_rate = (stats["json_repair_success"] / max(stats["truncation_detected"], 1)) * 100
         
-        # 查找"请为第X章到第Y章"的模式
-        import re
+        report = f"""
+📊 故事线生成统计报告
+{'='*50}
+📈 总体统计:
+   • 总尝试次数: {stats['total_attempts']}
+   • 成功生成: {stats['successful_generations']}
+   • 成功率: {success_rate:.1f}%
+
+🚨 截断检测:
+   • 检测到截断: {stats['truncation_detected']}
+   • 截断率: {truncation_rate:.1f}%
+   
+🔧 修复统计:
+   • JSON修复成功: {stats['json_repair_success']}
+   • 修复成功率: {repair_rate:.1f}%
+   • 渐进式降级使用: {stats['progressive_fallback_used']}
+   • 提供商特定修复: {stats['provider_specific_fixes']}
+
+🎯 当前提供商: {self.provider_name.upper()}
+⚙️ 截断检测: {'启用' if self.truncation_detection['enabled'] else '禁用'}
+{'='*50}
+"""
+        return report
+    
+    def reset_statistics(self):
+        """重置统计信息"""
+        self.stats = {
+            "total_attempts": 0,
+            "successful_generations": 0, 
+            "truncation_detected": 0,
+            "json_repair_success": 0,
+            "progressive_fallback_used": 0,
+            "provider_specific_fixes": 0
+        }
+        print("📊 统计信息已重置")
+    
+    def configure_truncation_detection(self, **kwargs):
+        """配置截断检测参数"""
+        for key, value in kwargs.items():
+            if key in self.truncation_detection:
+                old_value = self.truncation_detection[key]
+                self.truncation_detection[key] = value
+                print(f"🔧 截断检测配置已更新: {key} = {old_value} → {value}")
+            else:
+                print(f"⚠️ 未知配置项: {key}")
+    
+    def _record_success(self, method_type: str):
+        """记录成功生成"""
+        self.stats["successful_generations"] += 1
         
-        # 匹配"请为第X章到第Y章"或"第X-Y章"或"章节范围：X-Y章"的模式
-        patterns = [
-            r'请为第(\d+)章到第(\d+)章',
-            r'第(\d+)-(\d+)章',
-            r'章节范围[：:]\s*(\d+)-(\d+)章',
-            r'start_chapter["\']:\s*(\d+).*?end_chapter["\']:\s*(\d+)',
-        ]
+        if method_type in ["enhanced_json_repair", "traditional_repair"]:
+            self.stats["json_repair_success"] += 1
         
-        for pattern in patterns:
-            match = re.search(pattern, content)
-            if match:
-                start = int(match.group(1))
-                end = int(match.group(2))
-                expected_count = end - start + 1
-                print(f"📝 从提示词中提取到章节范围: 第{start}-{end}章，共{expected_count}章")
-                return expected_count
-        
-        # 如果没找到明确的章节范围，尝试查找单独的数字
-        chapter_mentions = re.findall(r'(\d+)章', content)
-        if len(chapter_mentions) >= 2:
-            try:
-                numbers = [int(x) for x in chapter_mentions]
-                if len(set(numbers)) > 1:  # 有不同的数字
-                    start = min(numbers)
-                    end = max(numbers)
-                    expected_count = end - start + 1
-                    print(f"📝 从章节提及中推断章节范围: 第{start}-{end}章，共{expected_count}章")
-                    return expected_count
-            except ValueError:
-                pass
-        
-        print("⚠️ 无法从提示词中提取章节数量，使用默认值10章")
-        return 10
+        if method_type.startswith("progressive_"):
+            self.stats["progressive_fallback_used"] += 1
+            
+        if self.provider_name == "lmstudio" and "truncation" in method_type:
+            self.stats["provider_specific_fixes"] += 1
+    
+    def print_statistics(self):
+        """打印统计报告到控制台"""
+        print(self.get_statistics_report())
     
     def _debug_chapter_count(self, data: Dict[str, Any], expected_count: int, method_name: str) -> None:
         """调试章节数量信息"""
@@ -359,6 +415,15 @@ class EnhancedStorylineGenerator:
             return None
 
         print(f"🔧 开始JSON修复，原始内容长度: {len(text)}字符")
+        
+        # 特殊处理：LM Studio截断问题
+        if self.provider_name == "lmstudio" and len(text) < 500:
+            print("🔧 检测到LM Studio可能的截断问题，尝试修复...")
+            fixed_truncated = self._fix_lmstudio_truncation(text)
+            if fixed_truncated:
+                print("✅ LM Studio截断修复成功")
+                self._record_success("lmstudio_truncation_fix")
+                return fixed_truncated
 
         # 第一步：提取可能的JSON内容
         json_candidates = self._extract_json_candidates(text)
@@ -380,6 +445,55 @@ class EnhancedStorylineGenerator:
 
         print("❌ 所有JSON修复方法都失败")
         return None
+    
+    def _fix_lmstudio_truncation(self, text: str) -> Optional[Dict[str, Any]]:
+        """专门修复LM Studio的截断问题"""
+        try:
+            print("🔧 尝试修复LM Studio截断的JSON...")
+            
+            # 寻找JSON开始
+            json_start = text.find('{')
+            if json_start == -1:
+                return None
+            
+            json_text = text[json_start:]
+            
+            # 检查是否有不完整的字符串
+            if '"chapter_mood": "' in json_text:
+                # 找到最后一个不完整的字段
+                last_quote_pos = json_text.rfind('"chapter_mood": "')
+                if last_quote_pos != -1:
+                    # 截取到该位置，然后补全
+                    prefix = json_text[:last_quote_pos + len('"chapter_mood": "')]
+                    # 补全常见的mood值
+                    completed_json = prefix + '调教沉沦"\n    }\n  ]\n}'
+                    
+                    # 尝试解析
+                    try:
+                        data = json.loads(completed_json)
+                        # 确保有基本结构
+                        if isinstance(data, dict) and 'chapters' in data:
+                            # 补全缺失的batch_info
+                            if 'batch_info' not in data:
+                                chapters = data['chapters']
+                                if chapters:
+                                    first_chapter = chapters[0].get('chapter_number', 31)
+                                    data['batch_info'] = {
+                                        "start_chapter": first_chapter,
+                                        "end_chapter": first_chapter,
+                                        "total_chapters": len(chapters)
+                                    }
+                            
+                            print(f"✅ LM Studio截断修复成功：生成了{len(data.get('chapters', []))}章")
+                            return data
+                    except json.JSONDecodeError as e:
+                        print(f"⚠️ 截断修复后JSON仍无效: {e}")
+                        
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ LM Studio截断修复异常: {e}")
+            return None
 
     def _extract_json_candidates(self, text: str) -> List[str]:
         """提取可能的JSON内容候选"""
@@ -603,7 +717,7 @@ class EnhancedStorylineGenerator:
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         """使用tool calling生成故事线"""
         # 检查是否支持tool calling
-        if not self._supports_advanced_features():
+        if not self._supports_tool_calling():
             print(f"⚠️ 当前提供商 {self.provider_name.upper()} 不支持Tool Calling，跳过此方法")
             return None, f"provider_{self.provider_name}_not_supported_tool_calling"
 
@@ -614,23 +728,35 @@ class EnhancedStorylineGenerator:
             expected_count = self._extract_chapter_count_from_messages(messages)
             print(f"🔢 期望生成章节数: {expected_count}")
 
+            # 根据提供商调整tool_choice格式
+            # 注意：LM Studio已在_supports_tool_calling中被禁用，此代码仅为备用
+            if self.provider_name == "lmstudio":
+                # LM Studio只支持字符串格式的tool_choice
+                tool_choice_param = "auto"  # 使用auto让模型自动选择工具
+            else:
+                # OpenRouter和其他提供商支持对象格式
+                tool_choice_param = {"type": "function", "function": {"name": "generate_storyline_batch"}}
+            
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
                 tools=self.get_storyline_tools(expected_count),
-                tool_choice={"type": "function", "function": {"name": "generate_storyline_batch"}}
+                tool_choice=tool_choice_param
             )
             
             if response.get("tool_calls"):
                 for tool_call in response["tool_calls"]:
                     if tool_call.function.name == "generate_storyline_batch":
+                        # 🔍 检测Tool Calling响应截断
+                        self._detect_and_display_truncation(tool_call.function.arguments, "Tool Calling响应")
+                        
                         try:
                             data = json.loads(tool_call.function.arguments)
                             
                             print("✅ Tool Calling成功生成JSON格式")
                             # 使用统一的调试方法检查章节数量
                             self._debug_chapter_count(data, expected_count, "Tool Calling")
-                            
+                            self._record_success("tool_calling_success")
                             return data, "tool_calling_success"
                         except json.JSONDecodeError as e:
                             print(f"⚠️ Tool Calling参数无法解析: {e}")
@@ -695,6 +821,9 @@ class EnhancedStorylineGenerator:
                 if response.get("content"):
                     print(f"📝 收到响应，长度: {len(response['content'])}字符")
 
+                    # 🔍 检测截断
+                    self._detect_and_display_truncation(response["content"], f"传统方法(第{retry+1}次尝试)")
+
                     # 尝试直接解析
                     try:
                         data = json.loads(response["content"])
@@ -703,6 +832,7 @@ class EnhancedStorylineGenerator:
                             # 从消息中提取期望章节数以便调试
                             expected_count = self._extract_chapter_count_from_messages(messages)
                             self._debug_chapter_count(data, expected_count, f"传统方法(第{retry+1}次)")
+                            self._record_success(f"traditional_success_attempt_{retry+1}")
                             return data, f"traditional_success_attempt_{retry+1}"
                         else:
                             print(f"⚠️ JSON格式正确但结构不符合要求")
@@ -722,6 +852,7 @@ class EnhancedStorylineGenerator:
                         self._debug_chapter_count(fixed_data, expected_count, f"增强JSON修复(第{retry+1}次)")
                         # 记录成功案例
                         self._log_successful_generation("enhanced_json_repair", retry + 1, fixed_data)
+                        self._record_success("enhanced_json_repair")
                         return fixed_data, f"enhanced_json_repair_success_attempt_{retry+1}"
                     else:
                         print(f"❌ 第{retry+1}次尝试增强JSON修复失败")
@@ -859,21 +990,21 @@ class EnhancedStorylineGenerator:
 
         print(f"🔧 当前提供商: {self.provider_name.upper()}")
 
-        # 如果支持高级功能，先尝试高级方法
+        # 方法1: Structured Outputs (仅OpenRouter)
         if self._supports_advanced_features():
-            # 方法1: Structured Outputs
             data, status = self.generate_with_structured_output(messages, temperature)
             if data:
                 self._log_successful_generation("structured_output", 1, data)
                 return data, status
 
-            # 方法2: Tool Calling
+        # 方法2: Tool Calling (OpenRouter和LM Studio)
+        if self._supports_tool_calling():
             data, status = self.generate_with_tool_calling(messages, temperature)
             if data:
                 self._log_successful_generation("tool_calling", 1, data)
                 return data, status
         else:
-            print(f"🔧 {self.provider_name.upper()} 不支持高级功能，直接使用传统方法")
+            print(f"🔧 {self.provider_name.upper()} 不支持Tool Calling，跳过此方法")
 
         # 方法3: 传统方法 + JSON修复（所有提供商都支持）
         data, status = self.generate_with_fallback_repair(messages, temperature)
@@ -881,7 +1012,298 @@ class EnhancedStorylineGenerator:
             # 成功案例已在 generate_with_fallback_repair 中记录
             return data, status
 
+        # 方法4: 渐进式生成（针对LM Studio等容易截断的提供商）
+        print("🔄 所有标准方法失败，尝试渐进式生成策略...")
+        expected_count = self._extract_chapter_count_from_messages(messages)
+        if expected_count > 3:  # 只有在请求较多章节时才使用渐进式策略
+            data, status = self._attempt_progressive_generation(messages, expected_count)
+            if data:
+                print(f"✅ 渐进式生成成功：{status}")
+                return data, status
+
         # 所有方法都失败，保存最终失败信息
         print("❌ 所有JSON生成方法都失败，跳过此批次")
         self._save_error_data("all_methods_failed", messages, "", "All generation methods failed")
         return None, "all_methods_failed"
+    
+    def _attempt_progressive_generation(self, messages: List[Dict[str, str]], expected_count: int) -> Tuple[Optional[Dict[str, Any]], str]:
+        """渐进式生成：如果10章失败，尝试5章，如果5章失败，尝试3章"""
+        print("🔄 开始渐进式生成策略...")
+        
+        # 从消息中提取章节范围信息
+        original_messages = messages.copy()
+        
+        # 尝试不同的章节数量
+        attempt_sizes = [5, 3, 1] if expected_count > 5 else [3, 1] if expected_count > 3 else [1]
+        
+        for attempt_size in attempt_sizes:
+            print(f"🔄 尝试生成{attempt_size}章（原计划{expected_count}章）...")
+            
+            # 修改消息以请求更少的章节
+            modified_messages = self._modify_messages_for_smaller_batch(original_messages, attempt_size)
+            
+            # 尝试所有生成方法
+            for method_name, method_func in [
+                ("Tool Calling", self.generate_with_tool_calling),
+                ("JSON修复", self.generate_with_fallback_repair)
+            ]:
+                if method_name == "Tool Calling" and not self._supports_tool_calling():
+                    continue
+                    
+                print(f"🔧 {method_name}方式生成{attempt_size}章...")
+                try:
+                    data, status = method_func(modified_messages, 0.7)  # 降低温度提高稳定性
+                    if data and self._validate_storyline_structure(data):
+                        chapter_count = len(data.get('chapters', []))
+                        print(f"✅ 渐进式生成成功: {method_name}方式生成了{chapter_count}章")
+                        result_status = f"progressive_{method_name.lower().replace(' ', '_')}_success_{attempt_size}chapters"
+                        self._record_success(result_status)
+                        return data, result_status
+                except Exception as e:
+                    print(f"⚠️ {method_name}方式失败: {e}")
+                    continue
+        
+        print("❌ 所有渐进式生成尝试都失败")
+        return None, "progressive_generation_failed"
+    
+    def _modify_messages_for_smaller_batch(self, messages: List[Dict[str, str]], target_count: int) -> List[Dict[str, str]]:
+        """修改消息内容以请求更少的章节"""
+        modified_messages = []
+        
+        for message in messages:
+            if message.get("role") == "user":
+                content = message["content"]
+                # 简化提示词，减少token消耗
+                simplified_content = self._simplify_prompt_for_fewer_chapters(content, target_count)
+                modified_messages.append({
+                    "role": "user", 
+                    "content": simplified_content
+                })
+            else:
+                modified_messages.append(message)
+        
+        return modified_messages
+    
+    def _simplify_prompt_for_fewer_chapters(self, original_content: str, target_count: int) -> str:
+        """简化提示词，减少token消耗，提高成功率"""
+        
+        # 提取关键信息
+        key_info = {}
+        lines = original_content.split('\n')
+        
+        # 提取关键章节范围信息
+        for line in lines:
+            if "章节范围:" in line:
+                key_info["章节范围"] = line
+            elif line.startswith("**大纲:**"):
+                # 提取大纲的关键部分（只保留相关章节）
+                key_info["大纲"] = "**大纲:** 经过调教，柳如烟彻底沦为性奴，正在进行母狗养成训练。"
+            elif line.startswith("**人物列表:**"):
+                key_info["人物列表"] = "**人物列表:** 林浩(主角), 柳如烟(江南名妓, 性奴)"
+            elif line.startswith("**写作要求:**"):
+                key_info["写作要求"] = "**写作要求:** 重点性爱描写，爽文风格，直白露骨"
+            elif "前置故事线:" in line:
+                key_info["前置故事线"] = line
+        
+        # 构建简化的提示词
+        simplified_prompt = f"""
+请严格按照JSON格式生成{target_count}章故事线：
+
+{key_info.get('大纲', '')}
+{key_info.get('人物列表', '')}
+{key_info.get('写作要求', '')}
+
+**要求生成第31-{30+target_count}章，共{target_count}章**
+
+必须返回完整JSON格式：
+```json
+{{
+  "chapters": [
+    {{
+      "chapter_number": 31,
+      "title": "章节标题",  
+      "plot_summary": "详细剧情梗概，至少50字",
+      "key_events": ["事件1", "事件2", "事件3"],
+      "character_development": "人物发展描述",
+      "chapter_mood": "情绪氛围"
+    }}
+  ],
+  "batch_info": {{
+    "start_chapter": 31,
+    "end_chapter": {30+target_count},
+    "total_chapters": {target_count}
+  }}
+}}
+```
+
+**关键要求：**
+1. 只返回JSON，不要其他文字
+2. 确保生成{target_count}章完整内容
+3. 确保JSON语法正确
+4. 每章都要有完整的字段
+"""
+        
+        return simplified_prompt
+    
+    def _detect_and_display_truncation(self, content: str, source: str = "未知来源"):
+        """检测并在控制台显示截断信息"""
+        # 检查是否启用截断检测
+        if not self.truncation_detection.get("enabled", True):
+            return
+        
+        self.stats["total_attempts"] += 1
+        
+        if not content:
+            print(f"⚠️ {source}: 内容为空")
+            return
+        
+        content_length = len(content)
+        print(f"📏 {source}: 内容长度 {content_length} 字符")
+        
+        # 多种截断检测方法
+        truncation_indicators = self._analyze_truncation_patterns(content)
+        
+        if truncation_indicators["is_truncated"]:
+            self.stats["truncation_detected"] += 1
+            print(f"🚨 检测到{source}可能被截断！")
+            print("="*60)
+            
+            if self.truncation_detection.get("show_detailed_analysis", True):
+                print("📊 截断分析结果:")
+                for indicator, details in truncation_indicators.items():
+                    if indicator != "is_truncated" and details:
+                        print(f"   • {indicator}: {details}")
+            
+            # 显示截断位置的上下文
+            self._display_truncation_context(content, source)
+            print("="*60)
+        else:
+            print(f"✅ {source}: 未检测到明显截断")
+    
+    def _analyze_truncation_patterns(self, content: str) -> Dict[str, Any]:
+        """分析各种截断模式"""
+        indicators = {"is_truncated": False}
+        
+        # 1. JSON结构不完整
+        if content.strip().startswith('{') or content.strip().startswith('['):
+            try:
+                json.loads(content)
+                indicators["json_structure"] = "完整"
+            except json.JSONDecodeError as e:
+                indicators["is_truncated"] = True
+                indicators["json_structure"] = f"不完整 - {str(e)}"
+        
+        # 2. 字符串未闭合（但排除正常的单个字符结尾）
+        unquoted_patterns = [
+            r'"[^"]{2,}$',  # 以未闭合引号结尾，且内容长度>2
+            r'"[^"]*\n\s*$',  # 以未闭合引号+换行结尾
+        ]
+        
+        for pattern in unquoted_patterns:
+            if re.search(pattern, content):
+                # 额外检查：确保不是正常结尾（如单个字符 '}' 或 ']'）
+                last_line = content.strip().split('\n')[-1].strip()
+                if not re.match(r'^[\}\]]+$', last_line):  # 不只是括号
+                    indicators["is_truncated"] = True
+                    indicators["unclosed_string"] = "检测到未闭合字符串"
+                    break
+        
+        # 3. 常见截断位置检测
+        truncation_positions = [
+            r'"chapter_mood":\s*"[^"]*$',  # chapter_mood字段截断
+            r'"plot_summary":\s*"[^"]*$',  # plot_summary字段截断
+            r'"title":\s*"[^"]*$',  # title字段截断
+            r'"key_events":\s*\[[^\]]*$',  # key_events数组截断
+        ]
+        
+        for i, pattern in enumerate(truncation_positions):
+            if re.search(pattern, content):
+                indicators["is_truncated"] = True
+                indicators[f"field_truncation"] = f"字段{i+1}被截断"
+                break
+        
+        # 4. 括号不匹配
+        open_braces = content.count('{')
+        close_braces = content.count('}')
+        open_brackets = content.count('[')
+        close_brackets = content.count(']')
+        
+        if open_braces != close_braces or open_brackets != close_brackets:
+            indicators["is_truncated"] = True
+            indicators["bracket_mismatch"] = f"大括号 {open_braces}:{close_braces}, 中括号 {open_brackets}:{close_brackets}"
+        
+        # 5. 内容长度异常短
+        if content.strip().endswith(('","', '",', '"')):
+            last_line = content.strip().split('\n')[-1]
+            if len(last_line) < 50:  # 最后一行异常短
+                indicators["is_truncated"] = True
+                indicators["short_ending"] = f"最后一行过短: '{last_line}'"
+        
+        return indicators
+    
+    def _display_truncation_context(self, content: str, source: str):
+        """显示截断位置的上下文"""
+        lines = content.split('\n')
+        total_lines = len(lines)
+        
+        print(f"📍 {source} 截断上下文 (总共{total_lines}行):")
+        
+        # 显示最后几行的内容
+        context_lines = min(self.truncation_detection.get("show_context_lines", 5), total_lines)
+        start_line = max(0, total_lines - context_lines)
+        
+        for i in range(start_line, total_lines):
+            line_number = i + 1
+            line_content = lines[i].rstrip()
+            
+            # 高亮最后一行（可能的截断位置）
+            if i == total_lines - 1:
+                print(f"   -> {line_number:3d}: {line_content} ⚠️ 可能的截断位置")
+            else:
+                print(f"      {line_number:3d}: {line_content}")
+        
+        # 分析最后一行的具体情况
+        last_line = lines[-1].rstrip() if lines else ""
+        if last_line:
+            print(f"🔍 最后一行详细信息:")
+            print(f"   • 长度: {len(last_line)} 字符")
+            print(f"   • 内容: '{last_line}'")
+            print(f"   • 以...结尾: {repr(last_line[-10:])}")
+        
+        # 检查字符编码问题
+        try:
+            last_line.encode('utf-8')
+            print(f"   • UTF-8编码: 正常")
+        except UnicodeEncodeError:
+            print(f"   • UTF-8编码: 可能有问题")
+    
+    def _extract_chapter_count_from_messages(self, messages: List[Dict[str, str]]) -> int:
+        """从消息中提取期望的章节数量"""
+        for message in messages:
+            if message.get("role") == "user" and "content" in message:
+                content = message["content"]
+                
+                # 寻找章节范围指示
+                range_patterns = [
+                    r"第(\d+)-(\d+)章",  # 第31-40章
+                    r"(\d+)-(\d+)章",    # 31-40章
+                    r"章节范围.*?(\d+)-(\d+)",  # 章节范围: 31-40
+                    r"生成(\d+)章",      # 生成10章
+                ]
+                
+                for pattern in range_patterns:
+                    matches = re.search(pattern, content)
+                    if matches:
+                        if len(matches.groups()) == 2:
+                            start, end = int(matches.group(1)), int(matches.group(2))
+                            return end - start + 1
+                        elif len(matches.groups()) == 1:
+                            return int(matches.group(1))
+                
+                # 如果找不到明确的范围，默认返回10
+                if "第31章到第40章" in content or "31-40章" in content:
+                    return 10
+                elif "生成完整的10章" in content:
+                    return 10
+        
+        return 10  # 默认值

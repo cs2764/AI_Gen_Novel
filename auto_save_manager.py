@@ -257,6 +257,218 @@ class AutoSaveManager:
         
         return result
     
+    def get_storage_info(self) -> Dict[str, Any]:
+        """获取存储信息"""
+        info = {
+            "save_directory": str(self.save_dir.absolute()),
+            "files": {},
+            "total_size": 0
+        }
+        
+        for file_type, file_path in self.files.items():
+            if file_path.exists():
+                stat = file_path.stat()
+                info["files"][file_type] = {
+                    "exists": True,
+                    "size": stat.st_size,
+                    "modified": stat.st_mtime,
+                    "readable_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))
+                }
+                info["total_size"] += stat.st_size
+            else:
+                info["files"][file_type] = {
+                    "exists": False,
+                    "size": 0,
+                    "modified": 0,
+                    "readable_time": "从未保存"
+                }
+        
+        return info
+    
+    def export_all_data(self, export_path: str) -> bool:
+        """导出所有数据到指定文件"""
+        try:
+            export_data = {
+                "_metadata": {
+                    "export_time": time.time(),
+                    "readable_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "app_name": "AI网络小说生成器",
+                    "version": "1.0"
+                }
+            }
+            
+            # 加载所有数据
+            all_data = self.load_all()
+            for key, data in all_data.items():
+                if data is not None:
+                    export_data[key] = data
+            
+            # 添加导出统计信息
+            export_data["_metadata"]["items_count"] = len([v for v in all_data.values() if v is not None])
+            
+            # 保存到指定文件
+            with open(export_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=2)
+            
+            file_size = os.path.getsize(export_path)
+            print(f"📤 数据导出完成: {export_path}")
+            print(f"📊 导出统计: {export_data['_metadata']['items_count']} 项, 文件大小: {file_size} 字节")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 数据导出失败: {e}")
+            return False
+    
+    def import_all_data(self, import_path: str) -> bool:
+        """从指定文件导入所有数据"""
+        try:
+            if not os.path.exists(import_path):
+                print(f"❌ 导入文件不存在: {import_path}")
+                return False
+            
+            with open(import_path, 'r', encoding='utf-8') as f:
+                import_data = json.load(f)
+            
+            # 验证导入数据格式
+            if "_metadata" not in import_data:
+                print(f"❌ 导入文件格式不正确，缺少元数据")
+                return False
+            
+            metadata = import_data["_metadata"]
+            print(f"📥 准备导入数据...")
+            print(f"📅 导出时间: {metadata.get('readable_time', '未知')}")
+            print(f"📱 应用名称: {metadata.get('app_name', '未知')}")
+            print(f"📊 包含项目: {metadata.get('items_count', 0)}")
+            
+            # 导入各项数据
+            imported_count = 0
+            
+            # 大纲
+            if "outline" in import_data and import_data["outline"]:
+                outline_data = import_data["outline"]
+                if self.save_outline(
+                    outline_data.get("outline", ""),
+                    outline_data.get("user_idea", ""),
+                    outline_data.get("user_requirements", ""),
+                    outline_data.get("embellishment_idea", "")
+                ):
+                    imported_count += 1
+            
+            # 标题
+            if "title" in import_data and import_data["title"]:
+                title_data = import_data["title"]
+                if self.save_title(title_data.get("title", "")):
+                    imported_count += 1
+            
+            # 人物列表
+            if "character_list" in import_data and import_data["character_list"]:
+                char_data = import_data["character_list"]
+                if self.save_character_list(char_data.get("character_list", "")):
+                    imported_count += 1
+            
+            # 详细大纲
+            if "detailed_outline" in import_data and import_data["detailed_outline"]:
+                detail_data = import_data["detailed_outline"]
+                if self.save_detailed_outline(
+                    detail_data.get("detailed_outline", ""),
+                    detail_data.get("target_chapters", 0)
+                ):
+                    imported_count += 1
+            
+            # 故事线
+            if "storyline" in import_data and import_data["storyline"]:
+                story_data = import_data["storyline"]
+                if self.save_storyline(
+                    story_data.get("storyline", {}),
+                    story_data.get("target_chapters", 0)
+                ):
+                    imported_count += 1
+            
+            # 用户设置
+            if "user_settings" in import_data and import_data["user_settings"]:
+                if self.save_user_settings(import_data["user_settings"]):
+                    imported_count += 1
+            
+            print(f"✅ 数据导入完成，成功导入 {imported_count} 项")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 数据导入失败: {e}")
+            return False
+    
+    def delete_all_data(self) -> bool:
+        """删除所有保存的数据"""
+        try:
+            deleted_count = 0
+            for file_type, file_path in self.files.items():
+                if file_path.exists():
+                    file_path.unlink()
+                    deleted_count += 1
+                    print(f"🗑️ 已删除: {file_type}")
+            
+            print(f"✅ 数据删除完成，删除了 {deleted_count} 个文件")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 数据删除失败: {e}")
+            return False
+    
+    def delete_specific_data(self, data_types: list) -> bool:
+        """删除指定类型的数据"""
+        try:
+            deleted_count = 0
+            for data_type in data_types:
+                if data_type in self.files:
+                    file_path = self.files[data_type]
+                    if file_path.exists():
+                        file_path.unlink()
+                        deleted_count += 1
+                        print(f"🗑️ 已删除: {data_type}")
+                else:
+                    print(f"⚠️ 未知的数据类型: {data_type}")
+            
+            print(f"✅ 指定数据删除完成，删除了 {deleted_count} 个文件")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 指定数据删除失败: {e}")
+            return False
+    
+    def backup_all_data(self, backup_dir: str = None) -> Optional[str]:
+        """备份所有数据到指定目录"""
+        try:
+            if backup_dir is None:
+                backup_dir = f"backup_{int(time.time())}"
+            
+            backup_path = Path(backup_dir)
+            backup_path.mkdir(parents=True, exist_ok=True)
+            
+            backup_count = 0
+            for file_type, file_path in self.files.items():
+                if file_path.exists():
+                    backup_file = backup_path / f"{file_type}.json"
+                    shutil.copy2(file_path, backup_file)
+                    backup_count += 1
+            
+            # 创建备份信息文件
+            backup_info = {
+                "backup_time": time.time(),
+                "readable_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "files_count": backup_count,
+                "original_directory": str(self.save_dir.absolute())
+            }
+            
+            with open(backup_path / "backup_info.json", 'w', encoding='utf-8') as f:
+                json.dump(backup_info, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 数据备份完成: {backup_path.absolute()}")
+            print(f"📊 备份了 {backup_count} 个文件")
+            return str(backup_path.absolute())
+            
+        except Exception as e:
+            print(f"❌ 数据备份失败: {e}")
+            return None
+    
     def has_saved_data(self) -> Dict[str, bool]:
         """检查是否有已保存的数据"""
         return {

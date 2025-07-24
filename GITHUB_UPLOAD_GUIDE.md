@@ -1,595 +1,265 @@
-# GitHub 上传指南
+# 🚀 GitHub上传安全指南
 
-## 📋 概述
+## 📋 项目准备概述
 
-本指南详细说明如何将 AI 网络小说生成器项目上传到 GitHub，包括初始设置、代码管理、发布流程等。
+本指南确保AI网络小说生成器项目能够安全地上传到GitHub，同时保护用户隐私和API密钥安全。
 
-## 🚀 快速开始
+## 🔒 安全措施
 
-### 前提条件
+### 1. 敏感文件保护
 
-1. **GitHub 账户**
-   - 创建 GitHub 账户：[https://github.com/join](https://github.com/join)
-   - 验证邮箱地址
-   - 设置两步验证 (推荐)
+项目已配置完善的 `.gitignore` 文件，确保以下敏感文件不会被上传：
 
-2. **Git 安装**
-   ```bash
-   # Windows
-   # 下载并安装 Git for Windows
-   # https://git-scm.com/download/win
-   
-   # macOS
-   brew install git
-   
-   # Linux (Ubuntu/Debian)
-   sudo apt-get install git
-   
-   # 验证安装
-   git --version
-   ```
+#### 🔑 配置文件（绝对不能上传）
+- `config.py` - 包含所有API密钥的主配置文件
+- `config.json` - JSON格式配置文件
+- `runtime_config.json` - 运行时动态配置
+- `default_ideas.json` - 用户自定义默认想法配置
+- `*.key`, `*.secret` - 各种密钥和敏感凭证文件
+- `.env*` - 环境变量文件
 
-3. **Git 配置**
-   ```bash
-   # 设置用户信息
-   git config --global user.name "Your Name"
-   git config --global user.email "your.email@example.com"
-   
-   # 验证配置
-   git config --list
-   ```
+#### 📁 用户数据目录（包含个人创作）
+- `output/` - 用户生成的小说文件和元数据
+- `autosave/` - 自动保存的用户数据（大纲、故事线、设置等）
+- `metadata/` - 元数据目录
+- `ai_novel_env/` - Python虚拟环境
 
-## 🔧 初始设置
+#### 📄 用户生成的数据文件
+- `ai_novel_data_*.json` - 导出的用户数据
+- `export_*.json`, `*_export.json` - 各种导出文件
+- `*_backup.json`, `*_user.json`, `*_personal.json` - 备份和个人数据文件
+- `novel_record.md` - 小说记录文件
 
-### 1. 创建 GitHub 仓库
+### 2. 安全检查脚本
 
-1. **在 GitHub 上创建新仓库**
-   - 登录 GitHub
-   - 点击右上角 "+" → "New repository"
-   - 仓库名称：`AI_Gen_Novel`
-   - 描述：`AI 网络小说生成器 - 增强版`
-   - 选择 Public 或 Private
-   - 不要勾选 "Initialize this repository with a README"
+项目包含 `github_upload_ready.py` 脚本，提供以下安全检查：
 
-2. **记录仓库信息**
-   ```bash
-   # 仓库 URL 格式
-   https://github.com/username/AI_Gen_Novel.git
-   git@github.com:username/AI_Gen_Novel.git
-   ```
+- ✅ 检查 `.gitignore` 文件存在性和覆盖范围
+- ✅ 扫描源代码中的敏感内容（API密钥等）
+- ✅ 验证敏感文件是否被Git正确忽略
+- ✅ 检查用户数据目录是否被保护
+- ✅ 分析Git状态，防止意外提交敏感文件
 
-### 2. 本地仓库初始化
+## 🛡️ 使用安全检查脚本
+
+### 运行安全检查
 
 ```bash
-# 进入项目目录
-cd AI_Gen_Novel
-
-# 初始化 Git 仓库
-git init
-
-# 添加远程仓库
-git remote add origin https://github.com/username/AI_Gen_Novel.git
-
-# 或使用 SSH (推荐)
-git remote add origin git@github.com:username/AI_Gen_Novel.git
-
-# 验证远程仓库
-git remote -v
+# 运行GitHub上传准备检查
+python github_upload_ready.py
 ```
 
-### 3. SSH 密钥设置 (推荐)
+### 检查结果示例
 
-```bash
-# 生成 SSH 密钥
-ssh-keygen -t ed25519 -C "your.email@example.com"
+```
+🛡️  开始GitHub上传安全检查...
+==================================================
+🔍 检查 .gitignore 文件...
+✅ .gitignore 文件存在
 
-# 启动 SSH 代理
-eval "$(ssh-agent -s)"
+🔍 检查 .gitignore 覆盖范围...
+✅ .gitignore 覆盖范围充分
 
-# 添加私钥到 SSH 代理
-ssh-add ~/.ssh/id_ed25519
+🔍 扫描敏感内容...
+✅ 未发现敏感内容
 
-# 复制公钥到剪贴板
-# macOS
-pbcopy < ~/.ssh/id_ed25519.pub
+🔍 检查敏感文件是否被忽略...
+✅ 所有敏感文件都被正确忽略
 
-# Linux
-xclip -sel clip < ~/.ssh/id_ed25519.pub
+🔍 检查用户数据目录...
+✅ 所有用户数据目录都被正确忽略
 
-# Windows
-clip < ~/.ssh/id_ed25519.pub
+🔍 检查Git状态...
+✅ Git状态安全
+
+==================================================
+🎉 所有安全检查通过！
 ```
 
-在 GitHub 设置中添加 SSH 密钥：
-1. 访问 GitHub → Settings → SSH and GPG keys
-2. 点击 "New SSH key"
-3. 粘贴公钥内容
-4. 点击 "Add SSH key"
+## 📤 安全上传流程
 
-## 📝 代码准备
-
-### 1. 检查文件状态
+### 1. 预检查
 
 ```bash
-# 查看文件状态
+# 运行安全检查
+python github_upload_ready.py
+
+# 手动确认敏感文件被忽略
+git check-ignore config.py output/ autosave/
+
+# 查看当前Git状态
 git status
-
-# 查看忽略文件
-cat .gitignore
-
-# 检查敏感文件
-ls -la *.json
-ls -la *.key
-ls -la *.secret
 ```
 
-### 2. 更新 .gitignore
-
-确保 `.gitignore` 文件包含以下内容：
-
-```gitignore
-# 配置文件 - 包含敏感信息
-config.json
-default_ideas.json
-*.key
-*.secret
-.env
-.env.local
-.env.production
-
-# 用户数据
-output/
-metadata/
-ai_novel_env/
-
-# Python 缓存
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-
-# IDE 文件
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# 操作系统文件
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# 临时文件
-*.tmp
-*.temp
-*.log
-*.bak
-
-# 测试文件
-test_*.py
-*_test.py
-.pytest_cache/
-.coverage
-htmlcov/
-```
-
-### 3. 安全检查
+### 2. 暂存和提交
 
 ```bash
-# 运行安全检查脚本
-python pre_release_check.py
-
-# 检查敏感信息
-grep -r "sk-" --exclude-dir=.git .
-grep -r "api.key" --exclude-dir=.git .
-grep -r "password" --exclude-dir=.git .
-
-# 验证配置文件被忽略
-git check-ignore config.json
-git check-ignore default_ideas.json
-```
-
-## 📤 上传流程
-
-### 1. 初始提交
-
-```bash
-# 添加所有文件
+# 添加所有安全文件
 git add .
 
-# 检查将要提交的文件
+# 查看将要提交的文件（确保没有敏感文件）
 git diff --cached --name-only
 
-# 创建初始提交
-git commit -m "feat: 初始化项目 - AI 网络小说生成器 v2.2.0
+# 创建提交
+git commit -m "feat: AI网络小说生成器初始版本
 
 - 完整的AI小说生成功能
-- 支持多个AI提供商
-- 现代化Web界面
-- 统一配置管理系统
-- 自定义默认想法配置
-- 完整的文档和安全指南"
+- 支持8个主流AI提供商
+- 现代化Web界面设计
+- 本地数据管理系统
+- 完善的安全措施和文档"
+```
 
-# 设置主分支
+### 3. 推送到GitHub
+
+```bash
+# 设置远程仓库（如果是新仓库）
+git remote add origin https://github.com/yourusername/AI_Gen_Novel.git
+
+# 设置主分枝
 git branch -M main
 
-# 推送到远程仓库
+# 推送代码
 git push -u origin main
 ```
 
-### 2. 创建发布标签
-
-```bash
-# 创建标签
-git tag -a v2.2.0 -m "Release v2.2.0: 发布管理增强版本
-
-主要更新:
-- 自定义默认想法配置
-- Web配置界面增强
-- 动态配置加载
-- 页面刷新问题修复
-- 用户体验优化"
-
-# 推送标签
-git push origin v2.1.0
-
-# 或推送所有标签
-git push origin --tags
-```
-
-### 3. 创建分支结构
-
-```bash
-# 创建开发分支
-git checkout -b dev
-git push -u origin dev
-
-# 创建功能分支 (示例)
-git checkout -b feature/new-ai-provider
-git push -u origin feature/new-ai-provider
-
-# 创建发布分支 (示例)
-git checkout -b release/v2.1.0
-git push -u origin release/v2.1.0
-```
-
-## 🎉 GitHub Release 创建
-
-### 1. 通过 Web 界面创建
-
-1. **访问 GitHub 仓库**
-   - 进入仓库主页
-   - 点击右侧 "Releases" 或 "Create a new release"
-
-2. **填写发布信息**
-   - Tag version: `v2.1.0`
-   - Release title: `AI 网络小说生成器 v2.1.0 - 功能增强版本`
-   - Description: 复制 [RELEASE_NOTES.md](RELEASE_NOTES.md) 内容
-
-3. **上传附件** (可选)
-   - 用户手册 PDF
-   - 安装脚本
-   - 示例配置文件
-
-4. **发布设置**
-   - 选择目标分支: `main`
-   - 勾选 "Set as the latest release"
-   - 点击 "Publish release"
-
-### 2. 通过命令行创建 (使用 GitHub CLI)
-
-```bash
-# 安装 GitHub CLI
-# Windows: winget install GitHub.cli
-# macOS: brew install gh
-# Linux: 参考官方文档
-
-# 登录 GitHub
-gh auth login
-
-# 创建 Release
-gh release create v2.1.0 \
-  --title "AI 网络小说生成器 v2.1.0 - 功能增强版本" \
-  --notes-file RELEASE_NOTES.md \
-  --draft=false \
-  --prerelease=false
-
-# 上传文件到 Release
-gh release upload v2.1.0 \
-  AI_Gen_Novel_v2.1.0.zip \
-  install_guide.pdf
-```
-
-## 📊 仓库配置
-
-### 1. 仓库设置
-
-在 GitHub 仓库设置中配置：
-
-1. **General 设置**
-   - Repository name: `AI_Gen_Novel`
-   - Description: `AI 网络小说生成器 - 增强版`
-   - Website: 项目主页 (可选)
-   - Topics: `ai`, `novel`, `generator`, `python`, `gradio`, `claude`
-
-2. **Features 设置**
-   - ✅ Issues
-   - ✅ Projects
-   - ✅ Wiki
-   - ✅ Discussions (推荐)
-   - ❌ Sponsorships
-
-3. **Pull Requests 设置**
-   - ✅ Allow merge commits
-   - ✅ Allow squash merging
-   - ✅ Allow rebase merging
-   - ✅ Always suggest updating pull request branches
-   - ✅ Automatically delete head branches
-
-### 2. 分支保护
-
-设置主分支保护规则：
-
-```bash
-# 通过 GitHub Web 界面设置
-# Settings → Branches → Add rule
-```
-
-保护规则建议：
-- Branch name pattern: `main`
-- ✅ Require pull request reviews before merging
-- ✅ Require status checks to pass before merging
-- ✅ Require branches to be up to date before merging
-- ✅ Include administrators
-
-### 3. 工作流设置
-
-创建 GitHub Actions 工作流：
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on:
-  push:
-    branches: [ main, dev ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.8, 3.9, 3.10, 3.11]
-
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    - name: Run tests
-      run: |
-        python -m pytest tests/
-    
-    - name: Security check
-      run: |
-        pip install bandit
-        bandit -r .
-```
-
-## 📚 文档更新
-
-### 1. README 优化
-
-确保 README.md 包含：
-- 项目徽章 (badges)
-- 清晰的安装指南
-- 使用示例
-- 贡献指南链接
-- 许可证信息
-
-### 2. 项目文档
-
-确保所有文档都已更新：
-- [x] README.md
-- [x] CHANGELOG.md
-- [x] INSTALL.md
-- [x] CONTRIBUTING.md
-- [x] LICENSE
-- [x] API.md
-- [x] FEATURES.md
-
-### 3. 文档链接检查
-
-```bash
-# 检查文档链接
-python -c "
-import re
-import os
-
-def check_links():
-    for root, dirs, files in os.walk('.'):
-        for file in files:
-            if file.endswith('.md'):
-                filepath = os.path.join(root, file)
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    links = re.findall(r'\[.*?\]\((.*?)\)', content)
-                    for link in links:
-                        if link.startswith('http'):
-                            print(f'External link in {filepath}: {link}')
-                        elif not os.path.exists(link):
-                            print(f'Broken link in {filepath}: {link}')
-
-check_links()
-"
-```
-
-## 🔍 验证检查
-
-### 1. 克隆测试
-
-```bash
-# 在临时目录测试克隆
-cd /tmp
-git clone https://github.com/username/AI_Gen_Novel.git
-cd AI_Gen_Novel
-
-# 验证文件完整性
-ls -la
-python --version
-pip install -r requirements.txt
-python app.py --help
-```
-
-### 2. 功能测试
-
-```bash
-# 基本功能测试
-python -c "
-import sys
-sys.path.append('.')
-from version import get_version
-print(f'Version: {get_version()}')
-
-from config_manager import ConfigManager
-config = ConfigManager()
-print('Config manager loaded successfully')
-"
-```
-
-### 3. 文档测试
-
-```bash
-# 检查所有文档是否可读
-for file in *.md; do
-    echo "Checking $file..."
-    head -5 "$file"
-done
-
-# 检查链接
-python -c "
-import os
-import re
-
-def check_md_files():
-    for file in os.listdir('.'):
-        if file.endswith('.md'):
-            with open(file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if len(content) < 100:
-                    print(f'Warning: {file} seems too short')
-                    
-check_md_files()
-"
-```
-
-## 🌟 发布后任务
-
-### 1. 立即检查
-
-- [ ] 验证仓库页面正常显示
-- [ ] 检查 README 渲染效果
-- [ ] 测试克隆和安装流程
-- [ ] 验证 Release 页面信息
-- [ ] 检查所有链接是否正常
-
-### 2. 社区推广
-
-```bash
-# 准备推广材料
-echo "项目发布推广清单：
-1. 更新个人资料中的项目链接
-2. 在相关社区分享项目
-3. 撰写技术博客文章
-4. 准备项目演示视频
-5. 回应用户问题和反馈"
-```
-
-### 3. 持续维护
-
-```bash
-# 设置定期维护提醒
-echo "定期维护任务：
-- 每周检查 Issues 和 Pull Requests
-- 每月更新依赖库
-- 每季度进行安全审计
-- 每半年规划新功能"
-```
-
-## 🚨 常见问题
-
-### 1. 推送失败
-
-```bash
-# 问题：推送被拒绝
-# 解决方案：
-git pull origin main --rebase
-git push origin main
-
-# 如果有冲突，解决冲突后：
-git add .
-git rebase --continue
-git push origin main
-```
-
-### 2. 大文件处理
-
-```bash
-# 如果有大文件需要 Git LFS
-git lfs install
-git lfs track "*.zip"
-git lfs track "*.pdf"
-git add .gitattributes
-git commit -m "feat: 添加 Git LFS 支持"
-```
-
-### 3. 历史记录清理
-
-```bash
-# 如果需要清理敏感信息
-git filter-branch --force --index-filter \
-  'git rm --cached --ignore-unmatch config.json' \
-  --prune-empty --tag-name-filter cat -- --all
-
-# 强制推送 (危险操作)
-git push origin --force --all
-```
-
-## 📞 支持与反馈
-
-如果在上传过程中遇到问题：
-
-1. **检查官方文档**
-   - [GitHub 文档](https://docs.github.com/)
-   - [Git 文档](https://git-scm.com/doc)
-
-2. **社区支持**
-   - GitHub Community Forum
-   - Stack Overflow (标签: github, git)
-
-3. **项目支持**
-   - GitHub Issues
-   - 项目讨论区
+### 4. 验证上传结果
+
+上传完成后，请在GitHub仓库中验证：
+
+- ❌ 确认没有 `config.py` 文件
+- ❌ 确认没有 `output/` 目录
+- ❌ 确认没有 `autosave/` 目录
+- ❌ 确认没有任何 `*.json` 配置文件（除了package.json等标准文件）
+- ✅ 确认 `.gitignore` 文件存在且内容完整
+- ✅ 确认 `config_template.py` 文件存在
+- ✅ 确认所有源代码和文档文件正常
+
+## 🚨 重要安全提醒
+
+### 🔥 绝对不要做的事情
+
+1. **不要上传真实的API密钥**
+   - `config.py` 已被加入 `.gitignore`
+   - 如果意外上传，立即删除仓库并重新创建
+
+2. **不要上传用户数据**
+   - `output/` 和 `autosave/` 包含用户创作内容
+   - 这些目录已被自动忽略
+
+3. **不要在代码中硬编码密钥**
+   - 使用配置文件或环境变量
+   - 所有密钥都应该通过安全的方式管理
+
+4. **不要在截图或文档中暴露敏感信息**
+   - 分享截图时遮挡API密钥
+   - 文档中使用占位符而非真实密钥
+
+### ✅ 安全的分享方式
+
+1. **分享配置模板**
+   - 只分享 `config_template.py`
+   - 包含占位符和使用说明
+
+2. **提供详细文档**
+   - 配置指南和安装说明
+   - 不包含真实密钥的示例
+
+3. **使用环境变量**
+   - 在文档中推荐使用环境变量
+   - 提供设置环境变量的指南
+
+## 🔧 故障排除
+
+### 如果安全检查失败
+
+1. **检查 `.gitignore` 文件**
+   ```bash
+   # 确认文件存在
+   ls -la .gitignore
+   
+   # 查看内容
+   cat .gitignore
+   ```
+
+2. **手动检查敏感文件**
+   ```bash
+   # 检查config.py是否被忽略
+   git check-ignore config.py
+   
+   # 检查output目录是否被忽略
+   git check-ignore output/
+   ```
+
+3. **清理已跟踪的敏感文件**
+   ```bash
+   # 如果敏感文件已被Git跟踪，需要取消跟踪
+   git rm --cached config.py
+   git rm --cached -r output/
+   
+   # 然后提交更改
+   git commit -m "remove sensitive files from tracking"
+   ```
+
+### 如果意外上传了敏感文件
+
+1. **立即删除敏感文件**
+   ```bash
+   git rm config.py
+   git commit -m "remove sensitive config file"
+   git push
+   ```
+
+2. **更换API密钥**
+   - 在对应平台撤销泄露的API密钥
+   - 生成新的API密钥
+   - 更新本地配置
+
+3. **考虑重新创建仓库**
+   - 如果泄露严重，删除GitHub仓库
+   - 清理本地Git历史
+   - 重新创建干净的仓库
+
+## 📚 相关文档
+
+- [安装指南](INSTALL.md) - 详细的安装和配置说明
+- [配置安全指南](CONFIG_SECURITY_GUIDE.md) - API密钥安全管理
+- [提供商配置指南](README_Provider_Config.md) - 各AI提供商配置方法
+- [本地数据管理](LOCAL_DATA_MANAGEMENT.md) - 用户数据保存和管理
+- [📋 文件管理通用准则](GITHUB_FILE_MANAGEMENT_GUIDE.md) - **适用于所有项目的通用文件管理指南**
+
+## 💡 最佳实践
+
+### 项目维护
+
+1. **定期运行安全检查**
+   ```bash
+   # 定期检查项目安全性
+   python github_upload_ready.py
+   ```
+
+2. **更新 `.gitignore`**
+   - 添加新的敏感文件类型时及时更新
+   - 关注用户反馈中提到的隐私文件
+
+3. **代码审查**
+   - 在接受Pull Request前检查敏感信息
+   - 使用自动化工具扫描API密钥
+
+### 协作开发
+
+1. **团队安全规范**
+   - 教育团队成员不要提交敏感文件
+   - 建立代码审查流程
+
+2. **环境隔离**
+   - 开发、测试、生产环境使用不同的API密钥
+   - 通过环境变量管理配置
+
+3. **权限管理**
+   - 限制仓库访问权限
+   - 定期审查协作者列表
 
 ---
 
-**重要提醒**: 在上传前请务必检查所有敏感信息是否已正确忽略，确保不会泄露 API 密钥或其他私密数据。
-
-**最后更新**: 2025-07-15  
-**版本**: v2.2.0  
-**状态**: 准备发布 
+通过遵循本指南，您可以安全地将AI网络小说生成器项目分享到GitHub，既保护了用户隐私，又确保了API密钥的安全。记住：**安全第一，分享第二！**🔒✨ 
