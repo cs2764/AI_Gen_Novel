@@ -270,3 +270,10 @@ pip install -r requirements.txt
 Made with ❤️ by AI Novel Generator Team
 
 </div>
+
+## ⚠️ 重要提醒
+
+### 虚拟环境管理
+- 📂 `ai_novel_env/` 目录包含项目运行必需的所有依赖包
+- 🚫 **请不要删除虚拟环境目录**
+- 📖 如需了解虚拟环境管理详情，请查看 [`VIRTUAL_ENV_MANAGEMENT.md`](VIRTUAL_ENV_MANAGEMENT.md)

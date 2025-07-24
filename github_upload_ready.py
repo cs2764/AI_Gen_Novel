@@ -46,9 +46,17 @@ class GitHubUploadChecker:
             'output',
             'autosave', 
             'metadata',
-            'ai_novel_env',
             'logs',
             'export_data',
+        ]
+        
+        # 虚拟环境目录 - 不上传但不删除
+        self.virtual_env_dirs = [
+            'ai_novel_env',
+            'venv',
+            '.venv', 
+            'env',
+            '.env_dir',
         ]
         
         self.issues = []
@@ -215,6 +223,42 @@ class GitHubUploadChecker:
         print("✅ 所有用户数据目录都被正确忽略")
         return True
     
+    def check_virtual_env_dirs_ignored(self) -> bool:
+        """检查虚拟环境目录是否被忽略（但提醒不要删除）"""
+        print("🔍 检查虚拟环境目录...")
+        
+        exposed_dirs = []
+        existing_env_dirs = []
+        
+        for dir_name in self.virtual_env_dirs:
+            dir_path = self.root_path / dir_name
+            if dir_path.exists() and dir_path.is_dir():
+                existing_env_dirs.append(dir_name)
+                try:
+                    result = subprocess.run(
+                        ['git', 'check-ignore', str(dir_path)],
+                        capture_output=True,
+                        text=True,
+                        cwd=self.root_path
+                    )
+                    
+                    if result.returncode != 0:  # 目录没有被忽略
+                        exposed_dirs.append(dir_name)
+                except subprocess.SubprocessError:
+                    exposed_dirs.append(dir_name)
+        
+        if exposed_dirs:
+            self.issues.append(f"❌ 以下虚拟环境目录未被忽略: {', '.join(exposed_dirs)}")
+            return False
+        
+        if existing_env_dirs:
+            print(f"✅ 虚拟环境目录被正确忽略: {', '.join(existing_env_dirs)}")
+            print("⚠️  提醒：虚拟环境包含项目依赖，请不要删除！")
+        else:
+            print("ℹ️  未找到虚拟环境目录")
+        
+        return True
+    
     def check_git_status(self) -> Tuple[bool, List[str]]:
         """检查Git状态，确保没有意外添加敏感文件"""
         print("🔍 检查Git状态...")
@@ -280,7 +324,7 @@ git status
 git diff --cached --name-only
 
 # 确认敏感文件被忽略
-git check-ignore config.py output/ autosave/
+git check-ignore config.py output/ autosave/ ai_novel_env/
 ```
 
 ### 2. 提交更改
@@ -316,8 +360,15 @@ git push origin main
 
 - ✅ 配置文件已被忽略
 - ✅ 用户数据目录已被忽略  
+- ✅ 虚拟环境目录已被忽略（但请不要删除！）
 - ✅ API密钥等敏感信息已被保护
 - ✅ 项目可以安全分享
+
+## ⚠️ 虚拟环境重要提醒
+
+- 📂 `ai_novel_env/` 目录包含项目必需的依赖包
+- 🚫 **请不要删除虚拟环境目录**
+- 📖 详细说明请查看 `VIRTUAL_ENV_MANAGEMENT.md`
 
 ## 📋 后续维护
 
@@ -340,6 +391,7 @@ git push origin main
             self.scan_for_sensitive_content,
             self.check_sensitive_files_ignored,
             self.check_user_data_dirs_ignored,
+            self.check_virtual_env_dirs_ignored,
         ]
         
         all_passed = True
