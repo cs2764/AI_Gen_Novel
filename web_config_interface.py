@@ -22,7 +22,7 @@ class WebConfigInterface:
         self.default_ideas_manager = get_default_ideas_manager()
         self._test_lock = threading.Lock()
         # 添加模型刷新的超时控制
-        self._refresh_timeout = 300  # 300秒超时
+        self._refresh_timeout = 1200  # 1200秒超时(20分钟)
     
     def get_provider_choices(self):
         """获取提供商选择列表"""
@@ -133,13 +133,33 @@ class WebConfigInterface:
         # 先保存配置
         save_result = self.save_config(provider_name, api_key, model_name, base_url, system_prompt, custom_model_name)
         
-        # 如果保存成功，尝试刷新ChatLLM实例
+        # 如果保存成功，尝试刷新ChatLLM实例和AIGN实例
         if save_result.startswith("✅"):
             try:
                 from config_manager import get_chatllm
                 # 刷新ChatLLM以使用新的配置，允许不完整配置以避免启动失败
                 get_chatllm(allow_incomplete=True)
                 save_result += " | ChatLLM已刷新"
+                
+                # 刷新AIGN实例的ChatLLM
+                try:
+                    print("🔄 Web配置界面: 尝试刷新AIGN实例...")
+                    from aign_manager import get_aign_manager
+                    aign_manager = get_aign_manager()
+                    print(f"🔄 获取AIGN管理器: {type(aign_manager)}")
+                    
+                    if aign_manager.refresh_chatllm():
+                        save_result += " | AIGN实例已刷新"
+                        print("✅ Web配置界面: AIGN实例刷新成功")
+                    else:
+                        save_result += " | AIGN实例刷新失败或不可用"
+                        print("⚠️ Web配置界面: AIGN实例刷新失败")
+                except Exception as aign_error:
+                    save_result += f" | AIGN实例刷新错误: {str(aign_error)}"
+                    print(f"❌ Web配置界面: AIGN刷新错误: {aign_error}")
+                    import traceback
+                    traceback.print_exc()
+                    
             except Exception as e:
                 save_result += f" | ChatLLM刷新失败: {str(e)}"
         
@@ -796,19 +816,29 @@ class WebConfigInterface:
                 'api_key_input': api_key_input,
                 'base_url_input': base_url_input,
                 'system_prompt_input': system_prompt_input,
+                'test_btn': test_btn,
+                'save_btn': save_btn,
+                'refresh_btn': refresh_btn,
                 'status_output': status_output,
                 'current_info': current_info,
                 'reload_btn': reload_btn,
                 'debug_level_radio': debug_level_radio,
+                'debug_save_btn': debug_save_btn,
+                'debug_refresh_btn': debug_refresh_btn,
                 'debug_status_output': debug_status_output,
                 'debug_level_info': debug_level_info,
                 'ideas_enabled_checkbox': ideas_enabled_checkbox,
                 'ideas_user_idea_input': ideas_user_idea_input,
                 'ideas_user_requirements_input': ideas_user_requirements_input,
                 'ideas_embellishment_input': ideas_embellishment_input,
+                'ideas_save_btn': ideas_save_btn,
+                'ideas_reset_btn': ideas_reset_btn,
+                'ideas_refresh_btn': ideas_refresh_btn,
                 'ideas_status_output': ideas_status_output,
                 'default_ideas_info': default_ideas_info,
                 'json_repair_checkbox': json_repair_checkbox,
+                'json_repair_save_btn': json_repair_save_btn,
+                'json_repair_refresh_btn': json_repair_refresh_btn,
                 'json_repair_status_output': json_repair_status_output,
                 'json_repair_info': json_repair_info
             }

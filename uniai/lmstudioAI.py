@@ -16,7 +16,7 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
     base_url = base_url or os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
     api_key = api_key or os.environ.get("LM_STUDIO_API_KEY", "lm-studio")
     
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    client = OpenAI(api_key=api_key, base_url=base_url, timeout=1200.0)  # 20分钟超时
 
     def chatLLM(
         messages: list,

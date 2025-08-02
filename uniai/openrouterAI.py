@@ -33,6 +33,7 @@ def openrouterChatLLM(model_name="openai/gpt-4", api_key=None, system_prompt="",
     client = OpenAI(
         api_key=api_key,
         base_url=actual_base_url,
+        timeout=1200.0,  # 20分钟超时
         default_headers={
             "HTTP-Referer": "https://github.com/cjyyx/AI_Gen_Novel",  # 可选，用于跟踪
             "X-Title": "AI Novel Generator",  # 可选，应用名称

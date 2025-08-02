@@ -10,7 +10,7 @@ def zhipuChatLLM(model_name, api_key=None, system_prompt=""):
     - glm-4
     """
     api_key = os.environ.get("ZHIPU_AI_API_KEY", api_key)
-    client = ZhipuAI(api_key=api_key)
+    client = ZhipuAI(api_key=api_key, timeout=1200.0)  # 20分钟超时
 
     def chatLLM(
         messages: list,

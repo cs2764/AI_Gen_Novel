@@ -33,7 +33,7 @@ class AutoSaveManager:
         
         print(f"📁 自动保存管理器初始化完成，保存目录: {self.save_dir}")
     
-    def save_outline(self, outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
+    def save_outline(self, outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", target_chapters: int = 0) -> bool:
         """保存大纲"""
         try:
             data = {
@@ -41,6 +41,7 @@ class AutoSaveManager:
                 "user_idea": user_idea,
                 "user_requirements": user_requirements,
                 "embellishment_idea": embellishment_idea,
+                "target_chapters": target_chapters,
                 "timestamp": time.time(),
                 "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -48,7 +49,10 @@ class AutoSaveManager:
             with open(self.files["outline"], 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             
-            print(f"💾 大纲已自动保存 ({len(outline)}字符)")
+            if target_chapters > 0:
+                print(f"💾 大纲已自动保存 ({len(outline)}字符, {target_chapters}章)")
+            else:
+                print(f"💾 大纲已自动保存 ({len(outline)}字符)")
             return True
         except Exception as e:
             print(f"❌ 大纲保存失败: {e}")
@@ -90,12 +94,15 @@ class AutoSaveManager:
             print(f"❌ 人物列表保存失败: {e}")
             return False
     
-    def save_detailed_outline(self, detailed_outline: str, target_chapters: int = 0) -> bool:
+    def save_detailed_outline(self, detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
         """保存详细大纲"""
         try:
             data = {
                 "detailed_outline": detailed_outline,
                 "target_chapters": target_chapters,
+                "user_idea": user_idea,
+                "user_requirements": user_requirements,
+                "embellishment_idea": embellishment_idea,
                 "timestamp": time.time(),
                 "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -109,7 +116,7 @@ class AutoSaveManager:
             print(f"❌ 详细大纲保存失败: {e}")
             return False
     
-    def save_storyline(self, storyline: Dict[str, Any], target_chapters: int = 0) -> bool:
+    def save_storyline(self, storyline: Dict[str, Any], target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
         """保存故事线"""
         try:
             chapter_count = len(storyline.get('chapters', []))
@@ -117,6 +124,9 @@ class AutoSaveManager:
                 "storyline": storyline,
                 "target_chapters": target_chapters,
                 "actual_chapters": chapter_count,
+                "user_idea": user_idea,
+                "user_requirements": user_requirements,
+                "embellishment_idea": embellishment_idea,
                 "timestamp": time.time(),
                 "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -170,7 +180,11 @@ class AutoSaveManager:
             if self.files["outline"].exists():
                 with open(self.files["outline"], 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                print(f"📚 大纲已自动加载 ({len(data.get('outline', ''))}字符, {data.get('readable_time', 'unknown time')})")
+                target_chapters = data.get('target_chapters', 0)
+                if target_chapters > 0:
+                    print(f"📚 大纲已自动加载 ({len(data.get('outline', ''))}字符, {target_chapters}章, {data.get('readable_time', 'unknown time')})")
+                else:
+                    print(f"📚 大纲已自动加载 ({len(data.get('outline', ''))}字符, {data.get('readable_time', 'unknown time')})")
                 return data
         except Exception as e:
             print(f"❌ 大纲加载失败: {e}")
@@ -350,7 +364,8 @@ class AutoSaveManager:
                     outline_data.get("outline", ""),
                     outline_data.get("user_idea", ""),
                     outline_data.get("user_requirements", ""),
-                    outline_data.get("embellishment_idea", "")
+                    outline_data.get("embellishment_idea", ""),
+                    outline_data.get("target_chapters", 0)
                 ):
                     imported_count += 1
             
@@ -371,7 +386,10 @@ class AutoSaveManager:
                 detail_data = import_data["detailed_outline"]
                 if self.save_detailed_outline(
                     detail_data.get("detailed_outline", ""),
-                    detail_data.get("target_chapters", 0)
+                    detail_data.get("target_chapters", 0),
+                    detail_data.get("user_idea", ""),
+                    detail_data.get("user_requirements", ""),
+                    detail_data.get("embellishment_idea", "")
                 ):
                     imported_count += 1
             
@@ -380,7 +398,10 @@ class AutoSaveManager:
                 story_data = import_data["storyline"]
                 if self.save_storyline(
                     story_data.get("storyline", {}),
-                    story_data.get("target_chapters", 0)
+                    story_data.get("target_chapters", 0),
+                    story_data.get("user_idea", ""),
+                    story_data.get("user_requirements", ""),
+                    story_data.get("embellishment_idea", "")
                 ):
                     imported_count += 1
             
@@ -502,17 +523,57 @@ class AutoSaveManager:
                         with open(file_path, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             if key == "outline":
-                                content_info = f"{len(data.get('outline', ''))}字符"
+                                # 检查用户输入数据
+                                user_inputs = []
+                                if data.get('user_idea', '').strip():
+                                    user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
+                                if data.get('user_requirements', '').strip():
+                                    user_inputs.append(f"写作要求({len(data.get('user_requirements', ''))}字符)")
+                                if data.get('embellishment_idea', '').strip():
+                                    user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
+                                
+                                outline_info = f"{len(data.get('outline', ''))}字符"
+                                if user_inputs:
+                                    content_info = f"{outline_info} [含用户输入: {', '.join(user_inputs)}]"
+                                else:
+                                    content_info = outline_info
                             elif key == "title":
                                 content_info = f"'{data.get('title', '')}'"
                             elif key == "character_list":
                                 content_info = f"{len(data.get('character_list', ''))}字符"
                             elif key == "detailed_outline":
-                                content_info = f"{len(data.get('detailed_outline', ''))}字符, {data.get('target_chapters', 0)}章"
+                                # 检查用户输入数据
+                                user_inputs = []
+                                if data.get('user_idea', '').strip():
+                                    user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
+                                if data.get('user_requirements', '').strip():
+                                    user_inputs.append(f"写作要求({len(data.get('user_requirements', ''))}字符)")
+                                if data.get('embellishment_idea', '').strip():
+                                    user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
+                                
+                                detail_info = f"{len(data.get('detailed_outline', ''))}字符, {data.get('target_chapters', 0)}章"
+                                if user_inputs:
+                                    content_info = f"{detail_info} [含用户输入: {', '.join(user_inputs)}]"
+                                else:
+                                    content_info = detail_info
                             elif key == "storyline":
                                 actual = data.get('actual_chapters', 0)
                                 target = data.get('target_chapters', 0)
-                                content_info = f"{actual}/{target}章"
+                                
+                                # 检查用户输入数据
+                                user_inputs = []
+                                if data.get('user_idea', '').strip():
+                                    user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
+                                if data.get('user_requirements', '').strip():
+                                    user_inputs.append(f"写作要求({len(data.get('user_requirements', ''))}字符)")
+                                if data.get('embellishment_idea', '').strip():
+                                    user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
+                                
+                                story_info = f"{actual}/{target}章"
+                                if user_inputs:
+                                    content_info = f"{story_info} [含用户输入: {', '.join(user_inputs)}]"
+                                else:
+                                    content_info = story_info
                             else:
                                 content_info = "已保存"
                     except:
@@ -591,9 +652,9 @@ def get_auto_save_manager() -> AutoSaveManager:
         _auto_save_manager = AutoSaveManager()
     return _auto_save_manager
 
-def auto_save_outline(outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
+def auto_save_outline(outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", target_chapters: int = 0) -> bool:
     """快捷保存大纲"""
-    return get_auto_save_manager().save_outline(outline, user_idea, user_requirements, embellishment_idea)
+    return get_auto_save_manager().save_outline(outline, user_idea, user_requirements, embellishment_idea, target_chapters)
 
 def auto_save_title(title: str) -> bool:
     """快捷保存标题"""
@@ -603,13 +664,13 @@ def auto_save_character_list(character_list: str) -> bool:
     """快捷保存人物列表"""
     return get_auto_save_manager().save_character_list(character_list)
 
-def auto_save_detailed_outline(detailed_outline: str, target_chapters: int = 0) -> bool:
+def auto_save_detailed_outline(detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
     """快捷保存详细大纲"""
-    return get_auto_save_manager().save_detailed_outline(detailed_outline, target_chapters)
+    return get_auto_save_manager().save_detailed_outline(detailed_outline, target_chapters, user_idea, user_requirements, embellishment_idea)
 
-def auto_save_storyline(storyline: Dict[str, Any], target_chapters: int = 0) -> bool:
+def auto_save_storyline(storyline: Dict[str, Any], target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
     """快捷保存故事线"""
-    return get_auto_save_manager().save_storyline(storyline, target_chapters)
+    return get_auto_save_manager().save_storyline(storyline, target_chapters, user_idea, user_requirements, embellishment_idea)
 
 def load_auto_saved_data() -> Dict[str, Any]:
     """快捷加载所有自动保存的数据"""

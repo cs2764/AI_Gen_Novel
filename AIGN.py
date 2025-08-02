@@ -633,29 +633,118 @@ class AIGN:
         for agent in agents:
             agent.parent_aign = self
     
+    def refresh_chatllm(self):
+        """
+        刷新chatLLM实例以使用最新的配置设置
+        当用户在Web界面修改AI提供商或模型时调用
+        """
+        try:
+            from config_manager import get_chatllm
+            print("🔄 正在刷新ChatLLM实例...")
+            
+            # 获取最新的chatLLM实例
+            new_chatllm = get_chatllm(allow_incomplete=True)
+            print(f"🔄 新chatLLM实例类型: {type(new_chatllm)}")
+            
+            # 更新主实例
+            old_chatllm_type = type(self.chatLLM)
+            self.chatLLM = new_chatllm
+            print(f"🔄 主chatLLM更新: {old_chatllm_type} -> {type(new_chatllm)}")
+            
+            # 更新所有Agent的chatLLM实例
+            agents_to_update = [
+                (self.novel_outline_writer, '小说大纲生成器'),
+                (self.novel_beginning_writer, '小说开头生成器'),
+                (self.novel_writer, '小说内容生成器'),
+                (self.novel_embellisher, '小说润色器'),
+                (self.novel_writer_compact, '精简小说生成器'),
+                (self.novel_embellisher_compact, '精简润色器'),
+                (self.memory_maker, '记忆生成器'),
+                (self.title_generator, '标题生成器'),
+                (self.title_generator_json, 'JSON标题生成器'),
+                (self.ending_writer, '结尾生成器'),
+                (self.storyline_generator, '故事线生成器'),
+                (self.character_generator, '人物生成器'),
+                (self.chapter_summary_generator, '章节总结生成器'),
+                (self.detailed_outline_generator, '详细大纲生成器')
+            ]
+            
+            updated_count = 0
+            for agent, name in agents_to_update:
+                if hasattr(agent, 'chatLLM'):
+                    old_agent_chatllm_type = type(agent.chatLLM)
+                    agent.chatLLM = new_chatllm
+                    updated_count += 1
+                    print(f"✅ {name} chatLLM已更新: {old_agent_chatllm_type.__name__} -> {type(new_chatllm).__name__}")
+                else:
+                    print(f"⚠️ {name} 没有chatLLM属性")
+            
+            print(f"✅ ChatLLM实例刷新成功，已更新 {updated_count} 个Agent")
+            
+        except Exception as e:
+            print(f"⚠️ 刷新ChatLLM实例失败: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def _save_to_local(self, data_type: str, **kwargs):
         """保存数据到本地文件"""
         try:
+            # 获取用户输入数据，优先使用传入的参数，如果没有则使用实例变量
+            user_idea = kwargs.get("user_idea", "") or getattr(self, 'user_idea', '')
+            user_requirements = kwargs.get("user_requirements", "") or getattr(self, 'user_requriments', '')
+            embellishment_idea = kwargs.get("embellishment_idea", "") or getattr(self, 'embellishment_idea', '')
+            
             if data_type == "outline":
                 return self.auto_save_manager.save_outline(
                     kwargs.get("outline", ""),
-                    kwargs.get("user_idea", ""),
-                    kwargs.get("user_requirements", ""),
-                    kwargs.get("embellishment_idea", "")
+                    user_idea,
+                    user_requirements,
+                    embellishment_idea,
+                    kwargs.get("target_chapters", 0) or getattr(self, 'target_chapter_count', 0)
                 )
             elif data_type == "title":
-                return self.auto_save_manager.save_title(kwargs.get("title", ""))
+                # 在保存标题时，如果用户输入数据存在，也一并保存到大纲文件中以确保不丢失
+                title_saved = self.auto_save_manager.save_title(kwargs.get("title", ""))
+                if (user_idea.strip() or user_requirements.strip() or embellishment_idea.strip()):
+                    # 同时更新大纲文件中的用户输入数据
+                    current_outline = getattr(self, 'novel_outline', '')
+                    self.auto_save_manager.save_outline(
+                        current_outline,
+                        user_idea,
+                        user_requirements,
+                        embellishment_idea,
+                        getattr(self, 'target_chapter_count', 0)
+                    )
+                return title_saved
             elif data_type == "character_list":
-                return self.auto_save_manager.save_character_list(kwargs.get("character_list", ""))
+                # 在保存人物列表时，如果用户输入数据存在，也一并保存到大纲文件中以确保不丢失
+                char_saved = self.auto_save_manager.save_character_list(kwargs.get("character_list", ""))
+                if (user_idea.strip() or user_requirements.strip() or embellishment_idea.strip()):
+                    # 同时更新大纲文件中的用户输入数据
+                    current_outline = getattr(self, 'novel_outline', '')
+                    self.auto_save_manager.save_outline(
+                        current_outline,
+                        user_idea,
+                        user_requirements,
+                        embellishment_idea,
+                        getattr(self, 'target_chapter_count', 0)
+                    )
+                return char_saved
             elif data_type == "detailed_outline":
                 return self.auto_save_manager.save_detailed_outline(
                     kwargs.get("detailed_outline", ""),
-                    kwargs.get("target_chapters", 0)
+                    kwargs.get("target_chapters", 0),
+                    user_idea,
+                    user_requirements,
+                    embellishment_idea
                 )
             elif data_type == "storyline":
                 return self.auto_save_manager.save_storyline(
                     kwargs.get("storyline", {}),
-                    kwargs.get("target_chapters", 0)
+                    kwargs.get("target_chapters", 0),
+                    user_idea,
+                    user_requirements,
+                    embellishment_idea
                 )
             elif data_type == "user_settings":
                 return self.auto_save_manager.save_user_settings(kwargs.get("settings", {}))
@@ -675,13 +764,24 @@ class AIGN:
             
             loaded_items = []
             
+            # 初始化用户输入数据变量
+            user_idea_loaded = ""
+            user_requirements_loaded = ""
+            embellishment_idea_loaded = ""
+            
             # 加载大纲相关数据
             if all_data["outline"]:
                 outline_data = all_data["outline"]
                 self.novel_outline = outline_data.get("outline", "")
-                self.user_idea = outline_data.get("user_idea", "")
-                self.user_requriments = outline_data.get("user_requirements", "")
-                self.embellishment_idea = outline_data.get("embellishment_idea", "")
+                # 从大纲中加载用户输入数据
+                user_idea_loaded = outline_data.get("user_idea", "")
+                user_requirements_loaded = outline_data.get("user_requirements", "")
+                embellishment_idea_loaded = outline_data.get("embellishment_idea", "")
+                # 从大纲中加载目标章节数（优先级最低）
+                saved_target_chapters = outline_data.get("target_chapters", 0)
+                if saved_target_chapters > 0:
+                    self.target_chapter_count = saved_target_chapters
+                    print(f"📊 从大纲载入目标章节数: {self.target_chapter_count}")
                 if self.novel_outline:
                     loaded_items.append(f"大纲 ({len(self.novel_outline)}字符)")
             
@@ -710,19 +810,60 @@ class AIGN:
             if all_data["detailed_outline"]:
                 detail_data = all_data["detailed_outline"]
                 self.detailed_outline = detail_data.get("detailed_outline", "")
+                # 从详细大纲中加载目标章节数
+                saved_target_chapters = detail_data.get("target_chapters", 0)
+                if saved_target_chapters > 0:
+                    self.target_chapter_count = saved_target_chapters
+                    print(f"📊 从详细大纲载入目标章节数: {self.target_chapter_count}")
+                # 如果大纲中没有用户输入数据，从详细大纲中加载
+                if not user_idea_loaded:
+                    user_idea_loaded = detail_data.get("user_idea", "")
+                if not user_requirements_loaded:
+                    user_requirements_loaded = detail_data.get("user_requirements", "")
+                if not embellishment_idea_loaded:
+                    embellishment_idea_loaded = detail_data.get("embellishment_idea", "")
                 if self.detailed_outline:
-                    loaded_items.append(f"详细大纲 ({len(self.detailed_outline)}字符)")
+                    loaded_items.append(f"详细大纲 ({len(self.detailed_outline)}字符, 目标{self.target_chapter_count}章)")
                     self.use_detailed_outline = True
             
             # 加载故事线
             if all_data["storyline"]:
                 story_data = all_data["storyline"]
                 self.storyline = story_data.get("storyline", {})
+                # 从故事线中加载目标章节数（如果详细大纲中没有的话）
+                storyline_target_chapters = story_data.get("target_chapters", 0)
+                if storyline_target_chapters > 0 and self.target_chapter_count <= 20:  # 只在还是默认值时更新
+                    self.target_chapter_count = storyline_target_chapters
+                    print(f"📊 从故事线载入目标章节数: {self.target_chapter_count}")
+                # 如果前面没有用户输入数据，从故事线中加载
+                if not user_idea_loaded:
+                    user_idea_loaded = story_data.get("user_idea", "")
+                if not user_requirements_loaded:
+                    user_requirements_loaded = story_data.get("user_requirements", "")
+                if not embellishment_idea_loaded:
+                    embellishment_idea_loaded = story_data.get("embellishment_idea", "")
                 if self.storyline and isinstance(self.storyline, dict):
                     chapters = self.storyline.get("chapters", [])
                     if chapters:
-                        target_chapters = story_data.get("target_chapters", len(chapters))
+                        target_chapters = story_data.get("target_chapters", self.target_chapter_count)
                         loaded_items.append(f"故事线 ({len(chapters)}/{target_chapters}章)")
+            
+            # 设置用户输入数据到实例变量
+            self.user_idea = user_idea_loaded
+            self.user_requriments = user_requirements_loaded  # 注意这里保持原始的拼写错误以保持兼容性
+            self.embellishment_idea = embellishment_idea_loaded
+            
+            # 如果加载了用户输入数据，添加到加载项列表
+            user_input_items = []
+            if user_idea_loaded.strip():
+                user_input_items.append(f"想法({len(user_idea_loaded)}字符)")
+            if user_requirements_loaded.strip():
+                user_input_items.append(f"写作要求({len(user_requirements_loaded)}字符)")
+            if embellishment_idea_loaded.strip():
+                user_input_items.append(f"润色要求({len(embellishment_idea_loaded)}字符)")
+            
+            if user_input_items:
+                loaded_items.append(f"用户输入数据: {', '.join(user_input_items)}")
             
             # 加载用户设置
             if all_data["user_settings"]:
@@ -871,6 +1012,9 @@ class AIGN:
         return self.novel_content
 
     def genNovelOutline(self, user_idea=None):
+        # 在生成前刷新chatLLM以确保使用最新配置
+        print("🔄 小说大纲生成: 刷新ChatLLM配置...")
+        self.refresh_chatllm()
         if user_idea:
             self.user_idea = user_idea
         
@@ -1173,6 +1317,10 @@ class AIGN:
     
     def genDetailedOutline(self):
         """生成详细大纲"""
+        # 在生成前刷新chatLLM以确保使用最新配置
+        print("🔄 详细大纲生成: 刷新ChatLLM配置...")
+        self.refresh_chatllm()
+        
         if not self.novel_outline or not self.user_idea:
             print("❌ 缺少原始大纲或用户想法，无法生成详细大纲")
             self.log_message("❌ 缺少原始大纲或用户想法，无法生成详细大纲")
@@ -1224,7 +1372,10 @@ class AIGN:
         # 自动保存详细大纲到本地文件
         self._save_to_local("detailed_outline",
             detailed_outline=self.detailed_outline,
-            target_chapters=self.target_chapter_count
+            target_chapters=self.target_chapter_count,
+            user_idea=self.user_idea,
+            user_requirements=self.user_requriments,
+            embellishment_idea=self.embellishment_idea
         )
         
         # 详细大纲生成完成后更新元数据
@@ -1240,6 +1391,9 @@ class AIGN:
         return self.novel_outline
     
     def genStoryline(self, chapters_per_batch=10):
+        # 在生成前刷新chatLLM以确保使用最新配置
+        print("🔄 故事线生成: 刷新ChatLLM配置...")
+        self.refresh_chatllm()
         """生成故事线，支持分批生成"""
         if not self.getCurrentOutline() or not self.character_list:
             print("❌ 缺少大纲或人物列表，无法生成故事线")
@@ -1249,6 +1403,18 @@ class AIGN:
         print(f"📖 正在生成故事线，目标章节数: {self.target_chapter_count}")
         print(f"📦 分批生成设置：每批 {chapters_per_batch} 章")
         print(f"📊 预计需要生成 {(self.target_chapter_count + chapters_per_batch - 1) // chapters_per_batch} 批")
+        
+        # 如果没有标题，先生成标题（不影响主流程）
+        if not self.novel_title or self.novel_title == "未命名小说":
+            try:
+                print("📚 检测到缺少标题，开始生成小说标题...")
+                self.genNovelTitle()
+                print("✅ 标题生成完成")
+            except Exception as e:
+                print(f"⚠️ 标题生成失败：{e}")
+                print("📋 使用默认标题并继续流程")
+                self.novel_title = "未命名小说"
+                self.log_message(f"⚠️ 标题生成异常，使用默认标题：{self.novel_title}")
         
         # 更新生成状态
         self.current_generation_status.update({
@@ -1346,7 +1512,7 @@ class AIGN:
                 self.update_webui_status("JSON处理方法", f"第{start_chapter}-{end_chapter}章: {method_name}")
                 
                 if batch_storyline is None:
-                    # 所有方法都失败，记录错误并跳过
+                    # 所有方法都失败，记录错误并跳过，但仍要更新进度
                     error_msg = f"第{start_chapter}-{end_chapter}章故事线生成失败: {generation_status}"
                     print(f"❌ {error_msg}")
                     self.current_generation_status["errors"].append(error_msg)
@@ -1355,6 +1521,11 @@ class AIGN:
                         "end_chapter": end_chapter,
                         "error": generation_status
                     })
+                    
+                    # 更新进度（跳过的批次也要计入进度）
+                    self.current_generation_status["progress"] = batch_count / self.current_generation_status["total_batches"] * 100
+                    self.current_generation_status["current_batch"] = batch_count
+                    
                     self.update_webui_status("跳过批次", f"第{start_chapter}-{end_chapter}章生成失败，已跳过")
                     continue
                 
@@ -1374,6 +1545,12 @@ class AIGN:
                         "end_chapter": end_chapter,
                         "error": validation_result['error']
                     })
+                    
+                    # 更新进度（验证失败的批次也要计入进度）
+                    self.current_generation_status["progress"] = batch_count / self.current_generation_status["total_batches"] * 100
+                    self.current_generation_status["current_batch"] = batch_count
+                    
+                    self.update_webui_status("验证失败", f"第{start_chapter}-{end_chapter}章验证失败，已跳过")
                     continue
                 
                 # 验证通过，合并到总故事线中
@@ -1405,8 +1582,9 @@ class AIGN:
                     if len(batch_storyline["chapters"]) > 3:
                         print(f"   ... 还有{len(batch_storyline['chapters']) - 3}章")
                 
-                # 更新进度并同步到WebUI
+                # 更新进度并同步到WebUI（无论是否成功都要更新进度）
                 self.current_generation_status["progress"] = batch_count / self.current_generation_status["total_batches"] * 100
+                self.current_generation_status["current_batch"] = batch_count
                 
                 # 构建详细的完成信息
                 completion_message = f"第{start_chapter}-{end_chapter}章故事线生成完成"
@@ -1426,6 +1604,12 @@ class AIGN:
                     "end_chapter": end_chapter,
                     "error": str(e)
                 })
+                
+                # 更新进度（异常的批次也要计入进度）
+                self.current_generation_status["progress"] = batch_count / self.current_generation_status["total_batches"] * 100
+                self.current_generation_status["current_batch"] = batch_count
+                
+                self.update_webui_status("生成异常", f"第{start_chapter}-{end_chapter}章生成异常，已跳过")
                 continue
         
         # 生成完成总结
@@ -1434,12 +1618,25 @@ class AIGN:
         # 自动保存故事线到本地文件
         self._save_to_local("storyline",
             storyline=self.storyline,
-            target_chapters=self.target_chapter_count
+            target_chapters=self.target_chapter_count,
+            user_idea=self.user_idea,
+            user_requirements=self.user_requriments,
+            embellishment_idea=self.embellishment_idea
         )
         
         # 故事线生成完成后更新元数据
         print(f"💾 故事线生成完成，更新元数据...")
         self.updateMetadataAfterStoryline()
+        
+        # 更新生成状态为完成
+        generated_chapters = len(self.storyline.get("chapters", []))
+        self.current_generation_status.update({
+            "stage": "completed",
+            "progress": 100,
+            "message": f"故事线生成完成 - 已生成 {generated_chapters} 章",
+            "generated_chapters": generated_chapters,
+            "completion_rate": (generated_chapters / self.target_chapter_count * 100) if self.target_chapter_count > 0 else 100
+        })
         
         return self.storyline
     
@@ -1511,17 +1708,9 @@ class AIGN:
         return prompt
     
     def update_webui_status(self, category: str, message: str):
-        """更新WebUI状态信息"""
-        # 确保状态历史存在
-        if not hasattr(self, 'global_status_history'):
-            self.global_status_history = []
-        
-        # 添加状态信息
-        self.global_status_history.append([category, message])
-        
-        # 限制状态历史长度，避免内存占用过多
-        if len(self.global_status_history) > 100:
-            self.global_status_history = self.global_status_history[-80:]  # 保留最新80条
+        """更新WebUI状态信息（简化版本，避免与详细版本冲突）"""
+        # 调用详细版本的状态更新方法
+        self.update_webui_status_detailed(category, message, include_progress=True)
     
     def _format_prev_storyline(self, prev_chapters):
         """格式化前置故事线用于上下文"""
@@ -1711,22 +1900,76 @@ class AIGN:
         return issues
     
     def _generate_storyline_summary(self):
-        """生成故事线生成总结"""
+        """生成故事线生成总结，包含失败章节的详细信息"""
+        generated_chapters = len(self.storyline['chapters'])
+        target_chapters = self.target_chapter_count
+        completion_rate = (generated_chapters / target_chapters * 100) if target_chapters > 0 else 0
+        
         print(f"\n🎉 故事线生成完成！")
         print(f"📊 生成统计：")
-        print(f"   • 总章节数：{len(self.storyline['chapters'])}")
-        print(f"   • 目标章节数：{self.target_chapter_count}")
-        print(f"   • 完成率：{(len(self.storyline['chapters']) / self.target_chapter_count * 100):.1f}%")
+        print(f"   • 成功生成章节：{generated_chapters}")
+        print(f"   • 目标章节数：{target_chapters}")
+        print(f"   • 完成率：{completion_rate:.1f}%")
         
         # 检查是否有失败的批次
         if hasattr(self, 'failed_batches') and self.failed_batches:
-            print(f"   • 失败批次：{len(self.failed_batches)}")
-            print(f"\n❌ 生成失败的章节：")
-            for failed_batch in self.failed_batches:
-                chapters_range = f"{failed_batch['start_chapter']}-{failed_batch['end_chapter']}"
-                print(f"   • 第{chapters_range}章 - {failed_batch['error']}")
+            failed_chapter_count = sum(
+                batch['end_chapter'] - batch['start_chapter'] + 1 
+                for batch in self.failed_batches
+            )
+            print(f"   • 失败章节数：{failed_chapter_count}")
+            print(f"   • 失败批次数：{len(self.failed_batches)}")
+            
+            print(f"\n❌ 生成失败的章节详情：")
+            for i, failed_batch in enumerate(self.failed_batches, 1):
+                if failed_batch['start_chapter'] == failed_batch['end_chapter']:
+                    chapters_range = f"第{failed_batch['start_chapter']}章"
+                else:
+                    chapters_range = f"第{failed_batch['start_chapter']}-{failed_batch['end_chapter']}章"
+                print(f"   {i}. {chapters_range}")
+                print(f"      错误原因: {failed_batch['error']}")
+            
+            print(f"\n💡 故事线修复建议：")
+            print(f"   1. 检查失败章节的API连接和配置")
+            print(f"   2. 尝试重新生成失败的章节批次")
+            print(f"   3. 检查输入的大纲和人物设定是否完整")
+            print(f"   4. 考虑调整批次大小或减少并发请求")
+            
+            # 更新WebUI状态，显示失败章节信息
+            failed_chapters_list = []
+            for batch in self.failed_batches:
+                if batch['start_chapter'] == batch['end_chapter']:
+                    failed_chapters_list.append(f"第{batch['start_chapter']}章")
+                else:
+                    failed_chapters_list.append(f"第{batch['start_chapter']}-{batch['end_chapter']}章")
+            
+            summary_message = f"生成完成: {generated_chapters}/{target_chapters}章 ({completion_rate:.1f}%)"
+            if failed_chapters_list:
+                summary_message += f"\n未生成章节: {', '.join(failed_chapters_list)}"
+                summary_message += f"\n建议检查API配置或重新生成失败章节"
+            
+            self.update_webui_status("故事线完成", summary_message)
+            
+            # 更新当前生成状态
+            self.current_generation_status.update({
+                "stage": "completed_with_errors",
+                "progress": 100,
+                "generated_chapters": generated_chapters,
+                "completion_rate": completion_rate,
+                "message": summary_message
+            })
         else:
             print(f"✅ 全部故事线生成成功！")
+            self.update_webui_status("故事线完成", f"✅ 全部{generated_chapters}章故事线生成成功")
+            
+            # 更新当前生成状态
+            self.current_generation_status.update({
+                "stage": "completed",
+                "progress": 100,
+                "generated_chapters": generated_chapters,
+                "completion_rate": 100,
+                "message": f"✅ 全部{generated_chapters}章故事线生成成功"
+            })
         
         # 显示前几章的章节标题预览
         if self.storyline["chapters"]:
@@ -1740,23 +1983,273 @@ class AIGN:
             if len(self.storyline["chapters"]) > 5:
                 print(f"   ... 还有{len(self.storyline['chapters']) - 5}章")
         
-        self.log_message(f"🎉 故事线生成完成，共{len(self.storyline['chapters'])}章，包含章节标题")
+        # 创建详细的日志消息
+        log_message = f"🎉 故事线生成完成: {generated_chapters}/{target_chapters}章 ({completion_rate:.1f}%)"
+        if hasattr(self, 'failed_batches') and self.failed_batches:
+            failed_count = len(self.failed_batches)
+            log_message += f", {failed_count}个批次失败"
+        
+        self.log_message(log_message)
     
-    def format_time_duration(self, seconds):
-        """格式化时间为友好的显示格式（几小时几分钟）"""
+    def get_storyline_status_info(self):
+        """获取故事线状态详细信息，供Web界面显示"""
+        if not hasattr(self, 'current_generation_status'):
+            return {
+                "stage": "未开始",
+                "progress": 0,
+                "message": "故事线生成尚未开始"
+            }
+        
+        status = self.current_generation_status
+        generated_chapters = len(self.storyline.get("chapters", []))
+        target_chapters = self.target_chapter_count
+        
+        status_info = {
+            "stage": status.get("stage", "未知"),
+            "progress": status.get("progress", 0),
+            "current_batch": status.get("current_batch", 0),
+            "total_batches": status.get("total_batches", 0),
+            "current_chapter": status.get("current_chapter", 0),
+            "total_chapters": target_chapters,
+            "generated_chapters": generated_chapters,
+            "completion_rate": (generated_chapters / target_chapters * 100) if target_chapters > 0 else 0
+        }
+        
+        # 添加失败信息
+        if hasattr(self, 'failed_batches') and self.failed_batches:
+            failed_chapters = []
+            for batch in self.failed_batches:
+                if batch['start_chapter'] == batch['end_chapter']:
+                    failed_chapters.append(f"第{batch['start_chapter']}章")
+                else:
+                    failed_chapters.append(f"第{batch['start_chapter']}-{batch['end_chapter']}章")
+            
+            status_info.update({
+                "failed_batches": len(self.failed_batches),
+                "failed_chapters": failed_chapters,
+                "failed_chapter_count": sum(
+                    batch['end_chapter'] - batch['start_chapter'] + 1 
+                    for batch in self.failed_batches
+                )
+            })
+        
+        # 添加错误和警告信息
+        status_info.update({
+            "errors": status.get("errors", []),
+            "warnings": status.get("warnings", []),
+            "error_count": len(status.get("errors", [])),
+            "warning_count": len(status.get("warnings", []))
+        })
+        
+        return status_info
+    
+    def get_storyline_repair_suggestions(self):
+        """获取故事线修复建议"""
+        if not hasattr(self, 'failed_batches') or not self.failed_batches:
+            return {
+                "needs_repair": False,
+                "message": "✅ 故事线完整，无需修复"
+            }
+        
+        failed_chapters = []
+        error_types = {}
+        
+        for batch in self.failed_batches:
+            # 记录失败的章节
+            if batch['start_chapter'] == batch['end_chapter']:
+                failed_chapters.append(f"第{batch['start_chapter']}章")
+            else:
+                failed_chapters.append(f"第{batch['start_chapter']}-{batch['end_chapter']}章")
+            
+            # 统计错误类型
+            error = batch.get('error', '未知错误')
+            if 'timeout' in error.lower() or '超时' in error:
+                error_types['timeout'] = error_types.get('timeout', 0) + 1
+            elif 'api' in error.lower() or 'key' in error.lower():
+                error_types['api'] = error_types.get('api', 0) + 1
+            elif 'json' in error.lower():
+                error_types['json'] = error_types.get('json', 0) + 1
+            else:
+                error_types['other'] = error_types.get('other', 0) + 1
+        
+        # 生成修复建议
+        suggestions = []
+        
+        if error_types.get('timeout', 0) > 0:
+            suggestions.append("🕐 检查网络连接，考虑增加API超时时间")
+        
+        if error_types.get('api', 0) > 0:
+            suggestions.append("🔑 检查API密钥配置，确认账户余额充足")
+        
+        if error_types.get('json', 0) > 0:
+            suggestions.append("📝 JSON解析错误，可能是模型输出格式问题，尝试重新生成")
+        
+        if error_types.get('other', 0) > 0:
+            suggestions.append("⚙️ 检查输入的大纲和人物设定是否完整")
+        
+        # 通用建议
+        suggestions.extend([
+            "🔄 重新生成失败的章节批次",
+            "📏 考虑减少批次大小（如改为5章一批）",
+            "🎯 检查故事设定的复杂度是否过高"
+        ])
+        
+        return {
+            "needs_repair": True,
+            "failed_chapters": failed_chapters,
+            "failed_count": len(self.failed_batches),
+            "error_types": error_types,
+            "suggestions": suggestions,
+            "repair_steps": [
+                "1. 检查上述建议中的相关问题",
+                "2. 在设置页面确认API配置正确",
+                "3. 尝试重新生成整个故事线",
+                "4. 如问题持续，考虑简化故事设定"
+            ]
+        }
+    
+    def repair_storyline_selective(self, chapters_per_batch=10):
+        """选择性修复故事线中的失败章节"""
+        print(f"🔧 开始选择性故事线修复...")
+        
+        if not hasattr(self, 'failed_batches') or not self.failed_batches:
+            print("✅ 未发现失败批次，故事线无需修复")
+            return True
+        
+        failed_batches_backup = self.failed_batches.copy()
+        self.failed_batches = []
+        repaired_batches = 0
+        
+        print(f"🔧 需要修复 {len(failed_batches_backup)} 个失败批次")
+        
+        for i, batch in enumerate(failed_batches_backup, 1):
+            start_chapter = batch['start_chapter']
+            end_chapter = batch['end_chapter']
+            
+            print(f"\n🔧 [{i}/{len(failed_batches_backup)}] 修复第{start_chapter}-{end_chapter}章...")
+            print(f"   原因: {batch.get('error', '未知错误')}")
+            
+            try:
+                # 生成修复的批次故事线
+                current_chapters = end_chapter - start_chapter + 1
+                
+                # 构建修复请求的提示词
+                repair_prompt = f"""
+根据以下故事设定，重新生成第{start_chapter}到第{end_chapter}章的详细故事线：
+
+用户想法：{self.user_idea}
+写作要求：{self.user_requriments}
+润色要求：{self.embellishment_idea}
+总章节数：{self.target_chapter_count}
+
+请按照JSON格式生成第{start_chapter}-{end_chapter}章的故事线，每章包含：
+- chapter_number: 章节号
+- title: 章节标题
+- plot_summary: 详细剧情总结
+- key_events: 关键事件列表
+- character_development: 人物发展
+- chapter_mood: 章节氛围
+
+注意：这是修复生成，请确保章节编号连续且符合整体故事脉络。
+"""
+                
+                # 调用AI生成修复内容
+                resp = self.gpt.query_json(repair_prompt)
+                
+                if 'parsed_json' in resp:
+                    batch_storyline = resp['parsed_json']
+                    
+                    # 验证生成的故事线
+                    validation_result = self.validate_storyline_batch(batch_storyline, start_chapter, end_chapter)
+                    
+                    if validation_result["valid"]:
+                        # 找到并替换现有故事线中对应的章节
+                        existing_chapters = self.storyline.get("chapters", [])
+                        
+                        # 移除旧的失败章节
+                        self.storyline["chapters"] = [
+                            ch for ch in existing_chapters 
+                            if not (start_chapter <= ch.get('chapter_number', 0) <= end_chapter)
+                        ]
+                        
+                        # 添加修复后的章节
+                        new_chapters = batch_storyline.get("chapters", [])
+                        self.storyline["chapters"].extend(new_chapters)
+                        
+                        # 按章节号重新排序
+                        self.storyline["chapters"].sort(key=lambda x: x.get('chapter_number', 0))
+                        
+                        print(f"✅ 第{start_chapter}-{end_chapter}章修复成功")
+                        print(f"   修复章节数：{len(new_chapters)}")
+                        repaired_batches += 1
+                        
+                    else:
+                        print(f"❌ 第{start_chapter}-{end_chapter}章验证失败: {validation_result['error']}")
+                        # 记录修复失败的批次
+                        self.failed_batches.append({
+                            "start_chapter": start_chapter,
+                            "end_chapter": end_chapter,
+                            "error": f"修复后验证失败: {validation_result['error']}"
+                        })
+                        
+                else:
+                    error_msg = f"第{start_chapter}-{end_chapter}章修复生成失败"
+                    print(f"❌ {error_msg}")
+                    self.failed_batches.append({
+                        "start_chapter": start_chapter,
+                        "end_chapter": end_chapter,
+                        "error": f"修复时生成失败: {resp.get('content', '未知错误')}"
+                    })
+                    
+            except Exception as e:
+                error_msg = f"第{start_chapter}-{end_chapter}章修复异常: {str(e)}"
+                print(f"❌ {error_msg}")
+                self.failed_batches.append({
+                    "start_chapter": start_chapter,
+                    "end_chapter": end_chapter,
+                    "error": f"修复时异常: {str(e)}"
+                })
+        
+        # 输出修复结果
+        total_chapters = len(self.storyline.get("chapters", []))
+        success_rate = (repaired_batches / len(failed_batches_backup)) * 100 if failed_batches_backup else 100
+        
+        print(f"\n🎉 故事线修复完成!")
+        print(f"   • 修复成功: {repaired_batches}/{len(failed_batches_backup)} 个批次 ({success_rate:.1f}%)")
+        print(f"   • 当前总章节数: {total_chapters}")
+        
+        if self.failed_batches:
+            print(f"   • 仍有失败: {len(self.failed_batches)} 个批次")
+            for batch in self.failed_batches:
+                if batch['start_chapter'] == batch['end_chapter']:
+                    print(f"     - 第{batch['start_chapter']}章: {batch['error']}")
+                else:
+                    print(f"     - 第{batch['start_chapter']}-{batch['end_chapter']}章: {batch['error']}")
+        
+        return repaired_batches > 0
+    
+    def format_time_duration(self, seconds, include_seconds=False):
+        """格式化时间为友好的显示格式（几小时几分钟几秒）"""
         if seconds <= 0:
-            return "0分钟"
+            return "0秒" if include_seconds else "0分钟"
         
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
         
+        parts = []
         if hours > 0:
-            if minutes > 0:
-                return f"{hours}小时{minutes}分钟"
-            else:
-                return f"{hours}小时"
-        else:
-            return f"{minutes}分钟"
+            parts.append(f"{hours}小时")
+        if minutes > 0:
+            parts.append(f"{minutes}分钟")
+        if include_seconds and (secs > 0 or len(parts) == 0):
+            parts.append(f"{secs}秒")
+        
+        # 如果没有小时和分钟，且不包含秒数，至少显示1分钟
+        if not parts and not include_seconds:
+            parts.append("1分钟")
+        
+        return "".join(parts)
 
     def getCurrentChapterStoryline(self, chapter_number):
         """获取当前章节的故事线"""
@@ -1808,6 +2301,9 @@ class AIGN:
         return self.getSurroundingStorylines(chapter_number, range_size=2)
 
     def genBeginning(self, user_requriments=None, embellishment_idea=None):
+        # 在生成前刷新chatLLM以确保使用最新配置
+        print("🔄 小说开头生成: 刷新ChatLLM配置...")
+        self.refresh_chatllm()
         if user_requriments:
             self.user_requriments = user_requriments
         if embellishment_idea:
@@ -2292,6 +2788,9 @@ class AIGN:
         return False, None, f"{operation_name}意外失败"
 
     def genNextParagraph(self, user_requriments=None, embellishment_idea=None):
+        # 在生成前刷新chatLLM以确保使用最新配置
+        print("🔄 段落生成: 刷新ChatLLM配置...")
+        self.refresh_chatllm()
         """生成下一个段落的主方法，包含自动重试机制"""
         if user_requriments:
             self.user_requriments = user_requriments
@@ -3654,7 +4153,7 @@ class AIGN:
 
                         self.genNextParagraph(self.user_requriments, self.embellishment_idea)
                         chapter_time = time.time() - chapter_start_time
-                        success_msg = f"✅ 第{self.chapter_count}章生成完成，耗时: {chapter_time:.1f}秒"
+                        success_msg = f"✅ 第{self.chapter_count}章生成完成，耗时: {self.format_time_duration(chapter_time, include_seconds=True)}"
                         print(success_msg)
 
                         # 同步生成结果到WebUI
@@ -3677,7 +4176,7 @@ class AIGN:
                 
                 total_time = time.time() - start_time
                 if self.chapter_count >= self.target_chapter_count:
-                    completion_msg = f"🎉 自动生成完成！共生成 {self.chapter_count} 章，总耗时: {total_time/60:.1f} 分钟"
+                    completion_msg = f"🎉 自动生成完成！共生成 {self.chapter_count} 章，总耗时: {self.format_time_duration(total_time, include_seconds=True)}"
                     print(completion_msg)
                     self._sync_to_webui(completion_msg)
                     # 确保最后一章内容和元数据被保存
@@ -3727,7 +4226,7 @@ class AIGN:
         if len(self.log_buffer) > self.max_log_entries:
             self.log_buffer = self.log_buffer[-self.max_log_entries:]
     
-    def update_webui_status(self, status_type, message, include_progress=True):
+    def update_webui_status_detailed(self, status_type, message, include_progress=True):
         """更新WebUI状态显示，包含详细的生成进度"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         
@@ -3750,11 +4249,28 @@ class AIGN:
                 if status.get('errors'):
                     progress_info += f"\n   ❌ 错误: {len(status['errors'])} 个"
                 
+                # 添加失败批次信息
+                if hasattr(self, 'failed_batches') and self.failed_batches:
+                    failed_chapters = []
+                    for batch in self.failed_batches:
+                        if batch['start_chapter'] == batch['end_chapter']:
+                            failed_chapters.append(f"第{batch['start_chapter']}章")
+                        else:
+                            failed_chapters.append(f"第{batch['start_chapter']}-{batch['end_chapter']}章")
+                    progress_info += f"\n   🚫 跳过章节: {', '.join(failed_chapters)}"
+                
                 status_info += progress_info
         
+        # 确保状态历史存在
+        if not hasattr(self, 'global_status_history'):
+            self.global_status_history = []
+        
         # 添加到全局状态历史
-        if hasattr(self, 'global_status_history'):
-            self.global_status_history.append([status_type, status_info])
+        self.global_status_history.append([status_type, status_info])
+        
+        # 限制状态历史长度，避免内存占用过多
+        if len(self.global_status_history) > 100:
+            self.global_status_history = self.global_status_history[-80:]  # 保留最新80条
         
         # 同时记录到日志
         self.log_message(status_info)
@@ -3816,8 +4332,13 @@ class AIGN:
         }
 
         # 故事线统计
+        storyline_chars = 0
+        if self.storyline and self.storyline.get('chapters'):
+            storyline_chars = sum(len(str(chapter.get('content', ''))) for chapter in self.storyline['chapters'])
+        
         storyline_stats = {
             'chapters_count': len(self.storyline.get('chapters', [])) if self.storyline else 0,
+            'storyline_chars': storyline_chars,
             'coverage': f"{len(self.storyline.get('chapters', []))}/{generation_status['target_chapters']}" if self.storyline else "0/0"
         }
 
@@ -3891,7 +4412,7 @@ class AIGN:
             duration = time.time() - self.stream_start_time
             total_chars = len(final_content) if final_content else self.current_stream_chars
             speed = total_chars / duration if duration > 0 else 0
-            self.log_message(f"✅ {self.current_stream_operation}完成: {total_chars}字符，耗时{duration:.1f}秒，速度{speed:.0f}字符/秒")
+            self.log_message(f"✅ {self.current_stream_operation}完成: {total_chars}字符，耗时{self.format_time_duration(duration, include_seconds=True)}，速度{speed:.0f}字符/秒")
 
         self.current_stream_chars = 0
         self.current_stream_operation = ""

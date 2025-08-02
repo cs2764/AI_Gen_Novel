@@ -221,7 +221,7 @@ def create_data_management_interface(aign) -> Tuple:
         except Exception as e:
             return f"❌ 刷新存储状态失败: {e}"
     
-    def manual_save_handler(aign_state, target_chapters=None):
+    def manual_save_handler(aign_state, target_chapters=None, user_idea="", user_requirements="", embellishment_idea=""):
         """处理手动保存"""
         try:
             # 从Gradio State对象获取实际的AIGN实例
@@ -232,19 +232,45 @@ def create_data_management_interface(aign) -> Tuple:
                 aign_instance.target_chapter_count = target_chapters
                 print(f"💾 手动保存：更新目标章节数为 {target_chapters} 章")
             
+            # 更新AIGN实例中的用户输入数据
+            if user_idea is not None:
+                aign_instance.user_idea = user_idea
+                print(f"💾 手动保存：更新用户想法 ({len(user_idea)}字符)")
+            if user_requirements is not None:
+                aign_instance.user_requriments = user_requirements  # 保持原有的拼写错误
+                print(f"💾 手动保存：更新写作要求 ({len(user_requirements)}字符)")
+            if embellishment_idea is not None:
+                aign_instance.embellishment_idea = embellishment_idea
+                print(f"💾 手动保存：更新润色要求 ({len(embellishment_idea)}字符)")
+            
             # 统计当前内存中的数据
             data_count = 0
             saved_items = []
             
+            # 首先检查并保存用户输入数据
+            user_idea = getattr(aign_instance, 'user_idea', '') or ''
+            user_requirements = getattr(aign_instance, 'user_requriments', '') or ''
+            embellishment_idea = getattr(aign_instance, 'embellishment_idea', '') or ''
+            
+            user_input_items = []
+            if user_idea.strip():
+                user_input_items.append(f"想法 ({len(user_idea)}字符)")
+            if user_requirements.strip():
+                user_input_items.append(f"写作要求 ({len(user_requirements)}字符)")
+            if embellishment_idea.strip():
+                user_input_items.append(f"润色要求 ({len(embellishment_idea)}字符)")
+                
+            user_input_summary = f" [含用户输入: {', '.join(user_input_items)}]" if user_input_items else ""
+
             # 检查并保存各类数据
             if aign_instance.novel_outline and aign_instance.novel_outline.strip():
                 aign_instance._save_to_local("outline", 
                                            outline=aign_instance.novel_outline,
-                                           user_idea=getattr(aign_instance, 'user_idea', ''),
-                                           user_requirements=getattr(aign_instance, 'user_requriments', ''),
-                                           embellishment_idea=getattr(aign_instance, 'embellishment_idea', ''))
+                                           user_idea=user_idea,
+                                           user_requirements=user_requirements,
+                                           embellishment_idea=embellishment_idea)
                 data_count += 1
-                saved_items.append(f"📋 大纲 ({len(aign_instance.novel_outline)}字符)")
+                saved_items.append(f"📋 大纲 ({len(aign_instance.novel_outline)}字符){user_input_summary}")
             
             if aign_instance.novel_title and aign_instance.novel_title.strip():
                 aign_instance._save_to_local("title", title=aign_instance.novel_title)
@@ -260,27 +286,53 @@ def create_data_management_interface(aign) -> Tuple:
                 target_chapters = getattr(aign_instance, 'target_chapter_count', 0)
                 aign_instance._save_to_local("detailed_outline", 
                                            detailed_outline=aign_instance.detailed_outline,
-                                           target_chapters=target_chapters)
+                                           target_chapters=target_chapters,
+                                           user_idea=user_idea,
+                                           user_requirements=user_requirements,
+                                           embellishment_idea=embellishment_idea)
                 data_count += 1
-                saved_items.append(f"📖 详细大纲 ({len(aign_instance.detailed_outline)}字符, 目标{target_chapters}章)")
+                saved_items.append(f"📖 详细大纲 ({len(aign_instance.detailed_outline)}字符, 目标{target_chapters}章){user_input_summary}")
             
             if hasattr(aign_instance, 'storyline') and aign_instance.storyline and aign_instance.storyline.get('chapters'):
                 chapter_count = len(aign_instance.storyline['chapters'])
                 target_chapters = getattr(aign_instance, 'target_chapter_count', 0)
                 aign_instance._save_to_local("storyline", 
                                            storyline=aign_instance.storyline,
-                                           target_chapters=target_chapters)
+                                           target_chapters=target_chapters,
+                                           user_idea=user_idea,
+                                           user_requirements=user_requirements,
+                                           embellishment_idea=embellishment_idea)
                 data_count += 1
-                saved_items.append(f"🗂️ 故事线 ({chapter_count}/{target_chapters}章)")
+                saved_items.append(f"🗂️ 故事线 ({chapter_count}/{target_chapters}章){user_input_summary}")
             
+            # 如果有用户输入数据但没有其他生成内容，也要保存用户输入
+            if data_count == 0 and user_input_items:
+                # 创建一个包含用户输入的空大纲条目来保存用户输入
+                aign_instance._save_to_local("outline", 
+                                           outline="",  # 空大纲
+                                           user_idea=user_idea,
+                                           user_requirements=user_requirements,
+                                           embellishment_idea=embellishment_idea)
+                data_count += 1
+                saved_items.append(f"📝 用户输入数据（{', '.join(user_input_items)}）")
+
             if data_count > 0:
                 result = f"✅ 手动保存完成！已保存 {data_count} 项数据:\n\n"
                 for item in saved_items:
                     result += f"• {item}\n"
+                
+                # 添加用户输入数据的详细说明
+                if user_input_items:
+                    result += f"\n📝 用户输入数据已同时保存:\n"
+                    for user_item in user_input_items:
+                        result += f"• {user_item}\n"
+                    result += f"\n🎯 这些用户输入将在生成大纲、详细大纲和故事线时自动使用"
+                
                 result += f"\n💾 保存时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                result += f"\n🔄 增强型自动保存：所有数据已包含用户创意和要求信息"
                 return result
             else:
-                return "⚠️ 没有找到可保存的数据\n\n💡 提示：请先生成大纲、标题或其他内容后再保存"
+                return "⚠️ 没有找到可保存的数据\n\n💡 提示：请输入想法、写作要求或润色要求，或者先生成大纲、标题等内容后再保存"
                 
         except Exception as e:
             return f"❌ 手动保存失败: {e}"

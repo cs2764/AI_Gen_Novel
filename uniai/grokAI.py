@@ -20,6 +20,7 @@ def grokChatLLM(model_name="grok-3-mini", api_key=None, system_prompt="", base_u
     client = OpenAI(
         api_key=api_key,
         base_url=actual_base_url,
+        timeout=1200.0,  # 20分钟超时
     )
 
     def chatLLM(

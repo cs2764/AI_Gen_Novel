@@ -115,7 +115,7 @@ TEMPERATURE_SETTINGS = {
 }
 
 NETWORK_SETTINGS = {
-    "timeout": 300,
+    "timeout": 1200,
     "max_retries": 3,
     "retry_delay": 2.0
 }
@@ -281,10 +281,16 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
         current_config = config_manager.get_current_config()
         
         # 检查动态配置是否有效
+        print(f"🔄 get_chatllm: 检查动态配置 - 提供商: {provider}")
+        if current_config:
+            print(f"🔄 当前配置: 模型={current_config.model_name}, API密钥状态={'***已设置' if current_config.api_key else '未设置'}")
+        else:
+            print("⚠️ 没有当前配置")
+            
         if current_config and current_config.api_key:
             # LM Studio不需要真实API密钥
             if provider == "lmstudio" or "your-" not in current_config.api_key.lower():
-                print(f"✅ 使用动态配置，当前提供商: {provider.upper()}")
+                print(f"✅ 使用动态配置，当前提供商: {provider.upper()}, 模型: {current_config.model_name}")
                 provider_config = {
                     'api_key': current_config.api_key,
                     'model_name': current_config.model_name,

@@ -1,12 +1,15 @@
-# 安装和使用指南
+# 🚀 AI网络小说生成器 v3.0.0 安装指南
 
-## 系统要求
+> 基于 Gradio 5.38.0 的现代化AI小说创作工具
 
-- Python 3.8 或更高版本
-- 至少 4GB 可用内存
-- 稳定的网络连接（用于 API 调用）
+## 📋 系统要求
 
-## 快速安装
+- **Python**: 3.10 或更高版本 (推荐 3.10.11)
+- **内存**: 至少 4GB 可用内存
+- **网络**: 稳定的网络连接（用于 API 调用）
+- **操作系统**: Windows 10+, macOS 10.15+, Linux
+
+## ⚡ 快速安装
 
 ### 1. 克隆项目
 
@@ -15,22 +18,87 @@ git clone https://github.com/cs2764/AI_Gen_Novel.git
 cd AI_Gen_Novel
 ```
 
-### 2. 安装依赖
+### 2. 创建虚拟环境 (强烈推荐)
 
 ```bash
-pip install -r requirements.txt
+# 创建Gradio 5.38.0专用虚拟环境
+python -m venv gradio5_env
+
+# 激活虚拟环境
+# Windows:
+gradio5_env\Scripts\activate.bat
+# Linux/Mac:
+source gradio5_env/bin/activate
 ```
 
-### 3. 启动程序
+### 3. 安装依赖
+
+```bash
+# 安装Gradio 5.38.0及相关依赖
+pip install -r requirements_gradio5.txt
+```
+
+### 4. 配置API密钥
+
+```bash
+# 复制配置模板
+cp config_template.py config.py
+# 编辑 config.py 文件，填入您的API密钥
+```
+
+### 5. 启动程序
 
 ```bash
 python app.py
+# 或者直接运行 start.bat (Windows)
 ```
 
 程序会自动：
-- 创建配置文件模板
-- 启动 Web 界面
-- 自动打开浏览器
+- 启动 Gradio 5.38.0 Web 界面
+- 在 http://localhost:7861 提供服务
+- 加载本地保存的数据
+- 显示实时状态和进度
+
+## 🔄 从旧版本迁移
+
+### 如果您已经在使用 v2.x 版本
+
+1. **备份数据**：
+   ```bash
+   cp -r output/ output_backup/
+   cp -r autosave/ autosave_backup/
+   cp config.py config_backup.py
+   ```
+
+2. **更新代码**：
+   ```bash
+   git pull origin main
+   ```
+
+3. **创建新环境**：
+   ```bash
+   python -m venv gradio5_env
+   source gradio5_env/bin/activate  # Linux/Mac
+   # gradio5_env\Scripts\activate.bat  # Windows
+   ```
+
+4. **安装新依赖**：
+   ```bash
+   pip install -r requirements_gradio5.txt
+   ```
+
+5. **迁移配置**：
+   ```bash
+   cp config_template.py config.py
+   # 编辑 config.py，填入您的API密钥
+   ```
+
+6. **验证迁移**：
+   - 启动应用：`python app.py`
+   - 访问：http://localhost:7861
+   - 检查数据是否正确加载
+
+> 📖 **详细迁移指南**: 参见 [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
 
 ## 详细配置
 

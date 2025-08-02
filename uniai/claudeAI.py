@@ -15,7 +15,7 @@ def claudeChatLLM(model_name="claude-3-sonnet-20240229", api_key=None, system_pr
     api_key = os.environ.get("ANTHROPIC_API_KEY", api_key)
     
     # 初始化Anthropic客户端
-    client = anthropic.Anthropic(api_key=api_key)
+    client = anthropic.Anthropic(api_key=api_key, timeout=1200.0)  # 20分钟超时
 
     def chatLLM(
         messages: List[Dict[str, str]],

@@ -1,0 +1,71 @@
+# AI Novel Generator - Gradio 5.38.0 Complete Dependencies
+# For Python 3.10+ environments
+# Includes all AI SDKs and EPUB support from original requirements.txt
+# Install command: pip install -r requirements_gradio5.txt
+
+# Core Framework
+# Gradio 5.38.0 - Latest stable version, will auto-install compatible dependencies
+gradio==5.38.0
+
+# AI Service SDKs
+# OpenAI Official SDK
+openai>=1.3.0
+
+# Anthropic Claude SDK
+anthropic>=0.7.0
+
+# Google Generative AI SDK
+google-generativeai>=0.3.0
+
+# Alibaba Cloud DashScope SDK
+dashscope>=1.14.0
+
+# Basic Dependencies
+# HTTP request library
+requests>=2.31.0
+
+# Date and time processing
+python-dateutil>=2.8.2
+
+# JSON Schema validation
+jsonschema>=4.20.0
+
+# EPUB file processing
+ebooklib>=0.18
+
+# System Dependencies
+# Windows system support (Windows only)
+pywin32>=306; sys_platform == "win32"
+
+# Performance Optimization Packages (optional)
+# Faster JSON processing
+orjson>=3.9.0
+
+# Faster JSON parsing
+ujson>=5.8.0
+
+# Memory monitoring
+psutil>=5.9.0
+
+# Notes:
+#
+# This is a simplified requirements file with features:
+# 1. Let Gradio auto-handle framework dependencies to avoid version conflicts
+# 2. Only specify necessary AI SDKs and utility packages
+# 3. Use >= version constraints to allow automatic compatible updates
+# 4. Reduce possibility of dependency conflicts
+#
+# Gradio 5.38.0 will automatically install:
+# - fastapi (>=0.115.2)
+# - uvicorn
+# - pydantic (>=2.0)
+# - starlette
+# - httpx
+# - aiofiles
+# - jinja2
+# - other core dependencies
+#
+# If installation fails, try:
+# 1. pip install --upgrade pip
+# 2. pip install gradio==5.38.0
+# 3. pip install -r requirements_gradio5.txt

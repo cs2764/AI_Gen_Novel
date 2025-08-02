@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "2.4.4"
-__author__ = "Claude Code"
-__description__ = "AI 网络小说生成器 - 增强版"
+__version__ = "3.0.1"
+__author__ = "Claude Code, qwen3-code"
+__description__ = "AI 网络小说生成器 - Gradio 5.38.0 独立版"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,29 +16,32 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "Gradio 5.38.0 现代化界面",
+        "完整的小说生成流程",
+        "实时状态显示和进度跟踪",
+        "用户确认机制防止误操作",
+        "本地数据自动保存和加载",
         "统一的配置管理系统",
-        "系统提示词优化",
-        "增强的 AI 提供商支持",
-        "自动化生成功能",
-        "改进的用户界面",
-        "自定义默认想法配置",
-        "Web配置界面增强",
-        "动态配置加载",
-        "本地数据自动保存",
-        "智能数据导入导出",
-        "网页文件直接下载",
-        "智能标题验证过滤",
-        "增强的故事线生成",
-        "JSON格式自动修复"
+        "8个主流AI提供商支持",
+        "智能错误处理和恢复",
+        "分阶段生成状态显示",
+        "故事线智能格式化",
+        "自动生成和停止控制",
+        "完善的参数验证",
+        "类型安全的组件绑定",
+        "简洁优化的用户界面"
     ],
     "ai_providers": [
+        "OpenRouter",
+        "Claude (Anthropic)",
+        "Gemini (Google)",
         "DeepSeek",
-        "OpenRouter", 
-        "Claude",
-        "Gemini",
         "LM Studio",
-        "智谱 AI",
-        "阿里云"
+        "智谱 AI (GLM)",
+        "阿里云通义千问",
+        "Fireworks AI",
+        "Grok (xAI)",
+        "Lambda Labs"
     ]
 }
 

@@ -35,6 +35,7 @@ def lambdaChatLLM(model_name="llama-4-maverick-17b-128e-instruct-fp8", api_key=N
     client = OpenAI(
         api_key=api_key,
         base_url=actual_base_url,
+        timeout=1200.0,  # 20分钟超时
     )
 
     def chatLLM(

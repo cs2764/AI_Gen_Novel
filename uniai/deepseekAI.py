@@ -9,7 +9,7 @@ def deepseekChatLLM(model_name="deepseek-chat", api_key=None, system_prompt=""):
     - deepseek-chat
     """
     api_key = os.environ.get("DEEPSEEK_AI_API_KEY", api_key)
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=1200.0)  # 20分钟超时
 
     def chatLLM(
         messages: list,

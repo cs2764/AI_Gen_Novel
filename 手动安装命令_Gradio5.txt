@@ -1,0 +1,309 @@
+# AI网络小说生成器 v3.0.0 - Gradio 5.38.0 独立版
+# 手动安装命令指南
+# 更新时间: 2025-01-24
+
+# ========================================
+# 🚀 快速安装 (推荐方式)
+# ========================================
+
+# 1. 克隆项目
+git clone https://github.com/cs2764/AI_Gen_Novel.git
+cd AI_Gen_Novel
+
+# 2. 创建虚拟环境 (强烈推荐)
+python -m venv gradio5_env
+
+# 3. 激活虚拟环境
+# Windows:
+gradio5_env\Scripts\activate.bat
+# Linux/Mac:
+source gradio5_env/bin/activate
+
+# 4. 安装Gradio 5.38.0依赖
+pip install -r requirements_gradio5.txt
+
+# 5. 配置API密钥
+cp config_template.py config.py
+# 然后编辑 config.py 文件，填入您的API密钥
+
+# 6. 启动应用
+python app.py
+# 或者直接运行 start.bat (Windows)
+
+# ========================================
+# � 从旧版本迁移 (v2.x → v3.0.0)
+# ========================================
+
+# 如果您已经在使用旧版本，请按以下步骤迁移：
+
+# 迁移步骤1: 备份现有数据
+mkdir migration_backup
+cp -r output/ migration_backup/
+cp -r autosave/ migration_backup/
+cp -r metadata/ migration_backup/
+cp config.py migration_backup/config_backup.py
+
+# 迁移步骤2: 更新代码
+git fetch origin
+git checkout main  # 或 dev_gradio5
+git pull origin main
+
+# 迁移步骤3: 停用旧环境 (如果正在使用)
+deactivate
+
+# 迁移步骤4: 创建新环境
+python -m venv gradio5_env
+
+# 迁移步骤5: 激活新环境
+# Windows:
+gradio5_env\Scripts\activate.bat
+# Linux/Mac:
+source gradio5_env/bin/activate
+
+# 迁移步骤6: 安装新依赖
+pip install -r requirements_gradio5.txt
+
+# 迁移步骤7: 迁移配置
+cp config_template.py config.py
+# 然后编辑 config.py，从备份文件中复制您的API密钥
+
+# 迁移步骤8: 验证迁移
+python app.py
+# 访问 http://localhost:7861 (注意端口从7860变为7861)
+# 检查数据是否正确加载
+
+# 迁移完成！您的用户数据会自动保留在 output/ 和 autosave/ 目录中
+
+# ========================================
+# �🔧 详细安装步骤 (全新安装)
+# ========================================
+
+# 步骤1: 环境准备
+# 确保Python版本
+python --version  # 需要 Python 3.10+
+
+# 检查pip版本
+pip --version
+
+# 更新pip (可选)
+python -m pip install --upgrade pip
+
+# 步骤2: 下载项目
+# 方式1: Git克隆 (推荐)
+git clone https://github.com/cs2764/AI_Gen_Novel.git
+cd AI_Gen_Novel
+
+# 方式2: 下载ZIP包
+# 从GitHub下载ZIP包并解压到本地目录
+
+# 步骤3: 创建独立环境
+# 创建Gradio 5.38.0专用虚拟环境
+python -m venv gradio5_env
+
+# 验证虚拟环境创建成功
+ls gradio5_env/  # Linux/Mac
+dir gradio5_env\  # Windows
+
+# 步骤4: 激活虚拟环境
+# Windows 命令提示符:
+gradio5_env\Scripts\activate.bat
+
+# Windows PowerShell:
+gradio5_env\Scripts\Activate.ps1
+
+# Linux/Mac Bash:
+source gradio5_env/bin/activate
+
+# 验证环境激活 (应该显示虚拟环境路径)
+which python  # Linux/Mac
+where python   # Windows
+
+# 步骤5: 安装依赖包
+# 安装Gradio 5.38.0及相关依赖
+pip install -r requirements_gradio5.txt
+
+# 验证关键包安装
+pip show gradio  # 应该显示版本 5.38.0
+pip show requests
+pip show anthropic
+
+# 步骤6: 配置API密钥
+# 复制配置模板
+cp config_template.py config.py  # Linux/Mac
+copy config_template.py config.py  # Windows
+
+# 编辑配置文件 (使用您喜欢的编辑器)
+notepad config.py     # Windows 记事本
+nano config.py        # Linux nano编辑器
+vim config.py         # Linux/Mac vim编辑器
+code config.py        # VS Code
+
+# 步骤7: 启动应用
+# 方式1: 直接启动
+python app.py
+
+# 方式2: 使用启动脚本 (Windows)
+start.bat
+
+# 方式3: 后台启动 (Linux/Mac)
+nohup python app.py &
+
+# ========================================
+# 🔑 API密钥配置示例
+# ========================================
+
+# 在 config.py 文件中填入以下内容:
+
+# OpenRouter (推荐)
+OPENROUTER_API_KEY = "sk-or-v1-your-api-key-here"
+
+# Claude (Anthropic)
+CLAUDE_API_KEY = "sk-ant-your-api-key-here"
+
+# Gemini (Google)
+GEMINI_API_KEY = "your-gemini-api-key-here"
+
+# DeepSeek
+DEEPSEEK_API_KEY = "sk-your-deepseek-key-here"
+
+# LM Studio (本地部署，无需API密钥)
+LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
+LMSTUDIO_API_KEY = "not-needed"
+
+# 智谱AI
+ZHIPU_API_KEY = "your-zhipu-api-key-here"
+
+# 阿里云通义千问
+ALIBABA_API_KEY = "sk-your-alibaba-key-here"
+
+# Fireworks AI
+FIREWORKS_API_KEY = "fw-your-fireworks-key-here"
+
+# Grok (xAI)
+GROK_API_KEY = "xai-your-grok-key-here"
+
+# Lambda Labs
+LAMBDA_API_KEY = "your-lambda-key-here"
+
+# ========================================
+# 🛠️ 故障排除
+# ========================================
+
+# 问题1: Python版本过低
+# 解决: 升级到Python 3.10+
+python --version
+# 如果版本低于3.10，请从 https://python.org 下载最新版本
+
+# 问题2: pip安装失败
+# 解决: 更新pip并使用国内镜像
+python -m pip install --upgrade pip
+pip install -r requirements_gradio5.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
+# 问题3: 虚拟环境激活失败
+# Windows PowerShell执行策略问题:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# 问题4: 端口被占用
+# 解决: 修改端口或关闭占用进程
+netstat -ano | findstr :7861  # Windows
+lsof -i :7861                 # Linux/Mac
+
+# 问题5: 依赖冲突
+# 解决: 清理环境重新安装
+pip uninstall -r requirements_gradio5.txt -y
+pip install -r requirements_gradio5.txt
+
+# 问题6: 配置文件错误
+# 解决: 重新复制模板
+rm config.py  # 删除错误配置
+cp config_template.py config.py  # 重新复制模板
+
+# ========================================
+# 📋 验证安装
+# ========================================
+
+# 1. 检查Python环境
+python --version
+pip list | grep gradio  # 应该显示 gradio 5.38.0
+
+# 2. 检查项目文件
+ls -la  # 确认所有文件存在
+ls app.py config_template.py start.bat
+
+# 3. 检查配置文件
+cat config.py | head -10  # 确认配置文件存在且有内容
+
+# 4. 测试启动
+python app.py
+# 应该看到类似输出:
+# Running on local URL:  http://127.0.0.1:7861
+# To create a public link, set `share=True` in `launch()`.
+
+# 5. 浏览器访问
+# 打开浏览器访问: http://localhost:7861
+# 应该看到AI网络小说生成器界面
+
+# ========================================
+# 🚀 启动选项
+# ========================================
+
+# 基本启动
+python app.py
+
+# 指定端口启动
+python app.py --port 8080
+
+# 公网访问启动 (谨慎使用)
+python app.py --share
+
+# 调试模式启动
+python app.py --debug
+
+# 后台启动 (Linux/Mac)
+nohup python app.py > app.log 2>&1 &
+
+# 使用screen启动 (Linux/Mac)
+screen -S ai_novel python app.py
+
+# ========================================
+# 📝 重要提醒
+# ========================================
+
+# 1. 虚拟环境
+# - 每次使用前都要激活虚拟环境
+# - 不要删除 gradio5_env/ 目录
+# - 虚拟环境是本地的，不会上传到GitHub
+
+# 2. API密钥安全
+# - 不要将 config.py 文件分享给他人
+# - 不要将API密钥上传到公开仓库
+# - 定期轮换API密钥
+
+# 3. 数据保护
+# - output/ 目录包含您生成的小说
+# - autosave/ 目录包含自动保存的数据
+# - 这些目录不会上传到GitHub，请自行备份
+
+# 4. 更新升级
+# - 定期检查项目更新: git pull
+# - 更新依赖包: pip install -r requirements_gradio5.txt --upgrade
+# - 备份重要数据后再更新
+
+# ========================================
+# 📞 获取帮助
+# ========================================
+
+# 官方文档: README.md
+# 安装指南: INSTALL.md
+# 系统文档: SYSTEM_DOCS.md
+# 问题反馈: GitHub Issues
+# 项目地址: https://github.com/cs2764/AI_Gen_Novel
+
+# ========================================
+# 版本信息
+# ========================================
+# 项目版本: v3.0.0
+# Gradio版本: 5.38.0
+# Python要求: 3.10+
+# 更新日期: 2025-01-24
+# 维护状态: 积极维护

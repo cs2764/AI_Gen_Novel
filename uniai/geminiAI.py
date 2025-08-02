@@ -14,8 +14,12 @@ def geminiChatLLM(model_name="gemini-pro", api_key=None, system_prompt=""):
     """
     api_key = os.environ.get("GEMINI_API_KEY", api_key)
     
-    # 配置API密钥
+    # 配置API密钥和超时设置
     genai.configure(api_key=api_key)
+    
+    # 设置全局请求超时(Gemini SDK通过环境变量设置)
+    import os
+    os.environ['GOOGLE_API_TIMEOUT'] = '1200'  # 20分钟超时
     
     # 初始化模型
     model = genai.GenerativeModel(model_name)
