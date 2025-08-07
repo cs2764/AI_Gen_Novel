@@ -77,8 +77,8 @@ class MarkdownAgent:
                 try:
                     for chunk in resp:
                         final_result = chunk
-                except Exception as e:
-                    print(f"Warning: Error iterating generator: {e}")
+                except Exception as generator_error:
+                    print(f"Warning: Error iterating generator: {generator_error}")
                 resp = final_result if final_result else {"content": "AI初始化失败", "total_tokens": 0}
             
             self.history.append({"role": "assistant", "content": resp["content"]})
@@ -157,8 +157,8 @@ class MarkdownAgent:
                         if hasattr(self, 'parent_aign') and self.parent_aign and new_content:
                             self.parent_aign.update_stream_progress(new_content)
 
-            except Exception as e:
-                print(f"Warning: Error iterating generator: {e}")
+            except Exception as generator_error:
+                print(f"Warning: Error iterating generator: {generator_error}")
 
             # 结束流式跟踪
             if hasattr(self, 'parent_aign') and self.parent_aign:
@@ -1779,7 +1779,7 @@ class AIGN:
                     print(f"🔧 已补充第{missing_num}章的占位结构")
                 
                 # 按章节号排序
-                chapters.sort(key=lambda x: x.get("chapter_number", 0))
+                chapters.sort(key=lambda item: item.get("chapter_number", 0))
                 batch_storyline["chapters"] = chapters
                 
                 print(f"✅ 智能修复完成，现在包含{len(chapters)}章")
@@ -2043,8 +2043,68 @@ class AIGN:
         
         return status_info
     
+    def _detect_missing_storyline_batches(self):
+        """检测故事线中缺失的批次"""
+        missing_batches = []
+        
+        if not hasattr(self, 'storyline') or not self.storyline:
+            return missing_batches
+            
+        if not hasattr(self, 'target_chapter_count') or self.target_chapter_count <= 0:
+            return missing_batches
+            
+        chapters = self.storyline.get('chapters', [])
+        if not chapters:
+            # 如果没有任何章节，创建所有批次
+            total_chapters = self.target_chapter_count
+            for start_chapter in range(1, total_chapters + 1, 10):
+                end_chapter = min(start_chapter + 9, total_chapters)
+                missing_batches.append({
+                    'start_chapter': start_chapter,
+                    'end_chapter': end_chapter,
+                    'error': '章节数据缺失，需要生成'
+                })
+            return missing_batches
+        
+        # 检查现有章节的连续性
+        existing_chapters = set()
+        for chapter in chapters:
+            chapter_num = chapter.get('chapter_number', 0)
+            if chapter_num > 0:
+                existing_chapters.add(chapter_num)
+        
+        # 检测缺失的章节范围
+        total_chapters = self.target_chapter_count
+        for start_chapter in range(1, total_chapters + 1, 10):
+            end_chapter = min(start_chapter + 9, total_chapters)
+            
+            # 检查这个批次中是否有缺失的章节
+            batch_chapters = set(range(start_chapter, end_chapter + 1))
+            missing_in_batch = batch_chapters - existing_chapters
+            
+            if missing_in_batch:
+                missing_batches.append({
+                    'start_chapter': start_chapter,
+                    'end_chapter': end_chapter,
+                    'error': f'批次中缺失章节: {sorted(missing_in_batch)}'
+                })
+        
+        return missing_batches
+    
     def get_storyline_repair_suggestions(self):
         """获取故事线修复建议"""
+        # 首先检查故事线数据是否存在缺失
+        missing_batches = self._detect_missing_storyline_batches()
+        
+        # 如果检测到缺失，重建failed_batches
+        if missing_batches:
+            if not hasattr(self, 'failed_batches'):
+                self.failed_batches = []
+            # 将检测到的缺失批次添加到failed_batches
+            for batch in missing_batches:
+                if batch not in self.failed_batches:
+                    self.failed_batches.append(batch)
+        
         if not hasattr(self, 'failed_batches') or not self.failed_batches:
             return {
                 "needs_repair": False,
@@ -2154,13 +2214,13 @@ class AIGN:
 """
                 
                 # 调用AI生成修复内容
-                resp = self.gpt.query_json(repair_prompt)
+                resp = self.storyline_generator.query_with_json_repair(repair_prompt)
                 
                 if 'parsed_json' in resp:
                     batch_storyline = resp['parsed_json']
                     
                     # 验证生成的故事线
-                    validation_result = self.validate_storyline_batch(batch_storyline, start_chapter, end_chapter)
+                    validation_result = self._validate_storyline_batch(batch_storyline, start_chapter, end_chapter)
                     
                     if validation_result["valid"]:
                         # 找到并替换现有故事线中对应的章节
@@ -2177,7 +2237,7 @@ class AIGN:
                         self.storyline["chapters"].extend(new_chapters)
                         
                         # 按章节号重新排序
-                        self.storyline["chapters"].sort(key=lambda x: x.get('chapter_number', 0))
+                        self.storyline["chapters"].sort(key=lambda item: item.get("chapter_number", 0))
                         
                         print(f"✅ 第{start_chapter}-{end_chapter}章修复成功")
                         print(f"   修复章节数：{len(new_chapters)}")
@@ -2591,7 +2651,7 @@ class AIGN:
             self.storyline["chapters"].append(new_chapter)
             
         # 按章节号排序
-        self.storyline["chapters"].sort(key=lambda x: x.get("chapter_number", 0))
+        self.storyline["chapters"].sort(key=lambda item: item.get("chapter_number", 0))
         
         print(f"✅ 第{chapter_number}章的故事线已更新")
         

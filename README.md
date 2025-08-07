@@ -1,6 +1,7 @@
-# 🤖 AI 网络小说生成器 v3.1.0
+# 🤖 AI 网络小说生成器 v3.2.0
 
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
+> 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
 ## 🔒 重要安全提醒
 
@@ -355,16 +356,16 @@ TEMPERATURE_SETTINGS = {
 ### 🔧 开发准备
 ```bash
 # 1. fork项目并克隆
-git clone https://github.com/yourusername/AI_Gen_Novel.git
+git clone https://github.com/cs2764/AI_Gen_Novel.git
 
 # 2. 创建虚拟环境
-python -m venv ai_novel_env
-source ai_novel_env/bin/activate  # Linux/Mac
+python -m venv gradio5_env
+source gradio5_env/bin/activate  # Linux/Mac
 # 或
-ai_novel_env\Scripts\activate     # Windows
+gradio5_env\Scripts\activate     # Windows
 
 # 3. 安装开发依赖
-pip install -r requirements.txt
+pip install -r requirements_gradio5.txt
 ```
 
 ### 📝 提交规范
@@ -395,9 +396,9 @@ pip install -r requirements.txt
 
 ## 📞 联系方式
 
-- 💬 **讨论交流**：[GitHub Discussions](https://github.com/yourusername/AI_Gen_Novel/discussions)
-- 🐛 **问题反馈**：[GitHub Issues](https://github.com/yourusername/AI_Gen_Novel/issues)
-- 📧 **邮件联系**：your-email@example.com
+- 💬 **讨论交流**：[GitHub Discussions](https://github.com/cs2764/AI_Gen_Novel/discussions)
+- 🐛 **问题反馈**：[GitHub Issues](https://github.com/cs2764/AI_Gen_Novel/issues)
+- 📧 **项目主页**：https://github.com/cs2764/AI_Gen_Novel
 
 ---
 
@@ -412,6 +413,6 @@ Made with ❤️ by AI Novel Generator Team
 ## ⚠️ 重要提醒
 
 ### 虚拟环境管理
-- 📂 `ai_novel_env/` 目录包含项目运行必需的所有依赖包
+- 📂 `gradio5_env/` 目录包含项目运行必需的所有依赖包
 - 🚫 **请不要删除虚拟环境目录**
 - 📖 如需了解虚拟环境管理详情，请查看 [`VIRTUAL_ENV_MANAGEMENT.md`](VIRTUAL_ENV_MANAGEMENT.md)
