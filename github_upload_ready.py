@@ -53,6 +53,7 @@ class GitHubUploadChecker:
         # 虚拟环境目录 - 不上传但不删除
         self.virtual_env_dirs = [
             'ai_novel_env',
+            'gradio5_env',
             'venv',
             '.venv', 
             'env',
@@ -118,14 +119,17 @@ class GitHubUploadChecker:
         found_sensitive = False
         sensitive_files = []
         
-        # 扫描Python文件（排除配置模板）
+        # 扫描Python文件（排除配置模板和虚拟环境）
         python_files = list(self.root_path.glob('*.py'))
-        python_files.extend(list(self.root_path.glob('**/*.py')))
+        # 递归扫描但排除虚拟环境目录
+        for py_file in self.root_path.glob('**/*.py'):
+            # 检查文件路径是否在虚拟环境中
+            if not any(env_dir in str(py_file) for env_dir in self.virtual_env_dirs):
+                python_files.append(py_file)
         
         for file_path in python_files:
             # 跳过虚拟环境和模板文件
-            if ('ai_novel_env' in str(file_path) or 
-                'venv' in str(file_path) or
+            if (any(env_dir in str(file_path) for env_dir in ['ai_novel_env', 'gradio5_env', 'venv', '.venv', 'env']) or 
                 file_path.name in ['config_template.py', 'github_upload_ready.py']):
                 continue
             

@@ -26,12 +26,46 @@ except ImportError:
 
 def Retryer(func, max_retries=10):
     def wrapper(*args, **kwargs):
-        for _ in range(max_retries):
+        for attempt in range(max_retries):
             try:
-                return func(*args, **kwargs)
+                result = func(*args, **kwargs)
+                
+                # 检查流式输出结果是否成功
+                if isinstance(result, dict) and 'content' in result:
+                    content = result['content']
+                    # 使用智能重试判断逻辑
+                    if hasattr(func, '__self__') and hasattr(func.__self__, 'should_retry_stream_output'):
+                        should_retry = func.__self__.should_retry_stream_output(content)
+                    else:
+                        # 默认检查逻辑
+                        should_retry = '流式输出失败' in content or '需要重试' in content
+                    
+                    if should_retry:
+                        print(f"🔄 第{attempt + 1}次尝试失败，检测到流式输出问题: {content[:100]}...")
+                        if attempt < max_retries - 1:  # 不是最后一次尝试
+                            print(f"⏳ 等待重试... ({attempt + 1}/{max_retries})")
+                            time.sleep(2.333)
+                            continue
+                        else:
+                            print(f"❌ 达到最大重试次数({max_retries})，放弃重试")
+                            return result
+                
+                return result
+                
             except Exception as e:
-                print("-" * 30 + f"\n失败：\n{e}\n" + "-" * 30)
-                time.sleep(2.333)
+                error_msg = str(e)
+                print("-" * 30 + f"\n第{attempt + 1}次尝试失败：\n{error_msg}\n" + "-" * 30)
+                
+                # 检查是否是严重错误，需要立即重试
+                if any(keyword in error_msg.lower() for keyword in ['model unloaded', 'model not found', 'connection', 'timeout']):
+                    print(f"🚨 检测到严重错误，需要立即重试: {error_msg}")
+                
+                if attempt < max_retries - 1:  # 不是最后一次尝试
+                    time.sleep(2.333)
+                else:
+                    print(f"❌ 达到最大重试次数({max_retries})，放弃重试")
+                    raise ValueError(f"重试{max_retries}次后仍然失败: {error_msg}")
+        
         raise ValueError("失败")
 
     return wrapper
@@ -64,6 +98,39 @@ class MarkdownAgent:
         # 直接使用ChatLLM，系统提示词已在AI提供商层面处理
         # 初始化对话历史，将agent的系统提示词作为第一个用户消息
         self.history = [{"role": "user", "content": self.sys_prompt}]
+        
+        # 调试：检查系统提示词长度
+        print(f"🔧 智能体 {self.name} 系统提示词长度: {len(self.sys_prompt)} 字符")
+        
+        # 如果系统提示词异常长，进行分析
+        if len(self.sys_prompt) > 2000:
+            print(f"⚠️  智能体 {self.name} 系统提示词异常长，进行分析:")
+            lines = self.sys_prompt.split('\n')
+            print(f"🔧   总行数: {len(lines)}")
+            print(f"🔧   前5行: {chr(10).join(lines[:5])}...")
+            
+            # 检查是否有重复内容
+            line_counts = {}
+            for line in lines:
+                if len(line.strip()) > 10:  # 只检查有意义的行
+                    line_counts[line] = line_counts.get(line, 0) + 1
+            
+            repeated_lines = [(line, count) for line, count in line_counts.items() if count > 1]
+            if repeated_lines:
+                print(f"🔧   发现重复行: {len(repeated_lines)} 种")
+                for line, count in repeated_lines[:3]:  # 只显示前3种
+                    print(f"🔧     重复{count}次: {line[:50]}...")
+            else:
+                print(f"🔧   未发现明显重复行")
+                
+            # 检查是否整个提示词被重复
+            mid_point = len(self.sys_prompt) // 2
+            first_half = self.sys_prompt[:mid_point]
+            second_half = self.sys_prompt[mid_point:]
+            if first_half == second_half:
+                print(f"🔧   ⚠️  发现提示词被完整重复了2次!")
+            else:
+                print(f"🔧   提示词没有完整重复")
 
         if first_replay:
             # 如果提供了首次回复，直接使用
@@ -80,6 +147,21 @@ class MarkdownAgent:
                 except Exception as generator_error:
                     print(f"Warning: Error iterating generator: {generator_error}")
                 resp = final_result if final_result else {"content": "AI初始化失败", "total_tokens": 0}
+            else:
+                # 非流式响应：直接使用返回的结果
+                print(f"🔧 {self.name} 初始化使用非流式响应")
+                
+                # 为初始化的非流式模式更新流式输出窗口
+                if hasattr(self, 'parent_aign') and self.parent_aign:
+                    response_content = resp.get('content', '')
+                    token_count = resp.get('total_tokens', 0)
+                    
+                    # 使用专门的方法设置非流式内容（确保只显示最近一个调用）
+                    self.parent_aign.set_non_stream_content(
+                        response_content, 
+                        f"{self.name}(初始化)", 
+                        token_count
+                    )
             
             self.history.append({"role": "assistant", "content": resp["content"]})
             # if self.is_speak:
@@ -127,7 +209,62 @@ class MarkdownAgent:
             print(f"   📋 完整提示词长度: {total_prompt_length} 字符")
             print(f"   📝 历史消息数: {len(self.history)} 条")
             print(f"   🏷️  智能体: {getattr(self, 'name', 'Unknown')}")
+            # 详细分析提示词组成 - 强制显示以诊断问题
+            print(f"   📊 提示词组成分析:")
+            if len(self.history) > 0:
+                sys_prompt_len = len(self.history[0].get("content", ""))
+                print(f"   🔧 系统提示词长度: {sys_prompt_len} 字符")
+                if len(self.history) > 1:
+                    assistant_reply_len = len(self.history[1].get("content", ""))
+                    print(f"   🤖 AI回复长度: {assistant_reply_len} 字符")
+                    calculated_total = sys_prompt_len + assistant_reply_len + len(user_input)
+                    print(f"   🧮 计算总长度: {calculated_total} 字符")
+                    print(f"   ❗ 实际总长度: {total_prompt_length} 字符")
+                    if total_prompt_length != calculated_total:
+                        print(f"   ⚠️  长度不匹配! 差异: {total_prompt_length - calculated_total} 字符")
+                        # 显示所有消息的详细信息
+                        print(f"   📝 消息详情:")
+                        for i, msg in enumerate(self.history + [{"role": "user", "content": user_input}]):
+                            role = msg.get("role", "unknown")
+                            content = msg.get("content", "")
+                            content_len = len(content)
+                            preview = content[:100] + "..." if len(content) > 100 else content
+                            print(f"     消息{i+1} [{role}]: {content_len} 字符 - {preview}")
+                        print(f"   🔧 use_memory状态: {getattr(self, 'use_memory', 'unknown')}")
+                else:
+                    print(f"   ❌ 历史消息不完整，只有 {len(self.history)} 条消息")
+            else:
+                print(f"   ❌ 没有历史消息")
             print("-" * 50)
+        
+        # 检测发送提示词长度是否过长
+        if hasattr(self, 'parent_aign') and self.parent_aign and total_prompt_length > self.parent_aign.overlength_threshold:
+            # 构建完整提示词内容用于保存
+            full_prompt_content = "\n" + "="*50 + "\n"
+            for i, msg in enumerate(full_messages):
+                role_name = {"system": "系统", "user": "用户", "assistant": "助手"}.get(msg["role"], msg["role"])
+                full_prompt_content += f"[{role_name}消息 {i+1}]\n"
+                full_prompt_content += f"{msg['content']}\n"
+                full_prompt_content += "="*50 + "\n"
+            
+            # 根据智能体名称映射到内容类型
+            content_type_mapping = {
+                "MemoryMaker": "记忆",
+                "NovelWriter": "正文",
+                "NovelWriterCompact": "正文", 
+                "NovelEmbellisher": "润色",
+                "NovelEmbellisherCompact": "润色",
+                "NovelOutlineGenerator": "大纲",
+                "StorylineGenerator": "故事线",
+                "CharacterGenerator": "人物",
+                "TitleGenerator": "标题",
+                "NovelBeginningWriter": "开头",
+                "EndingWriter": "结尾"
+            }
+            content_type = content_type_mapping.get(self.name, "其他")
+            self.parent_aign.check_and_handle_overlength_content(
+                full_prompt_content, content_type, self.name, direction="sent"
+            )
         
         resp = self.chatLLM(
             messages=full_messages,
@@ -137,9 +274,14 @@ class MarkdownAgent:
         
         # 处理流式和非流式响应
         if hasattr(resp, '__next__'):  # 检查是否为生成器
+            print(f"🔧 {self.name}: 检测到流式响应，开始处理生成器")
             # 流式响应：迭代生成器获取最终结果，并跟踪进度
             final_result = None
             accumulated_content = ""
+            stream_successful = False
+            min_content_length = 50  # 最小内容长度阈值
+            chunk_count = 0  # 记录接收到的数据块数量
+            last_chunk_time = time.time()  # 记录最后接收数据块的时间
 
             # 开始流式跟踪（如果有父AIGN实例）
             if hasattr(self, 'parent_aign') and self.parent_aign:
@@ -148,6 +290,9 @@ class MarkdownAgent:
             try:
                 for chunk in resp:
                     final_result = chunk
+                    chunk_count += 1
+                    last_chunk_time = time.time()
+                    
                     # 跟踪新增内容
                     if chunk and 'content' in chunk:
                         new_content = chunk['content'][len(accumulated_content):]
@@ -156,15 +301,157 @@ class MarkdownAgent:
                         # 更新流式进度（如果有父AIGN实例）
                         if hasattr(self, 'parent_aign') and self.parent_aign and new_content:
                             self.parent_aign.update_stream_progress(new_content)
+                        
+                        # 检查是否长时间没有新内容（超时检测）
+                        if time.time() - last_chunk_time > 30:  # 30秒超时
+                            print(f"⚠️ 流式输出超时: 30秒内未收到新数据")
+                            break
+
+                # 检查流式输出是否成功完成
+                if accumulated_content and len(accumulated_content) >= min_content_length:
+                    # 检查是否包含正常的结束标记
+                    success_markers = [
+                        '# END', '```', '完成', '结束', '明白了', '好的', '收到',
+                        '以上', '总结', '结论', '因此', '总之', '最后'
+                    ]
+                    
+                    # 检查内容是否包含成功标记
+                    has_success_marker = any(marker in accumulated_content for marker in success_markers)
+                    
+                    # 检查内容长度是否足够
+                    has_sufficient_length = len(accumulated_content) > 200
+                    
+                    # 检查内容是否看起来完整（不是被截断的）
+                    looks_complete = not accumulated_content.endswith('...') and not accumulated_content.endswith('..')
+                    
+                    # 检查是否接收到足够的数据块
+                    has_enough_chunks = chunk_count >= 3  # 至少接收到3个数据块
+                    
+                    # 检查是否在合理时间内完成
+                    completion_time = time.time() - last_chunk_time
+                    reasonable_time = completion_time < 60  # 完成时间不超过60秒
+                    
+                    # 综合判断是否成功
+                    success_criteria = [
+                        has_success_marker,
+                        (has_sufficient_length and looks_complete and has_enough_chunks),
+                        (len(accumulated_content) > 500)  # 如果内容很长，直接认为成功
+                    ]
+                    
+                    if any(success_criteria) and reasonable_time:
+                        stream_successful = True
+                        print(f"✅ 流式输出成功完成: {len(accumulated_content)}字符, {chunk_count}个数据块, 耗时{completion_time:.1f}秒")
+                    else:
+                        print(f"⚠️ 流式输出可能不完整: {len(accumulated_content)}字符, {chunk_count}个数据块, 耗时{completion_time:.1f}秒")
+                        if not has_enough_chunks:
+                            print(f"   ❌ 数据块数量不足: {chunk_count} < 3")
+                        if not reasonable_time:
+                            print(f"   ❌ 完成时间过长: {completion_time:.1f}秒 > 60秒")
+                        if not has_success_marker and not has_sufficient_length:
+                            print(f"   ❌ 缺少成功标记且内容长度不足")
+                else:
+                    print(f"⚠️ 流式输出内容过短或为空: {len(accumulated_content)} 字符, {chunk_count}个数据块")
 
             except Exception as generator_error:
-                print(f"Warning: Error iterating generator: {generator_error}")
+                error_msg = str(generator_error)
+                print(f"❌ 流式输出异常: {error_msg}")
+                
+                # 检查是否是模型卸载等严重错误
+                critical_errors = [
+                    'model unloaded', 'model not found', 'connection', 'timeout',
+                    'server error', 'internal error', 'service unavailable',
+                    'rate limit', 'quota exceeded', 'authentication failed',
+                    'invalid request', 'bad gateway', 'gateway timeout'
+                ]
+                
+                is_critical_error = any(keyword in error_msg.lower() for keyword in critical_errors)
+                
+                if is_critical_error:
+                    print(f"🚨 检测到严重错误，需要重试: {error_msg}")
+                    # 记录严重错误到日志
+                    if hasattr(self, 'parent_aign') and self.parent_aign:
+                        self.parent_aign.log_message(f"🚨 流式输出严重错误: {error_msg}")
+                else:
+                    print(f"⚠️ 检测到一般错误: {error_msg}")
+                    # 记录一般错误到日志
+                    if hasattr(self, 'parent_aign') and self.parent_aign:
+                        self.parent_aign.log_message(f"⚠️ 流式输出一般错误: {error_msg}")
 
             # 结束流式跟踪
             if hasattr(self, 'parent_aign') and self.parent_aign:
-                self.parent_aign.end_stream_tracking(accumulated_content)
+                if stream_successful:
+                    self.parent_aign.end_stream_tracking(accumulated_content)
+                else:
+                    # 流式输出失败，记录错误信息
+                    self.parent_aign.log_message(f"❌ 流式输出失败: 内容长度{len(accumulated_content)}字符，需要重试")
+                    self.parent_aign.end_stream_tracking("")  # 清空流内容
 
-            resp = final_result if final_result else {"content": "API调用失败，请检查配置", "total_tokens": 0}
+            # 如果流式输出失败，返回错误响应
+            if not stream_successful or not accumulated_content:
+                error_reason = "内容过短或为空"
+                if 'error_msg' in locals():
+                    error_reason = error_msg
+                elif len(accumulated_content) < min_content_length:
+                    error_reason = f"内容长度不足({len(accumulated_content)}字符，需要至少{min_content_length}字符)"
+                elif chunk_count < 3:
+                    error_reason = f"数据块数量不足({chunk_count}个，需要至少3个)"
+                elif time.time() - last_chunk_time > 30:
+                    error_reason = "流式输出超时(30秒内未收到新数据)"
+                
+                # 构建详细的错误信息
+                error_details = {
+                    "content_length": len(accumulated_content),
+                    "chunk_count": chunk_count,
+                    "completion_time": time.time() - last_chunk_time,
+                    "reason": error_reason
+                }
+                
+                resp = {
+                    "content": f"流式输出失败，需要重试。原因: {error_reason} | 详情: {error_details}", 
+                    "total_tokens": 0
+                }
+                print(f"❌ 流式输出失败: {error_reason}")
+                print(f"📊 失败详情: {error_details}")
+            else:
+                resp = final_result if final_result else {"content": accumulated_content, "total_tokens": 0}
+                print(f"✅ 流式输出成功: {len(accumulated_content)}字符, {chunk_count}个数据块")
+        else:
+            # 非流式响应：直接使用返回的结果
+            print(f"🔧 {self.name}: 检测到非流式响应，直接处理结果")
+            print(f"✅ 非流式输出: {len(resp.get('content', ''))}字符")
+            
+            # 为非流式模式更新流式输出窗口，显示完整的API调用信息
+            if hasattr(self, 'parent_aign') and self.parent_aign:
+                response_content = resp.get('content', '')
+                token_count = resp.get('total_tokens', 0)
+                
+                # 使用专门的方法设置非流式内容
+                self.parent_aign.set_non_stream_content(response_content, self.name, token_count)
+                
+                # 记录日志
+                self.parent_aign.log_message(f"✅ {self.name}生成完成: {len(response_content)}字符，Token使用: {token_count}（非流式模式）")
+        
+        # 检测过长内容并处理
+        response_content = resp.get("content", "")
+        if response_content and hasattr(self, 'parent_aign') and self.parent_aign:
+            # 根据智能体名称映射到内容类型
+            content_type_mapping = {
+                "MemoryMaker": "记忆",
+                "NovelWriter": "正文",
+                "NovelWriterCompact": "正文", 
+                "NovelEmbellisher": "润色",
+                "NovelEmbellisherCompact": "润色",
+                "NovelOutlineGenerator": "大纲",
+                "StorylineGenerator": "故事线",
+                "CharacterGenerator": "人物",
+                "TitleGenerator": "标题",
+                "NovelBeginningWriter": "开头",
+                "EndingWriter": "结尾"
+            }
+            content_type = content_type_mapping.get(self.name, "其他")
+            self.parent_aign.check_and_handle_overlength_content(
+                response_content, content_type, self.name, direction="received"
+            )
         
         # 显示API响应统计信息
         if debug_level in ['1', '2']:
@@ -467,7 +754,7 @@ class AIGN:
         }
         self.no_memory_paragraph = ""
         self.user_idea = ""
-        self.user_requriments = ""
+        self.user_requirements = ""
         self.embellishment_idea = ""
         
         # 新增属性
@@ -483,6 +770,39 @@ class AIGN:
         # 详细大纲相关属性
         self.detailed_outline = ""
         self.use_detailed_outline = False
+        
+        # 过长内容检测统计系统
+        # 接收的内容统计
+        self.overlength_statistics_received = {
+            "记忆": 0,
+            "正文": 0,
+            "润色": 0,
+            "大纲": 0,
+            "故事线": 0,
+            "人物": 0,
+            "标题": 0,
+            "开头": 0,
+            "结尾": 0,
+            "其他": 0
+        }
+        # 发送的提示词统计
+        self.overlength_statistics_sent = {
+            "记忆": 0,
+            "正文": 0,
+            "润色": 0,
+            "大纲": 0,
+            "故事线": 0,
+            "人物": 0,
+            "标题": 0,
+            "开头": 0,
+            "结尾": 0,
+            "其他": 0
+        }
+        self.overlength_threshold = 15000  # 超长阈值：15000字符
+        
+        # 确保metadata/overlength目录存在
+        import os
+        os.makedirs("metadata/overlength", exist_ok=True)
         
         # 故事线和人物列表相关属性
         self.character_list = ""
@@ -504,6 +824,7 @@ class AIGN:
         self.current_stream_chars = 0
         self.current_stream_operation = ""
         self.stream_start_time = 0
+        self.current_stream_content = ""  # 存储当前实时流内容
         
         # 生成控制标志
         self.stop_generation = False
@@ -580,7 +901,7 @@ class AIGN:
         )
         
         # JSON版本的标题生成器作为备用方案
-        from AIGN_Prompt import title_generator_json_prompt
+        from AIGN_Prompt import title_generator_json_prompt, ending_embellisher_prompt
         self.title_generator_json = JSONMarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=title_generator_json_prompt,
@@ -592,6 +913,14 @@ class AIGN:
             sys_prompt=ending_prompt,
             name="EndingWriter",
             temperature=0.85,
+        )
+        
+        # 结尾润色器
+        self.ending_embellisher = MarkdownAgent(
+            chatLLM=self.chatLLM,
+            sys_prompt=ending_embellisher_prompt,
+            name="EndingEmbellisher",
+            temperature=0.92,
         )
         self.storyline_generator = JSONMarkdownAgent(
             chatLLM=self.chatLLM,
@@ -627,7 +956,7 @@ class AIGN:
             self.novel_outline_writer, self.novel_beginning_writer, self.novel_writer,
             self.novel_embellisher, self.novel_writer_compact, self.novel_embellisher_compact,
             self.memory_maker, self.title_generator, self.title_generator_json, self.ending_writer, 
-            self.storyline_generator, self.character_generator, self.chapter_summary_generator, 
+            self.ending_embellisher, self.storyline_generator, self.character_generator, self.chapter_summary_generator, 
             self.detailed_outline_generator
         ]
         for agent in agents:
@@ -663,6 +992,7 @@ class AIGN:
                 (self.title_generator, '标题生成器'),
                 (self.title_generator_json, 'JSON标题生成器'),
                 (self.ending_writer, '结尾生成器'),
+                (self.ending_embellisher, '结尾润色器'),
                 (self.storyline_generator, '故事线生成器'),
                 (self.character_generator, '人物生成器'),
                 (self.chapter_summary_generator, '章节总结生成器'),
@@ -691,7 +1021,7 @@ class AIGN:
         try:
             # 获取用户输入数据，优先使用传入的参数，如果没有则使用实例变量
             user_idea = kwargs.get("user_idea", "") or getattr(self, 'user_idea', '')
-            user_requirements = kwargs.get("user_requirements", "") or getattr(self, 'user_requriments', '')
+            user_requirements = kwargs.get("user_requirements", "") or getattr(self, 'user_requirements', '')
             embellishment_idea = kwargs.get("embellishment_idea", "") or getattr(self, 'embellishment_idea', '')
             
             if data_type == "outline":
@@ -850,7 +1180,7 @@ class AIGN:
             
             # 设置用户输入数据到实例变量
             self.user_idea = user_idea_loaded
-            self.user_requriments = user_requirements_loaded  # 注意这里保持原始的拼写错误以保持兼容性
+            self.user_requirements = user_requirements_loaded
             self.embellishment_idea = embellishment_idea_loaded
             
             # 如果加载了用户输入数据，添加到加载项列表
@@ -1035,7 +1365,7 @@ class AIGN:
         resp = self.novel_outline_writer.invoke(
             inputs={
                 "用户想法": self.user_idea,
-                "写作要求": self.user_requriments
+                "写作要求": self.user_requirements
             },
             output_keys=["大纲"],
         )
@@ -1081,7 +1411,7 @@ class AIGN:
             self._save_to_local("outline",
                 outline=self.novel_outline,
                 user_idea=self.user_idea,
-                user_requirements=self.user_requriments,
+                user_requirements=self.user_requirements,
                 embellishment_idea=self.embellishment_idea
             )
         
@@ -1104,7 +1434,7 @@ class AIGN:
         
         inputs = {
             "用户想法": self.user_idea,
-            "写作要求": self.user_requriments,
+            "写作要求": self.user_requirements,
             "小说大纲": self.getCurrentOutline()
         }
         
@@ -1178,8 +1508,8 @@ class AIGN:
                         }
                         
                         # 如果有写作要求且不为空，才添加
-                        if self.user_requriments and self.user_requriments.strip():
-                            simplified_inputs["写作要求"] = self.user_requriments
+                        if self.user_requirements and self.user_requirements.strip():
+                            simplified_inputs["写作要求"] = self.user_requirements
                         
                         # 直接使用invoke方法，避免重复系统提示词
                         raw_resp = self.title_generator.invoke(
@@ -1254,7 +1584,7 @@ class AIGN:
                     inputs={
                         "大纲": self.getCurrentOutline(),
                         "用户想法": self.user_idea,
-                        "写作要求": self.user_requriments
+                        "写作要求": self.user_requirements
                     },
                     output_keys=["人物列表"]
                 )
@@ -1346,7 +1676,7 @@ class AIGN:
             "原始大纲": self.novel_outline,
             "目标章节数": str(self.target_chapter_count),
             "用户想法": self.user_idea,
-            "写作要求": self.user_requriments,
+            "写作要求": self.user_requirements,
             "剧情结构信息": structure_info
         }
         
@@ -1374,7 +1704,7 @@ class AIGN:
             detailed_outline=self.detailed_outline,
             target_chapters=self.target_chapter_count,
             user_idea=self.user_idea,
-            user_requirements=self.user_requriments,
+            user_requirements=self.user_requirements,
             embellishment_idea=self.embellishment_idea
         )
         
@@ -1459,7 +1789,7 @@ class AIGN:
                 "大纲": self.getCurrentOutline(),
                 "人物列表": self.character_list,
                 "用户想法": self.user_idea,
-                "写作要求": self.user_requriments,
+                "写作要求": self.user_requirements,
                 "章节范围": f"{start_chapter}-{end_chapter}章"
             }
             
@@ -1620,7 +1950,7 @@ class AIGN:
             storyline=self.storyline,
             target_chapters=self.target_chapter_count,
             user_idea=self.user_idea,
-            user_requirements=self.user_requriments,
+            user_requirements=self.user_requirements,
             embellishment_idea=self.embellishment_idea
         )
         
@@ -2198,7 +2528,7 @@ class AIGN:
 根据以下故事设定，重新生成第{start_chapter}到第{end_chapter}章的详细故事线：
 
 用户想法：{self.user_idea}
-写作要求：{self.user_requriments}
+写作要求：{self.user_requirements}
 润色要求：{self.embellishment_idea}
 总章节数：{self.target_chapter_count}
 
@@ -2360,12 +2690,12 @@ class AIGN:
         """获取精简模式下的前后2章故事线"""
         return self.getSurroundingStorylines(chapter_number, range_size=2)
 
-    def genBeginning(self, user_requriments=None, embellishment_idea=None):
+    def genBeginning(self, user_requirements=None, embellishment_idea=None):
         # 在生成前刷新chatLLM以确保使用最新配置
         print("🔄 小说开头生成: 刷新ChatLLM配置...")
         self.refresh_chatllm()
-        if user_requriments:
-            self.user_requriments = user_requriments
+        if user_requirements:
+            self.user_requirements = user_requirements
         if embellishment_idea:
             self.embellishment_idea = embellishment_idea
 
@@ -2379,7 +2709,7 @@ class AIGN:
         print(f"   • 原始大纲：{'✅' if self.novel_outline else '❌'}")
         print(f"   • 详细大纲：{'✅' if self.detailed_outline else '❌'}")
         print(f"   • 当前使用：{'详细大纲' if self.use_detailed_outline and self.detailed_outline else '原始大纲'}")
-        print(f"   • 写作要求：{'✅' if self.user_requriments else '❌'}")
+        print(f"   • 写作要求：{'✅' if self.user_requirements else '❌'}")
         print(f"   • 润色想法：{'✅' if self.embellishment_idea else '❌'}")
         print(f"   • 人物列表：{'✅' if self.character_list else '❌'}")
         print(f"   • 故事线：{'✅' if self.storyline and self.storyline.get('chapters') else '❌'}")
@@ -2413,14 +2743,14 @@ class AIGN:
         print(f"📊 输入项统计:")
         print(f"   • 用户想法: {len(self.user_idea) if self.user_idea else 0} 字符")
         print(f"   • 小说大纲: {len(current_outline) if current_outline else 0} 字符")
-        print(f"   • 写作要求: {len(self.user_requriments) if self.user_requriments else 0} 字符")
+        print(f"   • 写作要求: {len(self.user_requirements) if self.user_requirements else 0} 字符")
         print(f"   • 人物列表: {len(self.character_list) if self.character_list else 0} 字符")
         print(f"   • 故事线: {len(storyline_for_beginning)} 字符")
         
         total_input_length = (
             len(self.user_idea or "") + 
             len(current_outline or "") + 
-            len(self.user_requriments or "") + 
+            len(self.user_requirements or "") + 
             len(self.character_list or "") + 
             len(storyline_for_beginning)
         )
@@ -2432,7 +2762,7 @@ class AIGN:
             inputs={
                 "用户想法": self.user_idea,
                 "小说大纲": current_outline,
-                "写作要求": self.user_requriments,
+                "写作要求": self.user_requirements,
                 "人物列表": self.character_list if self.character_list else "暂无人物列表",
                 "故事线": storyline_for_beginning,
             },
@@ -2539,7 +2869,22 @@ class AIGN:
                 },
                 output_keys=["新的记忆"],
             )
-            self.writing_memory = resp["新的记忆"]
+            
+            # 获取生成的新记忆
+            new_memory = resp["新的记忆"]
+            
+            # 检查记忆长度并进行保护性处理
+            if len(new_memory) > 2000:  # 如果超过2000字符
+                print(f"⚠️ 前文记忆生成过长({len(new_memory)}字符)，进行截断处理...")
+                # 截断到1800字符，保留一些缓冲空间
+                new_memory = new_memory[:1800]
+                # 确保不在句子中间截断，找到最后一个句号
+                last_period = new_memory.rfind('。')
+                if last_period > 1000:  # 确保截断点不会太短
+                    new_memory = new_memory[:last_period + 1]
+                print(f"📏 记忆已截断至{len(new_memory)}字符")
+            
+            self.writing_memory = new_memory
             self.no_memory_paragraph = ""
     
     def generateChapterSummary(self, chapter_content, chapter_number):
@@ -2847,13 +3192,13 @@ class AIGN:
         # 这里不应该到达，但为了安全起见
         return False, None, f"{operation_name}意外失败"
 
-    def genNextParagraph(self, user_requriments=None, embellishment_idea=None):
+    def genNextParagraph(self, user_requirements=None, embellishment_idea=None):
         # 在生成前刷新chatLLM以确保使用最新配置
         print("🔄 段落生成: 刷新ChatLLM配置...")
         self.refresh_chatllm()
         """生成下一个段落的主方法，包含自动重试机制"""
-        if user_requriments:
-            self.user_requriments = user_requriments
+        if user_requirements:
+            self.user_requirements = user_requirements
         if embellishment_idea:
             self.embellishment_idea = embellishment_idea
 
@@ -2869,9 +3214,9 @@ class AIGN:
         
         if debug_level >= 2:
             # 详细模式：显示完整内容
-            print(f"   • 写作要求参数: {user_requriments}")
+            print(f"   • 写作要求参数: {user_requirements}")
             print(f"   • 润色想法参数: {embellishment_idea}")
-            print(f"   • 当前存储的写作要求: {self.user_requriments}")
+            print(f"   • 当前存储的写作要求: {self.user_requirements}")
             print(f"   • 当前存储的润色想法: {self.embellishment_idea}")
             print(f"   • 当前存储的用户想法: {self.user_idea}")
         elif debug_level == 1:
@@ -2883,9 +3228,9 @@ class AIGN:
                     return text
                 return text[:max_length] + "..."
             
-            print(f"   • 写作要求参数: {preview_text(user_requriments)}")
+            print(f"   • 写作要求参数: {preview_text(user_requirements)}")
             print(f"   • 润色想法参数: {preview_text(embellishment_idea)}")
-            print(f"   • 当前存储的写作要求: {preview_text(self.user_requriments)}")
+            print(f"   • 当前存储的写作要求: {preview_text(self.user_requirements)}")
             print(f"   • 当前存储的润色想法: {preview_text(self.embellishment_idea)}")
             print(f"   • 当前存储的用户想法: {preview_text(self.user_idea)}")
         else:
@@ -2924,7 +3269,7 @@ class AIGN:
             print(f"🏁 进入结尾阶段，正在生成第{self.chapter_count + 1}章（结尾铺垫）...")
             print(f"💡 用户输入:")
             print(f"   • 用户想法: {'✅' if self.user_idea else '❌'}")
-            print(f"   • 写作要求: {'✅' if self.user_requriments else '❌'}")
+            print(f"   • 写作要求: {'✅' if self.user_requirements else '❌'}")
             print(f"   • 润色想法: {'✅' if self.embellishment_idea else '❌'}")
             writer = self.ending_writer
             
@@ -2942,7 +3287,7 @@ class AIGN:
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
                 inputs = {
                     "大纲": self.getCurrentOutline(),
-                    "写作要求": self.user_requriments,
+                    "写作要求": self.user_requirements,
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
                     "计划": self.writing_plan,
@@ -2960,7 +3305,7 @@ class AIGN:
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
                     "计划": self.writing_plan,
-                    "写作要求": self.user_requriments,
+                    "写作要求": self.user_requirements,
                     "润色想法": self.embellishment_idea,
                     "上文内容": self.getLastParagraph(),
                     "是否最终章": "否"
@@ -2994,6 +3339,7 @@ class AIGN:
             print("-" * 50)
             
             # 添加详细大纲和基础大纲上下文
+            # 注意：避免重复添加，如果getCurrentOutline()已经是详细大纲，则不重复添加
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
@@ -3007,7 +3353,7 @@ class AIGN:
             print(f"🎯 正在生成最终章（第{self.chapter_count + 1}章）...")
             print(f"💡 用户输入:")
             print(f"   • 用户想法: {'✅' if self.user_idea else '❌'}")
-            print(f"   • 写作要求: {'✅' if self.user_requriments else '❌'}")
+            print(f"   • 写作要求: {'✅' if self.user_requirements else '❌'}")
             print(f"   • 润色想法: {'✅' if self.embellishment_idea else '❌'}")
             writer = self.ending_writer
             
@@ -3025,7 +3371,7 @@ class AIGN:
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
                 inputs = {
                     "大纲": self.getCurrentOutline(),
-                    "写作要求": self.user_requriments,
+                    "写作要求": self.user_requirements,
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
                     "计划": self.writing_plan,
@@ -3043,7 +3389,7 @@ class AIGN:
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
                     "计划": self.writing_plan,
-                    "写作要求": self.user_requriments,
+                    "写作要求": self.user_requirements,
                     "润色想法": self.embellishment_idea,
                     "上文内容": self.getLastParagraph(),
                     "是否最终章": "是"
@@ -3077,6 +3423,7 @@ class AIGN:
             print("-" * 50)
             
             # 添加详细大纲和基础大纲上下文
+            # 注意：避免重复添加，如果getCurrentOutline()已经是详细大纲，则不重复添加
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
@@ -3090,7 +3437,7 @@ class AIGN:
             print(f"📝 正在生成第{self.chapter_count + 1}章（正常章节）...")
             print(f"💡 用户输入:")
             print(f"   • 用户想法: {'✅' if self.user_idea else '❌'}")
-            print(f"   • 写作要求: {'✅' if self.user_requriments else '❌'}")
+            print(f"   • 写作要求: {'✅' if self.user_requirements else '❌'}")
             print(f"   • 润色想法: {'✅' if self.embellishment_idea else '❌'}")
             
             # 根据精简模式选择使用的writer
@@ -3233,12 +3580,12 @@ class AIGN:
             
             # 根据精简模式决定输入参数
             if getattr(self, 'compact_mode', False):
-                # 精简模式：生成正文时只包含：详细大纲；写作要求；各种记忆，设定，计划；前2章后2章的故事线
+                # 精简模式：生成正文时只包含：原始大纲（不是详细大纲）；写作要求；各种记忆，设定，计划；前2章后2章的故事线
                 print("📦 使用精简模式生成正文...")
                 # 使用前面已经获取的精简版故事线
                 inputs = {
                     "大纲": self.getCurrentOutline(),
-                    "写作要求": self.user_requriments,
+                    "写作要求": self.user_requirements,
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
                     "计划": self.writing_plan,
@@ -3256,7 +3603,7 @@ class AIGN:
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
                     "计划": self.writing_plan,
-                    "写作要求": self.user_requriments,
+                    "写作要求": self.user_requirements,
                     "润色想法": self.embellishment_idea,
                     "上文内容": self.getLastParagraph(),
                     "本章故事线": str(current_chapter_storyline),
@@ -3304,6 +3651,7 @@ class AIGN:
                 print("-" * 50)
             
             # 添加详细大纲和基础大纲上下文
+            # 注意：避免重复添加，如果getCurrentOutline()已经是详细大纲，则不重复添加
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
@@ -3392,6 +3740,7 @@ class AIGN:
                 print("-" * 50)
             
             # 添加详细大纲和基础大纲上下文到润色过程
+            # 注意：避免重复添加，如果getCurrentOutline()已经是详细大纲，则不重复添加
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 embellish_inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 润色阶段已加入详细大纲上下文")
@@ -3401,8 +3750,13 @@ class AIGN:
                     embellish_inputs["基础大纲"] = self.novel_outline
                     print(f"📋 润色阶段已加入基础大纲上下文")
                 
-            # 根据精简模式选择使用的润色器
-            if getattr(self, 'compact_mode', False):
+            # 根据章节类型和精简模式选择使用的润色器
+            if is_final_chapter:
+                print("🎭 使用结尾润色器")
+                embellisher = self.ending_embellisher
+                # 为结尾润色器添加特殊参数
+                embellish_inputs["是否最终章"] = "是"
+            elif getattr(self, 'compact_mode', False):
                 print("📦 使用精简版润色器")
                 embellisher = self.novel_embellisher_compact
             else:
@@ -3574,7 +3928,7 @@ class AIGN:
                 },
                 "user_input": {
                     "user_idea": self.user_idea or "",
-                    "user_requirements": self.user_requriments or "",
+                    "user_requirements": self.user_requirements or "",
                     "embellishment_idea": self.embellishment_idea or ""
                 },
                 "generated_content": {
@@ -3755,7 +4109,7 @@ class AIGN:
                 },
                 "user_input": {
                     "user_idea": self.user_idea,
-                    "user_requirements": self.user_requriments,
+                    "user_requirements": self.user_requirements,
                     "embellishment_idea": self.embellishment_idea
                 },
                 "generated_content": {
@@ -4170,7 +4524,7 @@ class AIGN:
                         print("✅ 输出文件初始化完成")
                     
                     try:
-                        self.genBeginning(self.user_requriments, self.embellishment_idea)
+                        self.genBeginning(self.user_requirements, self.embellishment_idea)
                         print("✅ 开头生成完成")
                     except Exception as e:
                         print(f"❌ 生成开头失败: {e}")
@@ -4188,18 +4542,24 @@ class AIGN:
                     progress = (self.chapter_count / self.target_chapter_count) * 100
                     elapsed_time = time.time() - start_time
 
+                    # 构建进度消息（无论是否为第一章都显示）
+                    progress_msg = f"📊 进度: {self.chapter_count}/{self.target_chapter_count} ({progress:.1f}%)"
+                    
                     if self.chapter_count > 0:
+                        # 如果已经生成了章节，显示时间预估
                         avg_time_per_chapter = elapsed_time / self.chapter_count
                         remaining_chapters = self.target_chapter_count - self.chapter_count
                         estimated_remaining_time = avg_time_per_chapter * remaining_chapters
-
-                        progress_msg = f"📊 进度: {self.chapter_count}/{self.target_chapter_count} ({progress:.1f}%)"
                         time_msg = f"⏱️  预计剩余时间: {self.format_time_duration(estimated_remaining_time)}"
-                        print(progress_msg)
-                        print(time_msg)
+                    else:
+                        # 第一章生成时，显示已用时间
+                        time_msg = f"⏱️  已用时间: {self.format_time_duration(elapsed_time)}"
+                    
+                    print(progress_msg)
+                    print(time_msg)
 
-                        # 同步到WebUI（通过更新状态）
-                        self._update_progress_status(progress_msg, time_msg)
+                    # 同步到WebUI（通过更新状态）
+                    self._update_progress_status(progress_msg, time_msg)
 
                     # 生成下一段
                     try:
@@ -4211,7 +4571,7 @@ class AIGN:
                             print(f"✅ 已达到目标章节数 {self.target_chapter_count}，停止生成")
                             break
 
-                        self.genNextParagraph(self.user_requriments, self.embellishment_idea)
+                        self.genNextParagraph(self.user_requirements, self.embellishment_idea)
                         chapter_time = time.time() - chapter_start_time
                         success_msg = f"✅ 第{self.chapter_count}章生成完成，耗时: {self.format_time_duration(chapter_time, include_seconds=True)}"
                         print(success_msg)
@@ -4455,15 +4815,18 @@ class AIGN:
         self.current_stream_chars = 0
         self.current_stream_operation = operation_name
         self.stream_start_time = time.time()
+        self.stream_update_logged = False  # 用于跟踪是否已经记录了初始状态
+        self.current_stream_content = ""  # 清空实时流内容（包括之前的非流式内容）
         self.log_message(f"🔄 开始{operation_name}...")
+        print(f"🔧 流式模式: 已清空流式输出窗口，开始显示 {operation_name} 的实时进度")
 
     def update_stream_progress(self, new_content):
         """更新流式输出进度"""
         if new_content:
             self.current_stream_chars += len(new_content)
-            # 每500字符更新一次日志，避免过于频繁
-            if self.current_stream_chars % 500 == 0 or self.current_stream_chars < 500:
-                self.log_message(f"📝 {self.current_stream_operation}: 已接收 {self.current_stream_chars} 字符")
+            # 更新实时流内容
+            self.current_stream_content += new_content
+            # 静默更新字符计数，不输出进度日志
 
     def end_stream_tracking(self, final_content=""):
         """结束流式输出跟踪"""
@@ -4486,6 +4849,36 @@ class AIGN:
         else:
             print("ℹ️  自动生成未在运行")
     
+    def get_current_stream_content(self):
+        """获取当前实时流内容"""
+        if hasattr(self, 'current_stream_content'):
+            return self.current_stream_content
+        return ""
+    
+    def set_non_stream_content(self, content, agent_name, token_count=0):
+        """为非流式模式设置流式输出窗口内容（仅显示最近一个API调用）"""
+        # 清空之前的流式内容，确保只显示最新的API调用
+        self.current_stream_content = ""
+        
+        api_info = f"""📡 最新非流式API调用信息:
+
+🎯 智能体: {agent_name}
+📊 响应长度: {len(content)} 字符
+🏷️  Token使用: {token_count}
+⏱️  响应模式: 非流式（一次性返回）
+⏰ 调用时间: {datetime.now().strftime('%H:%M:%S')}
+
+📝 完整响应内容:
+{'-'*50}
+{content}
+{'-'*50}
+
+💡 提示: 此窗口仅显示最近一次API调用的信息"""
+        
+        # 直接覆盖设置新内容
+        self.current_stream_content = api_info
+        print(f"🔧 非流式模式: 已更新流式输出窗口显示 {agent_name} 的最新API调用信息")
+    
     def getProgress(self):
         """获取当前进度信息"""
         if self.target_chapter_count == 0:
@@ -4493,15 +4886,241 @@ class AIGN:
                 "current_chapter": self.chapter_count,
                 "target_chapters": self.target_chapter_count,
                 "progress_percent": 0,
-                "is_running": self.auto_generation_running
+                "is_running": self.auto_generation_running,
+                "progress_message": "未开始生成",
+                "time_message": ""
             }
         
         progress_percent = (self.chapter_count / self.target_chapter_count) * 100
+        
+        # 获取进度消息和时间消息（如果有的话）
+        progress_message = getattr(self, 'progress_message', f"📊 进度: {self.chapter_count}/{self.target_chapter_count} ({progress_percent:.1f}%)")
+        time_message = getattr(self, 'time_message', "")
+        
+        # 获取过长内容统计信息
+        overlength_stats = self.get_overlength_statistics_display()
+        
         return {
             "current_chapter": self.chapter_count,
             "target_chapters": self.target_chapter_count,
             "progress_percent": progress_percent,
             "is_running": self.auto_generation_running,
             "title": self.novel_title,
-            "output_file": self.current_output_file
+            "output_file": self.current_output_file,
+            "progress_message": progress_message,
+            "time_message": time_message,
+            "overlength_statistics": overlength_stats,
+            "stream_content": self.get_current_stream_content()
         }
+    
+    def check_and_handle_overlength_content(self, content, content_type, agent_name="", direction="received"):
+        """检测并处理过长内容
+        direction: "sent" (发送的提示词) 或 "received" (接收的响应内容)
+        """
+        if not content or len(content) <= self.overlength_threshold:
+            return content
+            
+        import os
+        import datetime
+        
+        # 选择对应的统计字典
+        if direction == "sent":
+            stats_dict = self.overlength_statistics_sent
+        else:
+            stats_dict = self.overlength_statistics_received
+        
+        # 统计计数
+        if content_type in stats_dict:
+            stats_dict[content_type] += 1
+        else:
+            stats_dict["其他"] += 1
+        
+        # 生成文件名（包含方向信息）
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        direction_label = "发送" if direction == "sent" else "接收"
+        filename = f"{direction_label}_{content_type}_{agent_name}_{timestamp}_{len(content)}chars.txt"
+        filepath = os.path.join("metadata", "overlength", filename)
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # 保存过长内容到文件
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(f"方向: {direction_label}\n")
+                f.write(f"类型: {content_type}\n")
+                f.write(f"智能体: {agent_name}\n")
+                f.write(f"长度: {len(content)} 字符\n")
+                f.write(f"时间: {timestamp}\n")
+                f.write(f"阈值: {self.overlength_threshold} 字符\n")
+                f.write("=" * 50 + "\n")
+                f.write(content)
+                
+            print(f"⚠️ 检测到过长{direction_label}内容: {content_type} ({len(content)}字符)")
+            print(f"📁 已保存到: {filepath}")
+            
+            # 记录到日志
+            self.log_message(f"⚠️ {content_type}{direction_label}内容过长({len(content)}字符)，已保存至metadata")
+            
+        except Exception as e:
+            print(f"❌ 保存过长内容失败: {e}")
+            
+        return content
+    
+    def get_overlength_statistics_display(self):
+        """获取过长内容统计信息的显示字符串"""
+        sent_stats = []
+        received_stats = []
+        
+        # 统计发送的过长内容
+        for content_type, count in self.overlength_statistics_sent.items():
+            if count > 0:
+                sent_stats.append(f"{content_type}:{count}次")
+                
+        # 统计接收的过长内容
+        for content_type, count in self.overlength_statistics_received.items():
+            if count > 0:
+                received_stats.append(f"{content_type}:{count}次")
+        
+        # 构建显示字符串
+        display_parts = []
+        if sent_stats:
+            display_parts.append("📤 发送过长: " + ", ".join(sent_stats))
+        if received_stats:
+            display_parts.append("📥 接收过长: " + ", ".join(received_stats))
+            
+        if display_parts:
+            return "⚠️ " + " | ".join(display_parts)
+        else:
+            return ""
+    
+    def test_overlength_detection(self):
+        """测试过长内容检测机制"""
+        # 创建测试用的长内容
+        test_sent_content = "发送测试内容" * 3000  # 创建18000字符的发送内容
+        test_received_content = "接收测试内容" * 4000  # 创建20000字符的接收内容
+        
+        print("🧪 开始测试过长内容检测机制...")
+        print(f"🚩 检测阈值: {self.overlength_threshold} 字符")
+        
+        # 测试发送内容检测
+        print(f"📤 测试发送内容长度: {len(test_sent_content)} 字符")
+        self.check_and_handle_overlength_content(test_sent_content, "测试", "TestAgent", direction="sent")
+        
+        # 测试接收内容检测
+        print(f"📥 测试接收内容长度: {len(test_received_content)} 字符")
+        self.check_and_handle_overlength_content(test_received_content, "测试", "TestAgent", direction="received")
+        
+        # 显示统计结果
+        stats = self.get_overlength_statistics_display()
+        print(f"📊 统计结果: {stats if stats else '无过长内容'}")
+        print("✅ 过长内容检测机制测试完成")
+    
+    def test_realtime_stream(self):
+        """测试实时数据流功能"""
+        print("🧪 开始测试实时数据流功能...")
+        
+        # 模拟开始流式跟踪
+        self.start_stream_tracking("测试生成")
+        print(f"📡 当前流内容: '{self.get_current_stream_content()}'")
+        
+        # 模拟接收数据流
+        test_chunks = ["这是", "一段", "测试", "数据流", "内容"]
+        for i, chunk in enumerate(test_chunks):
+            self.update_stream_progress(chunk)
+            print(f"📥 接收第{i+1}块数据: '{chunk}' -> 当前流内容: '{self.get_current_stream_content()}'")
+        
+        # 模拟结束流式跟踪
+        final_content = self.get_current_stream_content()
+        self.end_stream_tracking(final_content)
+        print(f"✅ 流式跟踪结束，最终内容: '{final_content}'")
+        
+        # 测试新API调用时清空功能
+        print("🔄 测试新API调用时清空功能...")
+        self.start_stream_tracking("新的测试生成")
+        print(f"📡 新流式跟踪后的内容: '{self.get_current_stream_content()}'")
+        
+        print("✅ 实时数据流功能测试完成")
+    
+    def test_non_stream_display(self):
+        """测试非流式模式下只显示最近一个API调用的功能"""
+        print("🧪 开始测试非流式模式显示功能...")
+        
+        # 模拟第一个API调用
+        print("📡 模拟第一个API调用...")
+        self.set_non_stream_content("这是第一个API调用的响应内容", "TestAgent1", 100)
+        print(f"📋 当前显示内容长度: {len(self.get_current_stream_content())} 字符")
+        
+        # 模拟第二个API调用（应该覆盖第一个）
+        print("📡 模拟第二个API调用...")
+        self.set_non_stream_content("这是第二个API调用的响应内容，应该覆盖第一个", "TestAgent2", 200)
+        current_content = self.get_current_stream_content()
+        print(f"📋 当前显示内容长度: {len(current_content)} 字符")
+        
+        # 检查是否只包含第二个调用的信息
+        if "TestAgent2" in current_content and "TestAgent1" not in current_content:
+            print("✅ 测试通过: 只显示最近一个API调用的信息")
+        else:
+            print("❌ 测试失败: 显示了多个API调用的信息")
+        
+        # 模拟流式模式开始（应该清空非流式内容）
+        print("🔄 模拟流式模式开始...")
+        self.start_stream_tracking("测试流式生成")
+        if self.get_current_stream_content() == "":
+            print("✅ 测试通过: 流式模式开始时清空了非流式内容")
+        else:
+            print("❌ 测试失败: 流式模式开始时未清空非流式内容")
+        
+        print("✅ 非流式模式显示功能测试完成")
+
+    def test_stream_error_detection(self):
+        """测试流式输出错误检测功能"""
+        print("🧪 开始测试流式输出错误检测功能...")
+        
+        # 测试各种错误情况
+        test_errors = [
+            "Warning: Error iterating generator: Model unloaded.",
+            "Connection timeout",
+            "Server error 500",
+            "Rate limit exceeded",
+            "Invalid request",
+            "Content too short"
+        ]
+        
+        for error in test_errors:
+            print(f"🔍 测试错误: {error}")
+            
+            # 模拟错误检测逻辑
+            critical_errors = [
+                'model unloaded', 'model not found', 'connection', 'timeout',
+                'server error', 'internal error', 'service unavailable',
+                'rate limit', 'quota exceeded', 'authentication failed',
+                'invalid request', 'bad gateway', 'gateway timeout'
+            ]
+            
+            is_critical = any(keyword in error.lower() for keyword in critical_errors)
+            print(f"   {'🚨 严重错误' if is_critical else '⚠️ 一般错误'}: {error}")
+        
+        print("✅ 流式输出错误检测功能测试完成")
+    
+    def should_retry_stream_output(self, error_content):
+        """判断是否应该重试流式输出"""
+        if not error_content:
+            return False
+            
+        # 检查是否包含重试相关的错误信息
+        retry_keywords = [
+            '流式输出失败', '需要重试', 'model unloaded', 'connection timeout',
+            'server error', 'rate limit', 'content too short', '数据块数量不足'
+        ]
+        
+        has_retry_keyword = any(keyword in error_content.lower() for keyword in retry_keywords)
+        
+        # 检查是否是内容质量问题
+        content_quality_issues = [
+            '内容长度不足', '数据块数量不足', '流式输出超时', '缺少结束标记'
+        ]
+        
+        has_quality_issue = any(issue in error_content for issue in content_quality_issues)
+        
+        return has_retry_keyword or has_quality_issue

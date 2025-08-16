@@ -237,7 +237,7 @@ def create_data_management_interface(aign) -> Tuple:
                 aign_instance.user_idea = user_idea
                 print(f"💾 手动保存：更新用户想法 ({len(user_idea)}字符)")
             if user_requirements is not None:
-                aign_instance.user_requriments = user_requirements  # 保持原有的拼写错误
+                aign_instance.user_requirements = user_requirements  # 保持原有的拼写错误
                 print(f"💾 手动保存：更新写作要求 ({len(user_requirements)}字符)")
             if embellishment_idea is not None:
                 aign_instance.embellishment_idea = embellishment_idea
@@ -249,7 +249,7 @@ def create_data_management_interface(aign) -> Tuple:
             
             # 首先检查并保存用户输入数据
             user_idea = getattr(aign_instance, 'user_idea', '') or ''
-            user_requirements = getattr(aign_instance, 'user_requriments', '') or ''
+            user_requirements = getattr(aign_instance, 'user_requirements', '') or ''
             embellishment_idea = getattr(aign_instance, 'embellishment_idea', '') or ''
             
             user_input_items = []

@@ -62,7 +62,7 @@ genBeginning() -> None
 
 **前置条件:**
 - `self.novel_outline` 已设置
-- `self.user_requriments` 已设置（可选）
+- `self.user_requirements` 已设置（可选）
 - `self.embellishment_idea` 已设置（可选）
 
 **副作用:**
@@ -142,7 +142,7 @@ getProgress() -> Dict[str, Any]
 class AIGN:
     # 用户输入
     user_idea: str              # 用户想法
-    user_requriments: str       # 写作要求
+    user_requirements: str       # 写作要求
     embellishment_idea: str     # 润色要求
     
     # 生成内容
@@ -418,7 +418,7 @@ gen_beginning_button_clicked(
     aign: AIGN,
     history: List,
     novel_outline: str,
-    user_requriments: str,
+    user_requirements: str,
     embellishment_idea: str,
     enable_chapters: bool,
     enable_ending: bool
@@ -584,7 +584,7 @@ aign.user_idea = "一个关于时间旅行的科幻小说"
 aign.genNovelOutline()
 
 # 6. 生成开头
-aign.user_requriments = "轻松幽默的风格"
+aign.user_requirements = "轻松幽默的风格"
 aign.genBeginning()
 
 # 7. 自动生成

@@ -380,6 +380,9 @@ class DynamicConfigManager:
         #     )
         elif provider_name == "lmstudio":
             from uniai.lmstudioAI import lmstudioChatLLM
+            print(f"🔧 LM Studio 配置的系统提示词长度: {len(current_config.system_prompt)} 字符")
+            if current_config.system_prompt:
+                print(f"🔧 LM Studio 系统提示词内容预览: {current_config.system_prompt[:100]}...")
             return lmstudioChatLLM(
                 model_name=current_config.model_name,
                 api_key=current_config.api_key,

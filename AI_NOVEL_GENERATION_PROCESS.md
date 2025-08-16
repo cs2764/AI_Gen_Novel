@@ -92,7 +92,7 @@ graph TD
        resp = self.novel_outline_writer.invoke(
            inputs={
                "用户想法": self.user_idea,
-               "写作要求": self.user_requriments
+               "写作要求": self.user_requirements
            },
            output_keys=["大纲"]
        )
@@ -591,7 +591,7 @@ def saveMetadata(self):
         "target_chapters": self.target_chapter_count,
         "generation_time": datetime.now().isoformat(),
         "user_idea": self.user_idea,
-        "user_requirements": self.user_requriments,
+        "user_requirements": self.user_requirements,
         "embellishment_idea": self.embellishment_idea
     }
     

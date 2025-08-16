@@ -25,30 +25,22 @@ def claudeChatLLM(model_name="claude-3-sonnet-20240229", api_key=None, system_pr
         stream=False,
     ) -> Union[Dict[str, Union[str, int]], Generator[Dict[str, Union[str, int]], None, None]]:
         
-        # 如果设置了系统提示词，合并到第一个用户消息的开头
-        if system_prompt and messages:
-            # 找到第一个用户消息
-            for i, msg in enumerate(messages):
-                if msg.get("role") == "user":
-                    # 将系统提示词添加到用户消息的开头
-                    original_content = msg["content"]
-                    messages[i]["content"] = f"{system_prompt}\n\n{original_content}"
-                    break
-            else:
-                # 如果没有用户消息，创建一个包含系统提示词的用户消息
-                messages.append({"role": "user", "content": system_prompt})
+        # Claude有专门的system参数，不需要在这里处理系统提示词
+        # 系统提示词将在后面的system参数中统一处理
         
         # 将消息转换为Claude格式
         claude_messages = []
-        system_message = ""
+        system_message = system_prompt or ""  # 优先使用模型提供商层面的system_prompt
         
         for msg in messages:
             role = msg["role"]
             content = msg["content"]
             
             if role == "system":
-                # Claude使用单独的system参数
-                system_message = content
+                # 如果消息中有system内容，且模型提供商层面没有设置system_prompt，则使用消息中的
+                if not system_prompt:
+                    system_message = content
+                # 如果模型提供商层面已经设置了system_prompt，跳过消息中的system内容避免重复
             elif role == "user":
                 claude_messages.append({"role": "user", "content": content})
             elif role == "assistant":
