@@ -1,4 +1,104 @@
-# 更新日志
+# 更新日志 | Changelog
+
+## [3.5.0] - 2025-11-05 🎉 重大功能更新
+
+### ✨ 新功能 | New Features
+
+#### 🎙️ TTS文件处理器
+- 新增tts_file_processor.py模块，批量处理文本文件添加CosyVoice2语音标记
+- 支持自动编码检测（UTF-8、GBK、GB2312等）
+- 智能文本分段（每段最多2000字符）
+- 自动清理和格式化文本
+
+#### 📏 长章节模式（核心功能）
+**问题背景**：一次性生成长章节（10,000+字符）常导致中后段质量下降、内容重复、连贯性差
+
+**解决方案**：4段式分批生成
+- 将每章拆分为4个剧情段（开端、发展、高潮、结局）
+- 每段独立生成和润色，最后自动合并
+- 每段生成时参考其他3段摘要，保持整体连贯性
+
+**技术实现**：
+- 故事线生成器为每章创建4个plot_segments
+- 使用专门的分段智能体（novel_writer_compact_seg1-4）
+- 仅传递前2章/后2章摘要，不发送全文（优化上下文）
+- 批次大小自动调整（10章→5章）以适应更复杂的故事线
+
+**效果**：
+- ✅ 支持更长章节：可生成更长的高质量章节内容
+- ✅ 质量提升：每段专注特定情节，减少重复，质量一致
+- ✅ 连贯性增强：分段参考机制保持整体叙事流畅
+- ✅ 灵活可控：可随时启用/禁用，设置持久化
+
+详见：[LONG_CHAPTER_FEATURE.md](LONG_CHAPTER_FEATURE.md)
+
+#### 📊 Token统计系统
+- 自动生成过程中实时追踪API Token消耗，包含发送/接收统计和分类汇总
+- **文本净化功能**: sanitize_generated_text()自动移除生成内容中的结构化标签和非正文括注
+- **最近章节预览**: get_recent_novel_preview()仅显示最近5章，大幅减轻浏览器负担
+- **防重复提示词**: 新增AIGN_Anti_Repetition_Prompt.py模块，防止生成重复内容
+- **CosyVoice提示词**: 新增AIGN_CosyVoice_Prompt.py模块，专门用于语音合成标记
+
+### 🔧 功能改进 | Improvements
+- **增强故事线生成器**: enhanced_storyline_generator.py支持Structured Outputs和Tool Calling
+- **模型获取器优化**: model_fetcher.py改进Lambda AI模型获取，添加回退默认值机制
+- **状态持久化**: 保存/加载long_chapter_mode和cosyvoice_mode设置
+- **UI增强**: 新增长章节功能复选框和TTS文件处理界面
+- **提示词模块化**: 分离CosyVoice和防重复提示词，提高可维护性
+- **配置管理**: web_config_interface.py新增CosyVoice和TTS配置界面
+
+### 📊 性能优化 | Performance
+- **精简上下文**: 长章节模式下仅传递前2/后2章总结，不发送原文，大幅减少Token消耗
+- **智能分段**: 故事线生成器根据长章节模式动态调整批次大小（10章→5章）
+- **浏览器优化**: 界面仅显示最近章节，避免大量文本导致的性能问题
+
+### 📚 文档完善 | Documentation
+- **完整文档体系**: 19个核心文档涵盖安装、配置、安全、架构等所有方面
+- **双语系统文档**: 创建SYSTEM_DOCS.md，详细说明多智能体系统架构和AI提供商集成
+- **安全指南**: 完善的GitHub上传安全指南和配置安全指南
+- **开发者文档**: ARCHITECTURE.md、CONTRIBUTING.md、DEVELOPER.md助力社区贡献
+
+### 🔒 安全增强 | Security
+- **自动化安全检查**: github_upload_ready.py脚本自动检测敏感内容和配置问题
+- **完善的.gitignore**: 确保API密钥、用户数据、虚拟环境不会被意外上传
+- **数据保护机制**: 用户生成内容(output/)和自动保存数据(autosave/)完全保护
+
+### 🗂️ 项目组织 | Project Organization
+- **模块化重构**: app.py和AIGN.py拆分为多个小模块
+  - 18个AIGN模块：aign_agents.py, aign_chapter_manager.py, aign_storyline_manager.py等
+  - 4个app模块：app_ui_components.py, app_event_handlers.py, app_data_handlers.py, app_utils.py
+  - 提高代码可维护性和可读性
+- **清晰的项目结构**: 测试脚本统一管理到test/目录
+- **自动化工具**: prepare_github_upload.py一键准备GitHub上传
+- **质量保证**: 所有变更可追溯，文件移至回收站可恢复
+
+### 📖 核心文档列表 | Core Documentation
+**用户文档**: README.md, INSTALL.md, STARTUP_GUIDE.md, MIGRATION_GUIDE.md  
+**功能文档**: FEATURES.md, AI_NOVEL_GENERATION_PROCESS.md, API.md  
+**安全文档**: GITHUB_UPLOAD_GUIDE.md, CONFIG_SECURITY_GUIDE.md  
+**数据管理**: LOCAL_DATA_MANAGEMENT.md, VIRTUAL_ENV_MANAGEMENT.md  
+**开发文档**: ARCHITECTURE.md, SYSTEM_DOCS.md, DEVELOPER.md, CONTRIBUTING.md  
+**项目管理**: CHANGELOG.md, LICENSE, GITHUB_PREP_CHECKLIST.md, GITHUB_FILE_MANAGEMENT_GUIDE.md
+
+---
+
+## [3.4.0] - 2025-10-30
+
+### 🔍 功能增强
+- **智能标题验证**: 自动过滤无效标题内容
+- **故事线生成增强**: 支持Structured Outputs和Tool Calling
+- **JSON自动修复**: 智能修复JSON解析错误
+
+---
+
+## [3.3.0] - 2025-08-20
+
+### 🎙️ TTS功能
+- **CosyVoice2集成**: 文本转语音功能
+- **提示词优化**: 多个专业化提示词模块
+- **防重复机制**: 智能内容去重系统
+
+---
 
 ## [3.0.1] - 2025-07-26
 

@@ -79,6 +79,8 @@ class ModelFetcher:
                 return self._fetch_lmstudio_models(api_key, **kwargs)
             elif provider == 'fireworks':
                 return self._fetch_fireworks_models(api_key, **kwargs)
+            elif provider == 'lambda':
+                return self._fetch_lambda_models(api_key, **kwargs)
             else:
                 logger.warning(f"不支持的提供商: {provider}")
                 return []
@@ -136,27 +138,12 @@ class ModelFetcher:
         return models
     
     def _fetch_deepseek_models(self, api_key: str, base_url: str = "https://api.deepseek.com/v1") -> List[ModelInfo]:
-        """获取DeepSeek模型列表"""
-        headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        response = self.session.get(f"{base_url}/models", headers=headers)
-        response.raise_for_status()
-        
-        data = response.json()
-        models = []
-        
-        for model_data in data.get('data', []):
-            models.append(ModelInfo(
-                id=model_data.get('id', ''),
-                name=model_data.get('id', ''),
-                provider='deepseek',
-                owned_by=model_data.get('owned_by', '')
-            ))
-        
-        return models
+        """获取DeepSeek模型列表（固定为 deepseek-chat 和 deepseek-reasoner）"""
+        # 固定返回，避免因远程变动导致选项不一致
+        return [
+            ModelInfo(id="deepseek-chat", name="deepseek-chat", provider="deepseek", owned_by="deepseek"),
+            ModelInfo(id="deepseek-reasoner", name="deepseek-reasoner", provider="deepseek", owned_by="deepseek"),
+        ]
     
     def _fetch_ali_models(self, api_key: str, base_url: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1") -> List[ModelInfo]:
         """获取阿里云Qwen模型列表"""
@@ -376,6 +363,69 @@ class ModelFetcher:
                 provider='fireworks',
                 owned_by='fireworks',
                 description='Fireworks AI模型'
+            ))
+        
+        return models
+    
+    def _fetch_lambda_models(self, api_key: str, base_url: str = "https://api.lambda.ai/v1") -> List[ModelInfo]:
+        """获取Lambda (OpenAI兼容模式) 模型列表"""
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            response = self.session.get(f"{base_url}/models", headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            for model_data in data.get('data', []):
+                models.append(ModelInfo(
+                    id=model_data.get('id', ''),
+                    name=model_data.get('id', ''),
+                    provider='lambda',
+                    created_at=str(model_data.get('created', '')),
+                    owned_by=model_data.get('owned_by', 'lambda'),
+                    description='Lambda/OpenAI兼容模式'
+                ))
+            
+            if models:
+                return models
+            else:
+                # 如果API返回空列表，使用默认模型列表
+                return self._get_default_lambda_models()
+                
+        except Exception as e:
+            logger.warning(f"获取Lambda模型列表失败: {e}，使用默认列表")
+            return self._get_default_lambda_models()
+    
+    def _get_default_lambda_models(self) -> List[ModelInfo]:
+        """获取Lambda默认模型列表（当API请求失败时使用）"""
+        known_models = [
+            "llama-4-maverick-17b-128e-instruct-fp8",
+            "llama-4-scout-17b-16e-instruct",
+            "deepseek-r1-0528",
+            "deepseek-v3-0324",
+            "llama3.1-8b-instruct",
+            "llama3.1-70b-instruct-fp8",
+            "llama3.1-405b-instruct-fp8",
+            "llama3.3-70b-instruct-fp8",
+            "qwen3-32b-fp8",
+            "hermes3-8b",
+            "hermes3-70b",
+            "hermes3-405b"
+        ]
+        
+        models = []
+        for model_id in known_models:
+            models.append(ModelInfo(
+                id=model_id,
+                name=model_id,
+                provider='lambda',
+                owned_by='lambda',
+                description='Lambda/OpenAI兼容模式'
             ))
         
         return models

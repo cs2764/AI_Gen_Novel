@@ -386,7 +386,8 @@ git push origin main
     
     def run_all_checks(self) -> bool:
         """运行所有安全检查"""
-        print("🛡️  开始GitHub上传安全检查...")
+        print("开始GitHub上传安全检查...")
+        print("Starting GitHub upload security check...")
         print("=" * 50)
         
         checks = [
@@ -416,14 +417,17 @@ git push origin main
         print("=" * 50)
         
         if all_passed:
-            print("🎉 所有安全检查通过！")
+            print("所有安全检查通过！")
+            print("All security checks passed!")
             print("\n" + self.generate_upload_guide())
             return True
         else:
-            print("⚠️  发现安全问题：")
+            print("发现安全问题：")
+            print("Security issues found:")
             for issue in self.issues:
                 print(f"  {issue}")
             print("\n请修复以上问题后重新运行检查。")
+            print("Please fix the issues above and run the check again.")
             return False
 
 def main():

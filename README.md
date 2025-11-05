@@ -1,7 +1,63 @@
-# 🤖 AI 网络小说生成器 v3.3.0
+# 🤖 AI Novel Generator v3.5.0 | AI 网络小说生成器
 
-> 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
-> 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
+[中文文档](#中文文档) | [English Documentation](#english-documentation)
+
+---
+
+## 🎉 What's New in v3.5.0 (2025-11-05)
+
+**Major Feature Update!** Enhanced generation capabilities, TTS support, and production-ready documentation.
+
+### ✨ New Features | 新功能
+
+- 🎙️ **TTS File Processing**: Batch process text files with CosyVoice2 markers for audiobook generation
+- 📏 **Long Chapter Mode**: 4-segment generation system for longer, higher-quality chapters
+- 📊 **Token Statistics**: Real-time tracking of API token usage during auto-generation
+- 🧹 **Text Sanitization**: Automatic removal of structural tags and non-content annotations
+- 📖 **Recent Preview**: Display only recent 5 chapters in UI to reduce browser load
+- 🚫 **Anti-Repetition**: Enhanced prompts to prevent repetitive content generation
+- 🔧 **Modular Refactoring**: Split app.py and AIGN.py into smaller modules for easier maintenance
+
+### 🔧 Improvements | 功能改进
+
+- 🤖 **Enhanced Storyline Generator**: Support for Structured Outputs and Tool Calling
+- � **SModel Fetcher**: Improved Lambda AI model fetching with fallback defaults
+- 💾 **State Persistence**: Save/load long chapter mode and CosyVoice settings
+- 🎨 **UI Enhancements**: New checkboxes for long chapter and TTS features
+- 📚 **Prompt Modules**: Separated CosyVoice and anti-repetition prompts for maintainability
+- 📦 **Code Organization**: 18 AIGN modules + 4 app modules for better structure
+
+### 📚 Documentation & Security | 文档与安全
+
+- 📖 **Complete Documentation**: Comprehensive bilingual guides (19 core documents)
+- 🔒 **Enhanced Security**: Automated security checks and improved .gitignore
+- 🛡️ **Data Protection**: Virtual environment and user data fully safeguarded
+- 🏗️ **System Architecture**: Detailed SYSTEM_DOCS.md with multi-agent system explanation
+
+**Perfect for**: Developers wanting to understand the codebase, contributors, and users seeking comprehensive documentation.
+
+[View Full Changelog](#version-history--版本历史) | [查看完整更新日志](#version-history--版本历史)
+
+---
+
+## English Documentation
+
+> 🎨 Modern AI novel creation tool based on Gradio 5.38.0, supporting one-click generation from ideas to complete novels
+> 🚀 **GitHub Open Source Release** - Comprehensive security measures and detailed documentation
+
+### 🔒 Important Security Notice
+
+**⚠️ Before using and sharing this project, please note:**
+
+- 🚨 **Configuration files contain API keys**: The `config.py` file contains your AI provider API keys and must never be uploaded to public repositories
+- 🛡️ **User data protection**: The `output/` and `autosave/` directories contain your creative content and should remain private
+- ✅ **Security check**: The project includes a `github_upload_ready.py` script - please run security checks before uploading
+- 📖 **Detailed guide**: See [GitHub Upload Security Guide](GITHUB_UPLOAD_GUIDE.md) for complete security measures
+
+```bash
+# Run security check
+python github_upload_ready.py
+```
 
 ## 🔒 重要安全提醒
 
@@ -19,59 +75,59 @@ python github_upload_ready.py
 
 ---
 
-## ✨ 核心特性
+### ✨ Core Features
 
-### 🎯 完整的小说生成流程
+#### 🎯 Complete Novel Generation Pipeline
 
-- **智能大纲生成**：基于用户想法自动生成完整小说结构
-- **角色塑造**：自动创建丰富的人物设定和关系网络
-- **详细大纲扩展**：将简单大纲扩展为详细的章节梗概
-- **故事线生成**：为每章生成详细剧情，确保情节连贯
-- **开头生成**：创建引人入胜的小说开头
-- **段落续写**：智能续写，保持故事连贯性
-- **自动生成**：支持连续生成多章节，可随时暂停继续
+- **Intelligent Outline Generation**: Automatically generate complete novel structure from user ideas
+- **Character Development**: Automatically create rich character settings and relationship networks
+- **Detailed Outline Expansion**: Expand simple outlines into detailed chapter synopses
+- **Storyline Generation**: Generate detailed plots for each chapter, ensuring narrative coherence
+- **Opening Generation**: Create engaging novel openings
+- **Paragraph Continuation**: Intelligent continuation writing, maintaining story coherence
+- **Automatic Generation**: Support continuous multi-chapter generation, can pause and resume anytime
 
-### 🚀 Gradio 5.38.0 现代化界面
+#### 🚀 Gradio 5.38.0 Modern Interface
 
-- **实时状态显示**：分阶段显示生成进度和状态历史
-- **用户确认机制**：防止意外覆盖已生成内容
-- **智能错误处理**：完善的错误处理和恢复机制
-- **类型安全绑定**：确保组件参数正确匹配
-- **简洁优化界面**：隐藏不常用功能，专注核心体验
+- **Real-time Status Display**: Stage-by-stage generation progress and status history
+- **User Confirmation Mechanism**: Prevent accidental overwriting of generated content
+- **Intelligent Error Handling**: Comprehensive error handling and recovery mechanisms
+- **Type-safe Binding**: Ensure correct component parameter matching
+- **Clean Optimized Interface**: Hide infrequently used features, focus on core experience
 
-### 🤖 多AI提供商支持
+#### 🤖 Multi-AI Provider Support
 
-支持10个主流AI提供商，满足不同需求：
+Support for 10 mainstream AI providers to meet different needs:
 
-| 提供商 | 特点 | 推荐场景 |
-|--------|------|----------|
-| **🌟 OpenRouter** | 多模型聚合，选择丰富 | 高质量创作 |
-| **🧠 Claude** | Anthropic出品，长文本处理强 | 复杂情节 |
-| **💎 Gemini** | Google出品，稳定可靠 | 通用创作 |
-| **🚀 DeepSeek** | 性价比高，中文优化 | 日常创作 |
-| **🏠 LM Studio** | 本地部署，隐私保护 | 离线创作 |
-| **🇨🇳 智谱AI** | 国产GLM模型，中文理解佳 | 中文小说 |
-| **☁️ 阿里云** | 通义千问，长文本模型 | 长篇创作 |
-| **🔥 Fireworks** | 高性能推理，速度快 | 快速创作 |
-| **🤖 Grok** | xAI出品，创新思维 | 创意写作 |
-| **⚡ Lambda** | 成本低，多模型选择 | 经济型创作 |
+| Provider | Features | Recommended Use |
+|----------|----------|-----------------|
+| **🌟 OpenRouter** | Multi-model aggregator, rich selection | High-quality creation |
+| **🧠 Claude** | Anthropic, strong long-text processing | Complex plots |
+| **💎 Gemini** | Google, stable and reliable | General creation |
+| **🚀 DeepSeek** | Cost-effective, Chinese-optimized | Daily creation |
+| **🏠 LM Studio** | Local deployment, privacy protection | Offline creation |
+| **🇨🇳 智谱AI** | Domestic GLM model, excellent Chinese understanding | Chinese novels |
+| **☁️ 阿里云** | Qwen, long-text model | Long-form creation |
+| **🔥 Fireworks** | High-performance inference, fast speed | Quick creation |
+| **🤖 Grok** | xAI, innovative thinking | Creative writing |
+| **⚡ Lambda** | Low cost, multi-model selection | Budget creation |
 
-### 💾 智能数据管理
-- **本地存储**：数据安全保存在本地文件
-- **自动保存**：创作过程自动备份，防止意外丢失
-- **一键导出**：支持TXT、EPUB等多种格式
-- **数据同步**：界面与后端实时同步
+#### 💾 Intelligent Data Management
+- **Local Storage**: Data securely saved in local files
+- **Auto-save**: Automatic backup during creation process, prevent accidental loss
+- **One-click Export**: Support TXT, EPUB and other formats
+- **Data Synchronization**: Real-time sync between interface and backend
 
-## 🚀 快速开始
+### 🚀 Quick Start
 
-### 📋 系统要求
+#### 📋 System Requirements
 
-- **Python**: 3.10+ (推荐 3.10.11)
-- **内存**: 4GB+ 可用内存
-- **网络**: 稳定的网络连接
-- **操作系统**: Windows 10+, macOS 10.15+, Linux
+- **Python**: 3.10+ (recommended 3.10.11)
+- **Memory**: 4GB+ available RAM
+- **Network**: Stable internet connection
+- **Operating System**: Windows 10+, macOS 10.15+, Linux
 
-### ⚡ 快速安装
+#### ⚡ Quick Installation
 
 ```bash
 # 1. 克隆项目
@@ -253,7 +309,22 @@ TEMPERATURE_SETTINGS = {
 }
 ```
 
-## 🆕 版本更新
+## 🆕 Version History | 版本历史
+
+### v3.5.0 (2025-11-05) 🎉
+- 📏 **长章节模式**：4段式生成系统，支持更长章节，显著提升质量和连贯性
+- 🎙️ **TTS文件处理器**：批量处理文本文件添加CosyVoice2语音标记
+- 📊 **Token统计系统**：实时追踪API Token消耗
+- 🧹 **文本净化**：自动移除结构化标签
+- 📖 **最近预览**：仅显示最近5章减轻浏览器负担
+- 🚫 **防重复机制**：增强提示词防止重复内容
+- � ***模块化重构**：app.py和AIGN.py拆分为多个小模块，易于维护
+- 📚 **完整文档**：19个核心文档，双语系统文档
+
+### v3.4.0 (2025-10-30)
+- 🔍 **智能标题验证**：自动过滤无效标题内容
+- 🚀 **增强故事线生成**：支持Structured Outputs和Tool Calling
+- 🔧 **JSON自动修复**：智能修复JSON解析错误
 
 ### v3.3.0 (2025-08-16)
 - 🔧 **核心引擎重构**：AIGN.py 大幅优化，代码行数从4447行增至5126行，新增679行代码
@@ -311,19 +382,30 @@ TEMPERATURE_SETTINGS = {
 - 🚀 **增强的故事线生成**：支持Structured Outputs和Tool Calling
 - 🔧 **JSON格式自动修复**：智能修复JSON解析错误
 
-### v2.3.0 (2025-07-19)
-- 🍪 **Cookie数据存储系统**：全新的CookieStorageManager类
-- 🔄 **智能存储适配器**：SmartStorageAdapter提供多种存储方案
-- 🏠 **混合存储策略**：localStorage + cookies + sessionStorage多重备份
+### v3.5.0 (2025-11-05) 🎉 **GitHub发布版**
+- 🧹 **项目清理**：删除32个临时开发文件，整理7个测试脚本到test目录
+- 📚 **文档优化**：删除17个冗余开发文档，保留19个核心文档
+- 🔒 **安全加固**：完善.gitignore配置，确保敏感文件和用户数据不被上传
+- 📖 **系统文档**：创建SYSTEM_DOCS.md双语系统文档
+- 🛡️ **安全检查**：github_upload_ready.py脚本确保上传安全
+- 🗂️ **文件管理**：自动化准备脚本prepare_github_upload.py
+- ✅ **质量保证**：所有文件移至回收站，虚拟环境完整保护
 
-### v2.2.0 (2025-07-15)
-- 🛡️ **隐私保护**：确保用户数据和API密钥不会意外泄露
-- 📚 **文档完善**：详细的安全指南和最佳实践
+### v3.4.0 (2025-10-30)
+- 🔍 **智能标题验证过滤**：自动过滤无效标题内容
+- 🚀 **增强的故事线生成**：支持Structured Outputs和Tool Calling
+- 🔧 **JSON格式自动修复**：智能修复JSON解析错误
 
-### v2.1.0
-- 🔄 **实时同步**：修复目标章节数实时读取问题
-- 💾 **数据管理**：完善的本地数据保存和加载
-- 🎨 **界面优化**：改进用户体验和状态显示
+### v3.3.0 (2025-08-20)
+- 🎙️ **TTS功能集成**：CosyVoice2文本转语音支持
+- 📝 **提示词优化**：多个专业化提示词模块
+- 🔄 **防重复机制**：智能内容去重系统
+
+### v3.0.0 (2025-08-04)
+- 🎨 **Gradio 5.38.0升级**：全新现代化界面
+- 🤖 **多智能体系统**：专业化写作智能体
+- 💾 **本地数据管理**：完善的自动保存系统
+- 🔐 **安全措施**：API密钥保护和隐私保护
 
 [查看完整更新日志](CHANGELOG.md)
 
@@ -430,6 +512,275 @@ Made with ❤️ by AI Novel Generator Team
 ## ⚠️ 重要提醒
 
 ### 虚拟环境管理
+- 📂 `gradio5_env/` 目录包含项目运行必需的所有依赖包
+- 🚫 **请不要删除虚拟环境目录**
+- 📖 如需了解虚拟环境管理详情，请查看 [`VIRTUAL_ENV_MANAGEMENT.md`](VIRTUAL_ENV_MANAGEMENT.md)
+
+---
+
+## 中文文档
+
+> 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
+> 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
+
+### 🎉 v3.5.0 版本更新 (2025-11-05)
+
+**GitHub开源发布！** 生产就绪版本，增强文档和安全性。
+
+#### ✨ 主要改进
+
+- 📚 **完整文档**：全面的双语指南，涵盖安装、配置、安全和架构
+- � **文安全增强**：自动化安全检查和改进的.gitignore，保护API密钥和用户数据
+- �️* **数据保护**：虚拟环境和用户生成内容完全保护
+- �  **系统架构**：详细的SYSTEM_DOCS.md，解释多智能体系统和AI提供商集成
+- �️ **统更好的组织**：更清晰的项目结构和有序的测试套件
+- ✅ **生产就绪**：经过全面测试和文档化，适合社区使用
+
+**适合**：希望了解代码库的开发者、贡献者和寻求全面文档的用户。
+
+[查看完整更新日志](#version-history--版本历史)
+
+---
+
+### 🔒 重要安全提醒
+
+**⚠️ 在使用和分享本项目前，请务必注意：**
+
+- 🚨 **配置文件包含API密钥**：`config.py` 文件包含您的AI提供商API密钥，绝对不能上传到公开仓库
+- 🛡️ **用户数据保护**：`output/` 和 `autosave/` 目录包含您的创作内容，应保持私有
+- ✅ **安全检查**：项目内置 `github_upload_ready.py` 脚本，上传前请运行安全检查
+- 📖 **详细指南**：参见 [GitHub上传安全指南](GITHUB_UPLOAD_GUIDE.md) 了解完整的安全措施
+
+```bash
+# 运行安全检查
+python github_upload_ready.py
+```
+
+### ✨ 核心特性
+
+#### 🎯 完整的小说生成流程
+
+- **智能大纲生成**：基于用户想法自动生成完整小说结构
+- **角色塑造**：自动创建丰富的人物设定和关系网络
+- **详细大纲扩展**：将简单大纲扩展为详细的章节梗概
+- **故事线生成**：为每章生成详细剧情，确保情节连贯
+- **开头生成**：创建引人入胜的小说开头
+- **段落续写**：智能续写，保持故事连贯性
+- **自动生成**：支持连续生成多章节，可随时暂停继续
+
+#### 🚀 Gradio 5.38.0 现代化界面
+
+- **实时状态显示**：分阶段显示生成进度和状态历史
+- **用户确认机制**：防止意外覆盖已生成内容
+- **智能错误处理**：完善的错误处理和恢复机制
+- **类型安全绑定**：确保组件参数正确匹配
+- **简洁优化界面**：隐藏不常用功能，专注核心体验
+
+#### 🤖 多AI提供商支持
+
+支持10个主流AI提供商，满足不同需求：
+
+| 提供商 | 特点 | 推荐场景 |
+|--------|------|----------|
+| **🌟 OpenRouter** | 多模型聚合，选择丰富 | 高质量创作 |
+| **🧠 Claude** | Anthropic出品，长文本处理强 | 复杂情节 |
+| **💎 Gemini** | Google出品，稳定可靠 | 通用创作 |
+| **🚀 DeepSeek** | 性价比高，中文优化 | 日常创作 |
+| **🏠 LM Studio** | 本地部署，隐私保护 | 离线创作 |
+| **🇨🇳 智谱AI** | 国产GLM模型，中文理解佳 | 中文小说 |
+| **☁️ 阿里云** | 通义千问，长文本模型 | 长篇创作 |
+| **🔥 Fireworks** | 高性能推理，速度快 | 快速创作 |
+| **🤖 Grok** | xAI出品，创新思维 | 创意写作 |
+| **⚡ Lambda** | 成本低，多模型选择 | 经济型创作 |
+
+#### 💾 智能数据管理
+- **本地存储**：数据安全保存在本地文件
+- **自动保存**：创作过程自动备份，防止意外丢失
+- **一键导出**：支持TXT、EPUB等多种格式
+- **数据同步**：界面与后端实时同步
+
+### 🚀 快速开始
+
+#### 📋 系统要求
+
+- **Python**: 3.10+ (推荐 3.10.11)
+- **内存**: 4GB+ 可用内存
+- **网络**: 稳定的网络连接
+- **操作系统**: Windows 10+, macOS 10.15+, Linux
+
+#### ⚡ 快速安装
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/cs2764/AI_Gen_Novel.git
+cd AI_Gen_Novel
+
+# 2. 创建虚拟环境 (推荐)
+python -m venv gradio5_env
+source gradio5_env/bin/activate  # Linux/Mac
+# 或 gradio5_env\Scripts\activate.bat  # Windows
+
+# 3. 安装依赖
+pip install -r requirements_gradio5.txt
+
+# 4. 配置API密钥
+cp config_template.py config.py
+# 编辑 config.py 填入您的API密钥
+
+# 5. 启动应用
+python app.py
+# 或直接运行 start.bat (Windows)
+```
+
+### 🔧 配置API密钥
+
+1. **复制配置模板**：
+   ```bash
+   cp config_template.py config.py
+   ```
+
+2. **编辑配置文件**：
+   ```python
+   # 在 config.py 中填入您的API密钥
+   OPENROUTER_API_KEY = "your_api_key_here"
+   CLAUDE_API_KEY = "your_api_key_here"
+   # ... 其他提供商
+   ```
+
+3. **启动应用**：访问 `http://localhost:7861`
+
+### 🆕 版本更新
+
+#### v3.5.0 (2025-11-05) 🎉
+- 📏 **长章节模式**：4段式生成系统，支持更长章节，显著提升质量和连贯性
+- 🎙️ **TTS文件处理器**：批量处理文本文件添加CosyVoice2语音标记
+- 📊 **Token统计系统**：实时追踪API Token消耗
+- 🧹 **文本净化**：自动移除结构化标签
+- 📖 **最近预览**：仅显示最近5章减轻浏览器负担
+- 🚫 **防重复机制**：增强提示词防止重复内容
+- � ***模块化重构**：app.py和AIGN.py拆分为多个小模块，易于维护
+- 📚 **完整文档**：19个核心文档，双语系统文档
+
+#### v3.4.0 (2025-10-30)
+- 🔧 **GitHub上传准备**：完善的文件清理和版本管理
+- 📁 **测试文件组织**：将测试脚本移至test/目录，保持项目整洁
+- 🛡️ **安全检查增强**：更严格的隐私保护和敏感数据检测
+- 📚 **双语文档支持**：英文和中文双语文档，提升国际化支持
+- 🗂️ **文件管理优化**：清理不必要文件，优化项目结构
+- 📖 **系统文档完善**：新增SYSTEM_DOCS.md，提供完整的系统说明
+
+#### v3.3.0 (2025-08-16)
+- 🔧 **核心引擎重构**：AIGN.py 大幅优化，代码行数从4447行增至5126行，新增679行代码
+- 🎯 **精简模式**：新增精简模式 (`compact_mode`)，减少Token消耗，提升生成效率
+- 📊 **全局状态历史**：引入全局状态历史系统 (`global_status_history`)，完整跟踪生成过程
+- 💾 **自动保存集成**：集成自动保存管理器，确保数据安全性
+- 📏 **内容检测统计**：新增过长内容检测统计系统，智能优化输入长度
+- 📖 **详细大纲功能**：支持详细大纲功能，提供更精确的内容控制
+
+### 📚 文档资源
+
+- 📖 [系统文档](SYSTEM_DOCS.md) - 完整的系统说明
+- 🔧 [安装指南](INSTALL.md) - 详细安装步骤
+- 🔒 [安全指南](GITHUB_UPLOAD_GUIDE.md) - GitHub上传安全措施
+- 🗂️ [文件管理通用准则](GITHUB_FILE_MANAGEMENT_GUIDE.md) - 适用于所有项目的文件管理最佳实践
+- ⚙️ [配置指南](README_Provider_Config.md) - AI提供商配置
+- 💾 [数据管理](LOCAL_DATA_MANAGEMENT.md) - 本地数据管理
+- 🏗️ [架构文档](ARCHITECTURE.md) - 系统架构设计
+
+### ❓ 常见问题
+
+<details>
+<summary><b>Q: 如何获取API密钥？</b></summary>
+
+不同提供商的获取方式：
+- **DeepSeek**: [platform.deepseek.com](https://platform.deepseek.com/)
+- **OpenRouter**: [openrouter.ai](https://openrouter.ai/)
+- **Claude**: [console.anthropic.com](https://console.anthropic.com/)
+- **更多**: 参见[配置指南](README_Provider_Config.md)
+</details>
+
+<details>
+<summary><b>Q: 生成的内容质量如何提升？</b></summary>
+
+1. **详细描述想法**：提供更多背景信息
+2. **调整温度参数**：平衡创意性和一致性
+3. **选择合适模型**：不同模型各有特长
+4. **分步骤优化**：逐步完善大纲和设定
+</details>
+
+<details>
+<summary><b>Q: 数据安全如何保障？</b></summary>
+
+- 所有数据保存在本地
+- API密钥不会上传到云端
+- 支持数据导出和备份
+- 严格的.gitignore保护隐私
+</details>
+
+### 🤝 贡献指南
+
+欢迎参与项目改进！
+
+#### 🔧 开发准备
+```bash
+# 1. fork项目并克隆
+git clone https://github.com/cs2764/AI_Gen_Novel.git
+
+# 2. 创建虚拟环境
+python -m venv gradio5_env
+source gradio5_env/bin/activate  # Linux/Mac
+# 或
+gradio5_env\Scripts\activate     # Windows
+
+# 3. 安装开发依赖
+pip install -r requirements_gradio5.txt
+```
+
+#### 📝 提交规范
+- `feat:` 新功能
+- `fix:` 错误修复  
+- `docs:` 文档更新
+- `style:` 代码格式
+- `refactor:` 重构代码
+- `test:` 测试相关
+
+#### 🛡️ 安全提醒
+- 不要提交包含API密钥的文件
+- 运行 `python github_upload_ready.py` 检查安全性
+- 遵循[安全指南](GITHUB_UPLOAD_GUIDE.md)
+
+### 📄 开源协议
+
+本项目采用 [MIT License](LICENSE) 开源协议。
+
+### 💝 支持项目
+
+如果这个项目对您有帮助，请：
+
+- ⭐ 给项目点个星标
+- 🐛 报告问题和建议  
+- 🤝 参与代码贡献
+- 📢 分享给朋友们
+
+### 📞 联系方式
+
+- 💬 **讨论交流**：[GitHub Discussions](https://github.com/cs2764/AI_Gen_Novel/discussions)
+- 🐛 **问题反馈**：[GitHub Issues](https://github.com/cs2764/AI_Gen_Novel/issues)
+- 📧 **项目主页**：https://github.com/cs2764/AI_Gen_Novel
+
+---
+
+<div align="center">
+
+**🌟 让AI成为您创作路上的最佳伙伴！🌟**
+
+Made with ❤️ by AI Novel Generator Team
+
+</div>
+
+### ⚠️ 重要提醒
+
+#### 虚拟环境管理
 - 📂 `gradio5_env/` 目录包含项目运行必需的所有依赖包
 - 🚫 **请不要删除虚拟环境目录**
 - 📖 如需了解虚拟环境管理详情，请查看 [`VIRTUAL_ENV_MANAGEMENT.md`](VIRTUAL_ENV_MANAGEMENT.md)

@@ -34,6 +34,19 @@ class ProviderConfig:
         if self.provider_routing is None:
             self.provider_routing = {}
 
+# 提供商显示名称映射（用于界面显示）
+PROVIDER_DISPLAY_NAMES = {
+    "deepseek": "DeepSeek",
+    "ali": "Ali (阿里云)",
+    "lmstudio": "LM Studio",
+    "gemini": "Gemini",
+    "openrouter": "OpenRouter",
+    "claude": "Claude",
+    "grok": "Grok",
+    "fireworks": "Fireworks",
+    "lambda": "OpenAI兼容模式"  # Lambda 显示为 OpenAI兼容模式
+}
+
 class DynamicConfigManager:
     """动态配置管理器"""
     
@@ -43,6 +56,11 @@ class DynamicConfigManager:
         self._providers = {}
         self._debug_level = "1"  # 默认调试级别
         self._json_auto_repair = True  # 默认开启JSON自动修复
+        self._cosyvoice_mode = False  # 默认关闭CosyVoice2模式
+        self._tts_provider = ""  # TTS处理专用提供商，空表示使用当前提供商
+        self._tts_model = ""  # TTS处理专用模型，空表示使用当前模型
+        self._tts_api_key = ""  # TTS处理专用API密钥，空表示使用当前API密钥
+        self._tts_base_url = ""  # TTS处理专用基础URL，空表示使用当前基础URL
         self._load_default_configs()
         # 尝试从文件加载配置
         self.load_config_from_file()
@@ -56,7 +74,7 @@ class DynamicConfigManager:
                 api_key="your-deepseek-api-key-here",
                 model_name="deepseek-chat",
                 base_url="https://api.deepseek.com",
-                models=["deepseek-chat", "deepseek-coder"]
+                models=["deepseek-chat", "deepseek-reasoner"]
             ),
             "ali": ProviderConfig(
                 name="ali",
@@ -100,7 +118,7 @@ class DynamicConfigManager:
                 ],
                 provider_routing={
                     # 优先使用支持fp8量化的提供商以获得最佳性能
-                    "order": ["Lambda", "DeepInfra"],
+                    "order": ["novita", "Lambda", "DeepInfra"],
                     "allow_fallbacks": True,  # 允许回退到其他提供商
                     "sort": "throughput",  # 优先按吞吐量排序，fp8量化提供商通常有更高吞吐量
                     "quantizations": ["fp8"]  # 首选fp8量化（如果提供商支持）
@@ -139,6 +157,7 @@ class DynamicConfigManager:
                     "accounts/fireworks/models/mixtral-8x22b-instruct"
                 ]
             ),
+            # OpenAI兼容模式 (Lambda AI) - 支持OpenAI兼容的API接口，提供多种开源模型
             "lambda": ProviderConfig(
                 name="lambda",
                 api_key="your-lambda-api-key-here",
@@ -165,9 +184,18 @@ class DynamicConfigManager:
             self._providers = default_configs
     
     def get_provider_list(self) -> List[str]:
-        """获取所有支持的提供商列表"""
+        """获取所有支持的提供商列表（内部标识符）"""
         with self._config_lock:
             return list(self._providers.keys())
+    
+    def get_provider_display_name(self, provider_name: str) -> str:
+        """获取提供商显示名称"""
+        return PROVIDER_DISPLAY_NAMES.get(provider_name, provider_name.upper())
+    
+    def get_provider_display_list(self) -> Dict[str, str]:
+        """获取提供商显示名称列表（内部名: 显示名）"""
+        with self._config_lock:
+            return {name: self.get_provider_display_name(name) for name in self._providers.keys()}
     
     def get_provider_models(self, provider_name: str, refresh: bool = False) -> List[str]:
         """获取指定提供商的模型列表"""
@@ -179,7 +207,24 @@ class DynamicConfigManager:
                     print(f"❌ 提供商 {provider_name} 不存在于配置中")
                     return []
                 config = self._providers[provider_name]
-                
+            
+            # 深度定制：DeepSeek 模型选项固定为两个，忽略刷新和远程列表
+            if provider_name == "deepseek":
+                allowed = ["deepseek-chat", "deepseek-reasoner"]
+                # 如有必要，更新配置中的模型列表
+                with self._config_lock:
+                    if self._providers[provider_name].models != allowed:
+                        self._providers[provider_name].models = allowed
+                        # 尝试将更改持久化
+                        try:
+                            self.save_config_to_file()
+                        except Exception:
+                            pass
+                print(f"📋 获取 {provider_name} 模型列表，当前有 {len(allowed)} 个模型，refresh={refresh}")
+                print("🔒 DeepSeek 模型选项已固定为: deepseek-chat, deepseek-reasoner")
+                print(f"📤 返回 {provider_name} 模型列表，共 {len(allowed)} 个模型")
+                return allowed
+            
             print(f"📋 获取 {provider_name} 模型列表，当前有 {len(config.models)} 个模型，refresh={refresh}")
             
             # 如果需要刷新或者模型列表为空，尝试从API获取
@@ -279,6 +324,11 @@ class DynamicConfigManager:
                 config_data["current_provider"] = self._current_provider
                 config_data["debug_level"] = self._debug_level
                 config_data["json_auto_repair"] = self._json_auto_repair
+                config_data["cosyvoice_mode"] = self._cosyvoice_mode
+                config_data["tts_provider"] = self._tts_provider
+                config_data["tts_model"] = self._tts_model
+                config_data["tts_api_key"] = self._tts_api_key
+                config_data["tts_base_url"] = self._tts_base_url
                 config_data["providers"] = {}
                 
                 for name, provider_config in self._providers.items():
@@ -308,6 +358,11 @@ class DynamicConfigManager:
                 self._current_provider = config_data.get("current_provider", "deepseek")
                 self._debug_level = config_data.get("debug_level", "1")
                 self._json_auto_repair = config_data.get("json_auto_repair", True)
+                self._cosyvoice_mode = config_data.get("cosyvoice_mode", False)
+                self._tts_provider = config_data.get("tts_provider", "")
+                self._tts_model = config_data.get("tts_model", "")
+                self._tts_api_key = config_data.get("tts_api_key", "")
+                self._tts_base_url = config_data.get("tts_base_url", "")
                 
                 # 不再设置环境变量，统一从配置文件读取
                 
@@ -480,6 +535,95 @@ class DynamicConfigManager:
         except Exception as e:
             print(f"设置JSON自动修复失败: {e}")
             return False
+    
+    def get_cosyvoice_mode(self) -> bool:
+        """获取CosyVoice2模式状态"""
+        with self._config_lock:
+            return self._cosyvoice_mode
+    
+    def set_cosyvoice_mode(self, enabled: bool) -> bool:
+        """设置CosyVoice2模式并保存到配置文件"""
+        try:
+            with self._config_lock:
+                old_state = self._cosyvoice_mode
+                self._cosyvoice_mode = enabled
+                
+                print(f"CosyVoice2模式已{'开启' if enabled else '关闭'} (原状态: {'开启' if old_state else '关闭'})")
+            
+            # 保存到配置文件
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置CosyVoice2模式失败: {e}")
+            return False
+    
+    def get_tts_provider(self) -> str:
+        """获取TTS处理专用提供商"""
+        with self._config_lock:
+            return self._tts_provider
+    
+    def get_tts_model(self) -> str:
+        """获取TTS处理专用模型"""
+        with self._config_lock:
+            return self._tts_model
+    
+    def get_tts_api_key(self) -> str:
+        """获取TTS处理专用API密钥"""
+        with self._config_lock:
+            return getattr(self, '_tts_api_key', '')
+    
+    def get_tts_base_url(self) -> str:
+        """获取TTS处理专用基础URL"""
+        with self._config_lock:
+            return getattr(self, '_tts_base_url', '')
+    
+    def set_tts_config(self, provider: str = "", model: str = "", api_key: str = "", base_url: str = "") -> bool:
+        """设置TTS处理专用配置并保存到配置文件"""
+        try:
+            with self._config_lock:
+                old_provider = self._tts_provider
+                old_model = self._tts_model
+                old_api_key = getattr(self, '_tts_api_key', '')
+                old_base_url = getattr(self, '_tts_base_url', '')
+                
+                self._tts_provider = provider
+                self._tts_model = model
+                self._tts_api_key = api_key
+                self._tts_base_url = base_url
+                
+                provider_desc = provider if provider else "使用当前提供商"
+                model_desc = model if model else "使用当前模型"
+                api_key_desc = "已设置独立密钥" if api_key else "使用主配置密钥"
+                base_url_desc = f"独立URL: {base_url}" if base_url else "使用主配置URL"
+                
+                print(f"TTS配置已更新:")
+                print(f"  提供商: {provider_desc}")
+                print(f"  模型: {model_desc}")
+                print(f"  API密钥: {api_key_desc}")
+                print(f"  基础URL: {base_url_desc}")
+                print(f"原配置: 提供商={old_provider or '使用当前提供商'}, 模型={old_model or '使用当前模型'}")
+            
+            # 保存到配置文件
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置TTS配置失败: {e}")
+            return False
+    
+    def get_effective_tts_config(self):
+        """获取有效的TTS配置（如果TTS专用配置为空，则使用当前配置）"""
+        with self._config_lock:
+            provider = self._tts_provider if self._tts_provider else self._current_provider
+            
+            # 获取有效模型
+            if self._tts_model:
+                model = self._tts_model
+            else:
+                # 使用当前配置的模型
+                current_config = self.get_current_config()
+                model = current_config.model_name if current_config else ""
+            
+            return provider, model
 
 # 全局配置管理器实例
 _config_manager = None

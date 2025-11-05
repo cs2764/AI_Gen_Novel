@@ -24,9 +24,9 @@ try:
     from asyncio_error_fix import apply_all_fixes
     apply_all_fixes()
 except ImportError:
-    print("⚠️ asyncio_error_fix模块未找到，跳过错误修复")
+    print("Warning: asyncio_error_fix module not found, skipping error fix")
 except Exception as e:
-    print(f"⚠️ 应用asyncio修复时出错: {e}")
+    print(f"Warning: Error applying asyncio fix: {e}")
 
 # 独立导入必要的模块，不依赖旧版本app.py
 try:
@@ -37,6 +37,11 @@ try:
     from web_config_interface import get_web_config_interface
     from dynamic_config_manager import get_config_manager
     from default_ideas_manager import get_default_ideas_manager
+    from AIGN_Requirements_Expansion_Prompt import (
+        get_style_analysis_prompt,
+        get_writing_requirements_expansion_prompt,
+        get_embellishment_requirements_expansion_prompt
+    )
 
     # 获取配置状态
     config_is_valid = True  # 总是为True，实际验证在使用时进行
@@ -53,167 +58,33 @@ except ImportError as e:
 
 import gradio as gr
 
-def get_gradio_info():
-    """获取Gradio信息"""
-    version = gr.__version__
-    major_version = int(version.split('.')[0])
-    return {
-        'version': version,
-        'major': major_version,
-        'is_5x': major_version >= 5,
-        'features': {
-            'ssr': major_version >= 5,
-            'streaming': major_version >= 5,
-            'timer': major_version >= 5,
-            'modern_ui': major_version >= 5
-        }
-    }
+# 导入工具函数模块
+from app_utils import (
+    get_gradio_info,
+    find_free_port,
+    format_time_duration,
+    format_status_output,
+    format_storyline_display,
+    open_browser,
+    format_size,
+    get_current_provider_info
+)
 
-def find_free_port(start_port=7861):
-    """查找可用端口，从7861开始避免与旧版本冲突"""
-    for port in range(start_port, start_port + 100):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('', port))
-                return port
-        except OSError:
-            continue
-    return start_port
+# 模块化UI与事件
+from app_ui_components import (
+    create_title_and_header,
+    create_config_section,
+    create_main_layout,
+    create_tts_interface,
+    create_footer,
+)
+from app_event_handlers import bind_all_events
 
-def format_time_duration(seconds, include_seconds=True):
-    """格式化时间为友好的显示格式（几小时几分钟几秒）"""
-    if seconds <= 0:
-        return "0秒" if include_seconds else "0分钟"
-    
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    
-    parts = []
-    if hours > 0:
-        parts.append(f"{hours}小时")
-    if minutes > 0:
-        parts.append(f"{minutes}分钟")
-    if include_seconds and (secs > 0 or len(parts) == 0):
-        parts.append(f"{secs}秒")
-    
-    # 如果没有小时和分钟，且不包含秒数，至少显示1分钟
-    if not parts and not include_seconds:
-        parts.append("1分钟")
-    
-    return "".join(parts)
-
-def format_status_output(messages):
-    """将消息列表格式化为状态输出文本（修复版：最新状态在顶部，保留原始时间戳）"""
-    if not messages:
-        return "📋 准备开始生成...\n══════════════════════════════════════"
-
-    formatted_lines = ["📊 生成状态监控", "══════════════════════════════════════"]
-
-    # 反转消息列表，使最新的状态显示在顶部
-    reversed_messages = list(reversed(messages))
-    
-    # 检查是否有故事线状态信息需要特殊处理
-    storyline_status_shown = False
-
-    for msg in reversed_messages:
-        if isinstance(msg, list) and len(msg) >= 2:
-            role, content = msg[0], msg[1]
-
-            # 检查是否包含时间戳信息（新格式：[role, content, timestamp, start_time]）
-            if len(msg) >= 4:
-                timestamp = msg[2]
-                start_time = msg[3]
-            elif len(msg) >= 3:
-                timestamp = msg[2]
-                start_time = None
-            else:
-                # 兼容旧格式，使用当前时间
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                start_time = None
-
-            if role and content:
-                # 根据角色使用不同的图标
-                if "进度" in role:
-                    icon = "🔄"
-                elif "系统" in role:
-                    icon = "⚙️"
-                elif "错误" in role or "失败" in content:
-                    icon = "❌"
-                elif "完成" in content or "成功" in content:
-                    icon = "✅"
-                else:
-                    icon = "📝"
-
-                # 格式化内容，处理多行显示
-                formatted_content = content.replace("\\n", "\n   ")
-
-                # 如果有开始时间，显示持续时间
-                if start_time:
-                    try:
-                        current_time = datetime.now()
-                        duration = int((current_time - start_time).total_seconds())
-                        formatted_lines.append(f"{icon} [{timestamp}] {role} (用时: {duration}秒)")
-                    except:
-                        formatted_lines.append(f"{icon} [{timestamp}] {role}")
-                else:
-                    formatted_lines.append(f"{icon} [{timestamp}] {role}")
-
-                formatted_lines.append(f"   {formatted_content}")
-                formatted_lines.append("──────────────────────────────────────")
-
-    if len(formatted_lines) <= 2:  # 只有标题行
-        formatted_lines.append("📋 等待开始生成...")
-        formatted_lines.append("══════════════════════════════════════")
-
-    return "\n".join(formatted_lines)
-
-def format_storyline_display(storyline, is_generating=False, show_recent_only=False):
-    """格式化故事线显示"""
-    if not storyline or not storyline.get('chapters'):
-        return "暂无故事线内容" if not is_generating else "正在生成故事线..."
-
-    chapters = storyline['chapters']
-    if not chapters:
-        return "暂无故事线内容" if not is_generating else "正在生成故事线..."
-
-    formatted_lines = []
-
-    # 如果章节太多，只显示最近的章节
-    if show_recent_only and len(chapters) > 20:
-        display_chapters = chapters[-20:]
-        formatted_lines.append(f"📖 故事线 (显示最近20章，共{len(chapters)}章)\n")
-    else:
-        display_chapters = chapters
-        formatted_lines.append(f"📖 故事线 (共{len(chapters)}章)\n")
-
-    for i, chapter in enumerate(display_chapters, 1):
-        if isinstance(chapter, dict):
-            title = chapter.get('title', f'第{i}章')
-            content = chapter.get('content', '暂无内容')
-            # 限制内容长度
-            if len(content) > 200:
-                content = content[:200] + "..."
-            formatted_lines.append(f"第{i}章: {title}\n{content}")
-        else:
-            # 如果是字符串格式
-            if len(str(chapter)) > 200:
-                chapter_text = str(chapter)[:200] + "..."
-            else:
-                chapter_text = str(chapter)
-            formatted_lines.append(f"第{i}章: {chapter_text}")
-
-    if is_generating:
-        formatted_lines.append("\n⏳ 正在生成更多章节...")
-
-    return "\n\n".join(formatted_lines)
-
-def open_browser(url):
-    """延迟打开浏览器"""
-    def delayed_open():
-        time.sleep(2)
-        webbrowser.open(url)
-    threading.Thread(target=delayed_open, daemon=True).start()
+# 导入AI扩展功能模块
+from app_ai_expansion import (
+    expand_writing_requirements,
+    expand_embellishment_requirements
+)
 
 def gen_ouline_button_clicked(aign, user_idea, user_requirements, embellishment_idea, status_text):
     """生成大纲按钮点击处理函数（独立版：修复方法名和添加用户确认）"""
@@ -339,7 +210,7 @@ def gen_ouline_button_clicked(aign, user_idea, user_requirements, embellishment_
 
         # 实时更新状态
         update_counter = 0
-        max_wait_time = 300  # 最大等待时间5分钟
+        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
 
         while gen_ouline_thread.is_alive():
             # 检查是否超时
@@ -538,6 +409,17 @@ def create_gradio5_original_app():
         padding: 10px 0;
         text-align: center;
     }
+    
+    /* 确保所有文本框支持滚动 */
+    .gradio-textbox textarea {
+        overflow-y: auto !important;
+        resize: vertical;
+    }
+    
+    /* 人物列表等多行文本框的滚动优化 */
+    textarea[data-testid="textbox"] {
+        overflow-y: auto !important;
+    }
     """
     
     # 创建Gradio 5.0+应用，保持原版标题
@@ -551,8 +433,8 @@ def create_gradio5_original_app():
         # 初始化AIGN实例
         if ORIGINAL_MODULES_LOADED:
             try:
-                # 动态获取chatLLM实例
-                current_chatLLM = get_chatllm(allow_incomplete=True)
+                # 动态获取chatLLM实例（不包含系统提示词，避免与Agent的sys_prompt重复）
+                current_chatLLM = get_chatllm(allow_incomplete=True, include_system_prompt=False)
                 aign_instance = AIGN(current_chatLLM)
                 update_aign_settings(aign_instance)
                 
@@ -840,12 +722,39 @@ def create_gradio5_original_app():
                             lines=8,
                             interactive=True,
                         )
+                        
+                        # 写作要求扩展按钮
+                        with gr.Row():
+                            expand_writing_compact_btn = gr.Button(
+                                "📝 精简扩展(1000字)", 
+                                variant="secondary",
+                                size="sm"
+                            )
+                            expand_writing_full_btn = gr.Button(
+                                "📚 全面扩展(2000字)", 
+                                variant="secondary",
+                                size="sm"
+                            )
+                        
                         embellishment_idea_text = gr.Textbox(
                             loaded_data["embellishment_idea"],
                             label="润色要求",
                             lines=8,
                             interactive=True,
                         )
+                        
+                        # 润色要求扩展按钮
+                        with gr.Row():
+                            expand_embellishment_compact_btn = gr.Button(
+                                "✨ 精简扩展(1000字)", 
+                                variant="secondary",
+                                size="sm"
+                            )
+                            expand_embellishment_full_btn = gr.Button(
+                                "🎨 全面扩展(2000字)", 
+                                variant="secondary",
+                                size="sm"
+                            )
                         
                         # 导入自动保存数据按钮
                         with gr.Row():
@@ -875,12 +784,43 @@ def create_gradio5_original_app():
                             lines=8,
                             interactive=False,
                         )
+                        
+                        # 写作要求扩展按钮（禁用状态）
+                        with gr.Row():
+                            expand_writing_compact_btn = gr.Button(
+                                "📝 精简扩展(1000字)", 
+                                variant="secondary",
+                                size="sm",
+                                interactive=False
+                            )
+                            expand_writing_full_btn = gr.Button(
+                                "📚 全面扩展(2000字)", 
+                                variant="secondary",
+                                size="sm",
+                                interactive=False
+                            )
+                        
                         embellishment_idea_text = gr.Textbox(
                             "请先配置API密钥",
                             label="润色要求",
                             lines=8,
                             interactive=False,
                         )
+                        
+                        # 润色要求扩展按钮（禁用状态）
+                        with gr.Row():
+                            expand_embellishment_compact_btn = gr.Button(
+                                "✨ 精简扩展(1000字)", 
+                                variant="secondary",
+                                size="sm",
+                                interactive=False
+                            )
+                            expand_embellishment_full_btn = gr.Button(
+                                "🎨 全面扩展(2000字)", 
+                                variant="secondary",
+                                size="sm",
+                                interactive=False
+                            )
                         gen_ouline_button = gr.Button("生成大纲", interactive=False)
                 
                 with gr.Tab("大纲"):
@@ -904,11 +844,23 @@ def create_gradio5_original_app():
                     )
                     character_list_text = gr.Textbox(
                         loaded_data["character_list"],
-                        label="人物列表", lines=16, interactive=True
+                        label="人物列表", 
+                        lines=16, 
+                        max_lines=30,
+                        interactive=True,
+                        show_copy_button=True,
+                        container=True
                     )
                     target_chapters_slider = gr.Slider(
                         minimum=5, maximum=500, value=loaded_data["target_chapters"], step=1,
                         label="目标章节数", interactive=True
+                    )
+                    # 新的长章节功能开关（将一章拆分为4个剧情段分批生成并合并）
+                    long_chapter_feature_checkbox = gr.Checkbox(
+                        label="长章节功能（分4段生成并合并）",
+                        value=True,
+                        interactive=True,
+                        info="开启后：每章拆分为4个剧情段，逐段生成与润色，最后自动合并为完整一章"
                     )
                     gen_detailed_outline_button = gr.Button("生成详细大纲", variant="secondary")
                     detailed_outline_text = gr.Textbox(
@@ -998,9 +950,13 @@ def create_gradio5_original_app():
                             value="<span style='cursor: pointer; color: #666; font-size: 16px; margin-left: 5px;' title='精简模式详细说明'>❓</span>"
                         )
                     
+                    
                     with gr.Row():
-                        auto_generate_button = gr.Button("开始自动生成", variant="primary")
-                        stop_generate_button = gr.Button("停止生成", variant="stop")
+                        auto_generate_button = gr.Button("开始自动生成", variant="primary", interactive=True)
+                        stop_generate_button = gr.Button("停止生成", variant="stop", visible=False, interactive=True)
+                    
+                    # 添加测试按钮
+                    test_button = gr.Button("🟢 测试按钮响应", variant="secondary")
 
                     with gr.Row():
                         refresh_progress_btn = gr.Button("🔄 刷新进度", variant="secondary", size="sm")
@@ -1030,19 +986,21 @@ def create_gradio5_original_app():
 
                     progress_text = gr.Textbox(
                         label="📊 生成进度与状态",
-                        lines=12,
+                        lines=24,
+                        max_lines=50,
                         interactive=False,
                         show_copy_button=True,
                         container=True,
                         elem_classes=["status-panel"],
-                        info="显示详细的生成进度、状态信息和统计数据"
+                        info="显示详细的生成进度、状态信息和统计数据",
+                        autoscroll=True
                     )
                     
                     # 实时数据流显示框
                     realtime_stream_text = gr.Textbox(
                         label="📡 实时数据流",
-                        lines=12,
-                        max_lines=30,
+                        lines=24,
+                        max_lines=40,
                         interactive=False,
                         show_copy_button=True,
                         container=True,
@@ -1087,10 +1045,248 @@ def create_gradio5_original_app():
                     autoscroll=True
                 )
         
+        # TTS文件处理区域
+        with gr.Accordion("🎙️ CosyVoice2 TTS文件处理", open=False):
+            gr.Markdown("### 🎙️ TTS文本处理工具")
+            gr.Markdown("""
+**功能说明**：为现有TXT文件添加CosyVoice2语音合成标记，用于生成有声书。
+
+📋 **处理流程**：
+1. 上传TXT文件（支持多文件批量处理）
+2. 自动检测文件编码（支持UTF-8、GBK、GB18030、Big5等）
+3. 选择TTS模型类型：
+   • cosyvoice2：细粒度标记模式 ([breath]、[sigh]、<strong>等)
+4. 配置AI模型（在设置中配置专用模型，默认使用当前模型）
+5. 智能分段处理，为每段内容添加相应的CosyVoice2标记
+6. 整理文章结构，删除多余空格和空行
+7. 保存到output文件夹，统一使用UTF-8编码
+
+🔧 **编码支持**：
+- 自动检测：UTF-8、GBK、GB18030、Big5、Latin1等
+- 输出格式：统一UTF-8编码，确保最佳兼容性
+- 错误处理：编码检测失败时使用容错模式
+
+⚠️ **重要提示**：原文内容不会被修改或删减，只会添加语音标记和整理格式。
+            """)
+            
+            with gr.Row():
+                with gr.Column(scale=2):
+                    # 文件上传
+                    tts_file_upload = gr.File(
+                        label="📁 上传TXT文件",
+                        file_count="multiple",
+                        file_types=[".txt"],
+                        interactive=True
+                    )
+                    
+                    # TTS模型选择
+                    tts_model_selector = gr.Dropdown(
+                        choices=["cosyvoice2"],
+                        value="cosyvoice2",
+                        label="🤖 TTS模型类型",
+                        interactive=True,
+                        info="cosyvoice2: 细粒度标记模式，添加语音标记如[breath]、<strong>等"
+                    )
+                    
+                    # 显示当前使用的AI模型
+                    if ORIGINAL_MODULES_LOADED:
+                        try:
+                            config_manager = get_config_manager()
+                            effective_provider, effective_model = config_manager.get_effective_tts_config()
+                            current_ai_model_display = f"当前AI模型: {effective_provider.upper()} - {effective_model}"
+                        except:
+                            current_ai_model_display = "当前AI模型: 未配置"
+                    else:
+                        current_ai_model_display = "当前AI模型: 演示模式"
+                    
+                    tts_current_model_info = gr.Textbox(
+                        label="🔧 处理模型信息",
+                        value=current_ai_model_display,
+                        interactive=False,
+                        lines=1
+                    )
+                    
+                    # 添加刷新模型信息按钮
+                    tts_refresh_info_btn = gr.Button("🔄 刷新模型信息", size="sm")
+                    
+                    # 处理按钮
+                    with gr.Row():
+                        tts_process_btn = gr.Button("🎙️ 开始处理", variant="primary")
+                        tts_stop_btn = gr.Button("⏹️ 停止处理", variant="stop", visible=False)
+                
+                with gr.Column(scale=3):
+                    # 状态显示
+                    tts_status_display = gr.Textbox(
+                        label="📊 处理状态",
+                        lines=15,
+                        interactive=False,
+                        value="📋 准备就绪，请上传文件并点击开始处理...\n══════════════════════════════════════"
+                    )
+
         # 页面底部信息 - 保持原版样式
         gr.Markdown("---")
         gr.Markdown("💡 **项目地址**: [github.com/cs2764/AI_Gen_Novel](https://github.com/cs2764/AI_Gen_Novel)", elem_classes=["footer-info"])
         
+        # TTS文件处理功能
+        if ORIGINAL_MODULES_LOADED:
+            try:
+                from tts_file_processor import get_tts_processor
+                tts_processor = get_tts_processor()
+                
+                def tts_process_files(files, tts_model):
+                    """TTS文件处理函数"""
+                    if not files:
+                        yield "❌ 请先上传TXT文件"
+                        return
+                    
+                    file_paths = [f.name for f in files]
+                    for status in tts_processor.process_files(file_paths, tts_model):
+                        yield status
+                
+                def tts_stop_processing():
+                    """停止TTS处理"""
+                    for status in tts_processor.stop_processing():
+                        yield status
+                
+                def tts_process_with_buttons(files, tts_model):
+                    """带按钮状态管理的TTS处理"""
+                    try:
+                        print(f"🔧 TTS处理开始 - 文件数量: {len(files) if files else 0}, 模型: {tts_model}")
+                        
+                        # 更新模型信息
+                        current_model_info = update_tts_model_info()
+                        
+                        # 显示停止按钮，隐藏开始按钮，并更新模型信息
+                        yield (
+                            "🎙️ 开始处理...",
+                            gr.Button(visible=False),  # 隐藏开始按钮
+                            gr.Button(visible=True),   # 显示停止按钮
+                            current_model_info         # 更新模型信息
+                        )
+                        
+                        if not files:
+                            yield (
+                                "❌ 请先上传TXT文件",
+                                gr.Button(visible=True),   # 显示开始按钮
+                                gr.Button(visible=False),  # 隐藏停止按钮
+                                current_model_info         # 显示当前模型信息
+                            )
+                            return
+                        
+                        print(f"📁 处理文件: {[f.name for f in files]}")
+                        file_paths = [f.name for f in files]
+                        
+                        for status in tts_processor.process_files(file_paths, tts_model):
+                            yield (
+                                status,
+                                gr.Button(visible=False),  # 保持隐藏开始按钮
+                                gr.Button(visible=True),   # 保持显示停止按钮
+                                current_model_info         # 保持显示当前模型信息
+                            )
+                    
+                    except Exception as e:
+                        error_msg = f"❌ TTS处理出错: {str(e)}"
+                        print(f"TTS处理异常: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        
+                        yield (
+                            error_msg,
+                            gr.Button(visible=True),   # 显示开始按钮
+                            gr.Button(visible=False),  # 隐藏停止按钮
+                            update_tts_model_info()    # 更新模型信息
+                        )
+                    
+                    finally:
+                        # 处理完成，恢复按钮状态，并更新模型信息
+                        try:
+                            final_model_info = update_tts_model_info()
+                            final_status = "✅ 处理完成"
+                        except:
+                            final_model_info = "当前AI模型: 未配置"
+                            final_status = "⚠️ 处理结束"
+                        
+                        yield (
+                            final_status,
+                            gr.Button(visible=True),   # 显示开始按钮
+                            gr.Button(visible=False),  # 隐藏停止按钮
+                            final_model_info           # 更新模型信息
+                        )
+                
+                def update_tts_model_info():
+                    """更新TTS模型信息显示"""
+                    try:
+                        config_manager = get_config_manager()
+                        effective_provider, effective_model = config_manager.get_effective_tts_config()
+                        return f"当前AI模型: {effective_provider.upper()} - {effective_model}"
+                    except Exception as e:
+                        print(f"更新TTS模型信息失败: {e}")
+                        return "当前AI模型: 未配置"
+                
+                # 绑定刷新事件
+                tts_refresh_info_btn.click(
+                    fn=update_tts_model_info,
+                    outputs=[tts_current_model_info]
+                )
+                
+                # 绑定TTS处理事件
+                tts_process_btn.click(
+                    fn=tts_process_with_buttons,
+                    inputs=[tts_file_upload, tts_model_selector],
+                    outputs=[tts_status_display, tts_process_btn, tts_stop_btn, tts_current_model_info]
+                )
+                
+                tts_stop_btn.click(
+                    fn=tts_stop_processing,
+                    outputs=[tts_status_display]
+                )
+                
+                print("✅ TTS文件处理器初始化成功")
+                print(f"🔧 TTS处理器对象: {tts_processor}")
+                print("✅ TTS事件绑定成功")
+            except Exception as e:
+                print(f"⚠️ TTS文件处理器初始化失败: {e}")
+                import traceback
+                traceback.print_exc()
+                tts_processor = None
+        
+        else:
+            tts_processor = None
+            print("⚠️ ORIGINAL_MODULES_LOADED=False，跳过TTS处理器初始化")
+        
+        # TTS全局事件（如果TTS模块已加载且初始化成功）
+        if ORIGINAL_MODULES_LOADED and 'tts_current_model_info' in locals():
+            try:
+                # 定义全局TTS模型信息更新函数
+                def global_update_tts_model_info():
+                    """全局TTS模型信息更新函数"""
+                    try:
+                        config_manager = get_config_manager()
+                        effective_provider, effective_model = config_manager.get_effective_tts_config()
+                        return f"当前AI模型: {effective_provider.upper()} - {effective_model}"
+                    except:
+                        return "当前AI模型: 未配置"
+                
+                # 页面加载时刷新模型信息
+                demo.load(
+                    fn=global_update_tts_model_info,
+                    outputs=[tts_current_model_info]
+                )
+                
+                # 添加定时器定期更新TTS模型信息
+                timer_tts = gr.Timer(value=5, active=True)  # 每5秒检查一次
+                
+                timer_tts.tick(
+                    fn=global_update_tts_model_info,
+                    outputs=[tts_current_model_info]
+                )
+                
+                print("✅ TTS全局事件绑定成功")
+            except Exception as e:
+                print(f"⚠️ TTS全局事件绑定失败: {e}")
+                import traceback
+                traceback.print_exc()
+
         # 移除浏览器cookie保存功能 - 现在使用本地文件保存
 
         # 添加数据管理Tab - 保持原版功能
@@ -1160,7 +1356,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 600  # 最大等待时间10分钟
+                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
 
                         while gen_thread.is_alive():
                             if time.time() - start_time > max_wait_time:
@@ -1228,7 +1424,7 @@ def create_gradio5_original_app():
                             gr.Button(visible=True),
                         ]
 
-                def gen_beginning_button_clicked(aign, status_output, novel_outline, user_requirements, embellishment_idea, enable_chapters, enable_ending):
+                def gen_beginning_button_clicked(aign, status_output, novel_outline, user_requirements, embellishment_idea, enable_chapters, enable_ending, novel_title, character_list):
                     """生成开头按钮点击处理函数"""
                     try:
                         import threading
@@ -1242,8 +1438,8 @@ def create_gradio5_original_app():
                         aign.user_requirements = user_requirements
                         aign.embellishment_idea = embellishment_idea
                         aign.novel_outline = novel_outline
-                        aign.novel_title = novel_title
-                        aign.character_list = character_list
+                        aign.novel_title = novel_title or getattr(aign, 'novel_title', '')
+                        aign.character_list = character_list or getattr(aign, 'character_list', '')
 
                         # 初始化状态历史
                         if not hasattr(aign, 'global_status_history'):
@@ -1270,7 +1466,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 300  # 最大等待时间5分钟
+                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
 
                         while gen_thread.is_alive():
                             if time.time() - start_time > max_wait_time:
@@ -1293,10 +1489,15 @@ def create_gradio5_original_app():
                                 else:
                                     status_history.append(["开头生成进度", progress_text, current_timestamp, generation_start_time])
 
+                                # 仅显示最近5章内容以降低浏览器负担
+                                recent_preview = getattr(aign, 'get_recent_novel_preview', None)
+                                preview_text = "生成中..." if content_chars == 0 else (recent_preview(5) if callable(recent_preview) else aign.novel_content)
                                 yield [
                                     aign,
                                     format_status_output(status_history),
-                                    "生成中..." if content_chars == 0 else aign.novel_content,
+                                    getattr(aign, 'writing_plan', '') or '',
+                                    getattr(aign, 'temp_setting', '') or '',
+                                    preview_text,
                                     getattr(aign, 'current_output_file', '') or '',
                                     gr.Button(visible=False),
                                 ]
@@ -1313,10 +1514,15 @@ def create_gradio5_original_app():
                             summary_text = f"✅ 小说开头生成完成\n   • 字数: {len(aign.novel_content)} 字\n   • 输出文件: {getattr(aign, 'current_output_file', '未设置')}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
                             status_history.append(["开头生成", summary_text, final_timestamp, generation_start_time])
 
+                            # 仅显示最近5章内容以降低浏览器负担
+                            recent_preview = getattr(aign, 'get_recent_novel_preview', None)
+                            preview_text = recent_preview(5) if callable(recent_preview) else aign.novel_content
                             yield [
                                 aign,
                                 format_status_output(status_history),
-                                aign.novel_content,
+                                getattr(aign, 'writing_plan', '') or '',
+                                getattr(aign, 'temp_setting', '') or '',
+                                preview_text,
                                 getattr(aign, 'current_output_file', '') or '',
                                 gr.Button(visible=True),
                             ]
@@ -1327,6 +1533,8 @@ def create_gradio5_original_app():
                             yield [
                                 aign,
                                 format_status_output(status_history),
+                                getattr(aign, 'writing_plan', '') or '',
+                                getattr(aign, 'temp_setting', '') or '',
                                 error_text,
                                 "",
                                 gr.Button(visible=True),
@@ -1342,19 +1550,24 @@ def create_gradio5_original_app():
                             gr.Button(visible=True),
                         ]
 
-                def gen_next_paragraph_button_clicked(aign, status_output, user_idea, novel_outline, writing_memory, temp_setting, writing_plan, user_requirements, embellishment_idea, compact_mode):
+                def gen_next_paragraph_button_clicked(aign, status_output, user_idea, novel_outline, writing_memory, temp_setting, writing_plan, user_requirements, embellishment_idea, compact_mode, long_chapter_feature, novel_content):
                     """生成下一段落按钮点击处理函数"""
                     try:
                         import threading
                         import time
 
                         print(f"📝 开始生成下一段落...")
-                        print(f"📝 当前内容长度: {len(novel_content)} 字符")
+                        print(f"📝 当前内容长度: {len(novel_content or '')} 字符")
 
                         # 设置参数
                         aign.user_requirements = user_requirements
                         aign.embellishment_idea = embellishment_idea
-                        aign.novel_content = novel_content
+                        # 同步界面开关
+                        aign.compact_mode = bool(compact_mode)
+                        if hasattr(aign, 'long_chapter_mode'):
+                            # 新长章节功能：仅作为分段生成开关使用，不再调整提示词
+                            aign.long_chapter_mode = bool(long_chapter_feature)
+                        aign.novel_content = novel_content or getattr(aign, 'novel_content', '')
 
                         # 初始化状态历史
                         if not hasattr(aign, 'global_status_history'):
@@ -1367,7 +1580,7 @@ def create_gradio5_original_app():
                         start_timestamp = generation_start_time.strftime("%H:%M:%S")
 
                         # 添加开始状态
-                        status_history.append(["段落生成", f"📝 开始生成下一段落...\n   • 当前内容: {len(novel_content)} 字符\n   • 输出文件: {output_file}", start_timestamp, generation_start_time])
+                        status_history.append(["段落生成", f"📝 开始生成下一段落...\n   • 当前内容: {len(novel_content or '')} 字符\n   • 输出文件: {getattr(aign, 'current_output_file', '')}", start_timestamp, generation_start_time])
 
                         # 记录生成前的内容长度
                         original_length = len(novel_content)
@@ -1384,7 +1597,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 180  # 最大等待时间3分钟
+                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
 
                         while gen_thread.is_alive():
                             if time.time() - start_time > max_wait_time:
@@ -1408,11 +1621,16 @@ def create_gradio5_original_app():
                                 else:
                                     status_history.append(["段落生成进度", progress_text, current_timestamp, generation_start_time])
 
+                                # 仅显示最近5章内容以降低浏览器负担
+                                recent_preview = getattr(aign, 'get_recent_novel_preview', None)
+                                preview_text = (recent_preview(5) if callable(recent_preview) else aign.novel_content) if aign.novel_content else (novel_content or '')
                                 yield [
                                     aign,
                                     format_status_output(status_history),
-                                    aign.novel_content if aign.novel_content else novel_content,
-                                    getattr(aign, 'current_output_file', '') or output_file,
+                                    getattr(aign, 'writing_plan', '') or '',
+                                    getattr(aign, 'temp_setting', '') or '',
+                                    getattr(aign, 'writing_memory', '') or '',
+                                    preview_text,
                                     gr.Button(visible=False),
                                 ]
 
@@ -1429,11 +1647,16 @@ def create_gradio5_original_app():
                             summary_text = f"✅ 段落生成完成\n   • 新增字数: {new_chars} 字\n   • 总字数: {len(aign.novel_content)} 字\n   • 输出文件: {getattr(aign, 'current_output_file', '未设置')}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
                             status_history.append(["段落生成", summary_text, final_timestamp, generation_start_time])
 
+                            # 仅显示最近5章内容以降低浏览器负担
+                            recent_preview = getattr(aign, 'get_recent_novel_preview', None)
+                            preview_text = recent_preview(5) if callable(recent_preview) else aign.novel_content
                             yield [
                                 aign,
                                 format_status_output(status_history),
-                                aign.novel_content,
-                                getattr(aign, 'current_output_file', '') or output_file,
+                                getattr(aign, 'writing_plan', '') or '',
+                                getattr(aign, 'temp_setting', '') or '',
+                                getattr(aign, 'writing_memory', '') or '',
+                                preview_text,
                                 gr.Button(visible=True),
                             ]
                         else:
@@ -1443,8 +1666,10 @@ def create_gradio5_original_app():
                             yield [
                                 aign,
                                 format_status_output(status_history),
-                                aign.novel_content if aign.novel_content else novel_content,
-                                getattr(aign, 'current_output_file', '') or output_file,
+                                getattr(aign, 'writing_plan', '') or '',
+                                getattr(aign, 'temp_setting', '') or '',
+                                getattr(aign, 'writing_memory', '') or '',
+                                aign.novel_content if aign.novel_content else (novel_content or ''),
                                 gr.Button(visible=True),
                             ]
 
@@ -1458,7 +1683,7 @@ def create_gradio5_original_app():
                             gr.Button(visible=True),
                         ]
 
-                def gen_storyline_button_clicked(aign, user_idea, user_requirements, embellishment_idea, target_chapters, status_text):
+                def gen_storyline_button_clicked(aign, user_idea, user_requirements, embellishment_idea, novel_outline, character_list, target_chapters, status_text):
                     """生成故事线按钮点击处理函数"""
                     try:
                         import threading
@@ -1471,6 +1696,8 @@ def create_gradio5_original_app():
                         aign.user_idea = user_idea
                         aign.user_requirements = user_requirements
                         aign.embellishment_idea = embellishment_idea
+                        aign.novel_outline = novel_outline or getattr(aign, 'novel_outline', '')
+                        aign.character_list = character_list or getattr(aign, 'character_list', '')
                         aign.target_chapter_count = target_chapters
 
                         # 清空现有故事线
@@ -1501,7 +1728,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 900  # 最大等待时间15分钟
+                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
 
                         timeout_notified = False
                         while gen_thread.is_alive():
@@ -1603,6 +1830,17 @@ def create_gradio5_original_app():
                             generated_count = len(chapters)
                             completion_rate = (generated_count / target_chapters * 100) if target_chapters > 0 else 0
                             
+                            # 统计分段识别情况
+                            segments_ok = 0
+                            for ch in chapters:
+                                try:
+                                    segs = ch.get('plot_segments') or ch.get('segments') or []
+                                    if isinstance(segs, list) and len(segs) == 4:
+                                        segments_ok += 1
+                                except Exception:
+                                    pass
+                            segments_info = f" | 分段OK {segments_ok}/{generated_count}"
+
                             # 获取故事线状态信息
                             storyline_status_info = aign.get_storyline_status_info() if hasattr(aign, 'get_storyline_status_info') else {}
                             
@@ -1612,8 +1850,8 @@ def create_gradio5_original_app():
                                 timeout_info = "\n   • 注意: 生成过程中出现API超时，但已完成"
                             
                             if completion_rate >= 100:
-                                summary_text = f"✅ 故事线生成完成\n   • 成功生成: {generated_count}/{target_chapters} 章\n   • 完成率: 100%{timeout_info}"
-                                storyline_status = f"✅ 已完成 {generated_count} 章"
+                                summary_text = f"✅ 故事线生成完成\n   • 成功生成: {generated_count}/{target_chapters} 章\n   • 完成率: 100%{timeout_info}\n   • 分段识别: {segments_ok}/{generated_count} 章包含4段"
+                                storyline_status = f"✅ 已完成 {generated_count} 章{segments_info}"
                             else:
                                 failed_info = ""
                                 if storyline_status_info.get('failed_chapters'):
@@ -1629,8 +1867,8 @@ def create_gradio5_original_app():
                                     top_suggestions = repair_info['suggestions'][:2]  # 只显示前2个建议
                                     repair_tips = f"\n   💡 修复建议: {'; '.join(top_suggestions)}"
                                 
-                                summary_text = f"⚠️ 故事线部分完成\n   • 成功生成: {generated_count}/{target_chapters} 章\n   • 完成率: {completion_rate:.1f}%{failed_info}{repair_tips}{timeout_info}"
-                                storyline_status = f"⚠️ 已生成 {generated_count}/{target_chapters} 章"
+                                summary_text = f"⚠️ 故事线部分完成\n   • 成功生成: {generated_count}/{target_chapters} 章\n   • 完成率: {completion_rate:.1f}%{failed_info}{repair_tips}{timeout_info}\n   • 分段识别: {segments_ok}/{generated_count} 章包含4段"
+                                storyline_status = f"⚠️ 已生成 {generated_count}/{target_chapters} 章{segments_info}"
                             
                             summary_text += f"\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
                             
@@ -1864,14 +2102,39 @@ def create_gradio5_original_app():
                             error_msg
                         ]
 
-                def auto_generate_button_clicked(aign, target_chapters, enable_chapters, enable_ending, user_requirements, embellishment_idea, compact_mode):
+                def auto_generate_button_clicked(aign, target_chapters, enable_chapters, enable_ending, user_requirements, embellishment_idea, compact_mode, long_chapter_feature):
                     """自动生成按钮点击处理函数"""
                     try:
+                        # 从全局配置读取CosyVoice2模式
+                        from dynamic_config_manager import get_config_manager
+                        config_manager = get_config_manager()
+                        cosyvoice_mode = config_manager.get_cosyvoice_mode()
+                        
                         print(f"🚀 开始自动生成...")
                         print(f"📊 目标章节数: {target_chapters}")
+                        print(f"🎙️ CosyVoice2模式: {cosyvoice_mode}")
 
                         # 设置目标章节数
                         aign.target_chapter_count = target_chapters
+                        
+                        # 应用界面选项到AIGN
+                        aign.enable_chapters = bool(enable_chapters)
+                        aign.enable_ending = bool(enable_ending)
+                        aign.compact_mode = bool(compact_mode)
+                        if hasattr(aign, 'long_chapter_mode'):
+                            # 新长章节功能：仅作为分段生成开关使用，不再调整提示词
+                            aign.long_chapter_mode = bool(long_chapter_feature)
+                        
+                        # 设置CosyVoice2模式
+                        aign.cosyvoice_mode = cosyvoice_mode
+                        
+                        # 更新润色器提示词（根据CosyVoice模式）
+                        if hasattr(aign, 'updateEmbellishersForCosyVoice'):
+                            aign.updateEmbellishersForCosyVoice()
+                        
+                        # 保存用户设置
+                        if hasattr(aign, 'save_user_settings'):
+                            aign.save_user_settings()
 
                         # 初始化状态历史
                         if not hasattr(aign, 'global_status_history'):
@@ -1882,21 +2145,24 @@ def create_gradio5_original_app():
                         generation_start_time = datetime.now()
                         start_timestamp = generation_start_time.strftime("%H:%M:%S")
 
-                        # 添加开始状态
-                        status_history.append(["自动生成", f"🚀 开始自动生成...\n   • 目标章节数: {target_chapters}\n   • 模式: 自动化生成", start_timestamp, generation_start_time])
+                        # 添加开始状态（包含CosyVoice模式信息）
+                        mode_info = "自动化生成" + ("（CosyVoice2语音版）" if cosyvoice_mode else "")
+                        status_history.append(["自动生成", f"🚀 开始自动生成...\n   • 目标章节数: {target_chapters}\n   • 模式: {mode_info}", start_timestamp, generation_start_time])
 
                         # 启动自动生成
                         try:
                             aign.autoGenerate(target_chapters)
                             success_text = f"✅ 自动生成已启动\n   • 目标章节数: {target_chapters}\n   • 状态: 后台运行中"
+                            if cosyvoice_mode:
+                                success_text += "\n   • 🎙️ CosyVoice2模式已开启"
                             status_history.append(["自动生成", success_text, datetime.now().strftime("%H:%M:%S"), generation_start_time])
 
                             return [
                                 aign,
                                 format_status_output(status_history),
                                 "自动生成已启动，请查看状态日志",
-                                gr.Button(visible=False),  # 隐藏自动生成按钮
-                                gr.Button(visible=True)    # 显示停止生成按钮
+                                gr.update(visible=False),  # 隐藏自动生成按钮
+                                gr.update(visible=True)    # 显示停止生成按钮
                             ]
                         except Exception as e:
                             error_text = f"❌ 自动生成启动失败: {str(e)}"
@@ -1906,8 +2172,8 @@ def create_gradio5_original_app():
                                 aign,
                                 format_status_output(status_history),
                                 error_text,
-                                gr.Button(visible=True),   # 显示自动生成按钮
-                                gr.Button(visible=False)   # 隐藏停止生成按钮
+                                gr.update(visible=True),   # 显示自动生成按钮
+                                gr.update(visible=False)   # 隐藏停止生成按钮
                             ]
 
                     except Exception as e:
@@ -1916,8 +2182,8 @@ def create_gradio5_original_app():
                             aign,
                             error_msg,
                             error_msg,
-                            gr.Button(visible=True),   # 显示自动生成按钮
-                            gr.Button(visible=False)   # 隐藏停止生成按钮
+                            gr.update(visible=True),   # 显示自动生成按钮
+                            gr.update(visible=False)   # 隐藏停止生成按钮
                         ]
 
                 def stop_generate_button_clicked(aign):
@@ -1944,8 +2210,8 @@ def create_gradio5_original_app():
                             aign,
                             format_status_output(status_history),
                             "已发送停止信号",
-                            gr.Button(visible=True),   # 显示自动生成按钮
-                            gr.Button(visible=False)   # 隐藏停止生成按钮
+                            gr.update(visible=True),   # 显示自动生成按钮
+                            gr.update(visible=False)   # 隐藏停止生成按钮
                         ]
 
                     except Exception as e:
@@ -1954,8 +2220,8 @@ def create_gradio5_original_app():
                             aign,
                             error_msg,
                             error_msg,
-                            gr.Button(visible=True),   # 显示自动生成按钮
-                            gr.Button(visible=False)   # 隐藏停止生成按钮
+                            gr.update(visible=True),   # 显示自动生成按钮
+                            gr.update(visible=False)   # 隐藏停止生成按钮
                         ]
 
                 def update_progress_demo(*args):
@@ -1978,8 +2244,8 @@ def create_gradio5_original_app():
                             # 获取详细状态信息
                             detailed_status = aign_instance.get_detailed_status()
 
-                            # 获取最近的日志（倒序显示，最新的在前）
-                            recent_logs = aign_instance.get_recent_logs(10, reverse=True) if hasattr(aign_instance, 'get_recent_logs') else []
+                            # 获取最近的日志（倒序显示，最新的在前，只显示5条）
+                            recent_logs = aign_instance.get_recent_logs(5, reverse=True) if hasattr(aign_instance, 'get_recent_logs') else []
                             log_text = "\n".join(recent_logs) if recent_logs else "暂无生成日志"
 
                             # 解构详细状态
@@ -2019,10 +2285,30 @@ def create_gradio5_original_app():
                                 if overlength_stats:
                                     overlength_display = f"\n\n{overlength_stats}"
                             
-                            # 计算预计总字数
+                            # 获取Token累积统计信息
+                            token_display = ""
+                            if hasattr(aign_instance, 'get_token_accumulation_display'):
+                                token_stats = aign_instance.get_token_accumulation_display(show_details=False)
+                                if token_stats:
+                                    token_display = f"\n\n{token_stats}"
+                            
+                            # 计算预计总字数（基于实际平均值）
                             target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
+                            current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
                             current_chars = content_stats.get('total_chars', 0)
-                            estimated_total_chars = target_chapters * 2500  # 假设平均每章2500字
+                            
+                            # 基于已生成内容计算实际平均字数
+                            if current_chapter_count > 0 and current_chars > 0:
+                                actual_avg_per_chapter = current_chars / current_chapter_count
+                                print(f"📊 使用实际平均字数: {actual_avg_per_chapter:.0f} 字符/章 (已生成{current_chapter_count}章，共{current_chars}字符)")
+                                if actual_avg_per_chapter > 50000:
+                                    print(f"⚠️ 检测到异常平均字数: {actual_avg_per_chapter:.0f}，使用默认值12000")
+                                    actual_avg_per_chapter = 12000
+                            else:
+                                actual_avg_per_chapter = 12000
+                                print(f"📊 使用默认平均字数: {actual_avg_per_chapter} 字符/章 (尚未生成章节)")
+                            
+                            estimated_total_chars = int(target_chapters * actual_avg_per_chapter)
                             
                             # 构建进度文本
                             progress_text = f"""📊 生成进度监控
@@ -2036,7 +2322,7 @@ def create_gradio5_original_app():
 • 人物: {format_size(content_stats.get('character_list_chars', 0))}
 • 详细大纲: {format_size(content_stats.get('detailed_outline_chars', 0))}
 • 正文内容: {format_size(content_stats.get('total_chars', 0))}
-• 预计总字数: {format_size(estimated_total_chars)}
+• 预计总字数: {format_size(estimated_total_chars)}{token_display}
 
 📖 故事线统计:
 • 章节数: {storyline_stats.get('chapters_count', 0)} 章
@@ -2046,11 +2332,12 @@ def create_gradio5_original_app():
 • 大纲: {'✅ 已完成' if 'outline' in preparation_status and '已生成' in preparation_status['outline'] else '⏳ 待生成'}
 • 人物: {'✅ 已完成' if 'character_list' in preparation_status and '已生成' in preparation_status['character_list'] else '⏳ 待生成'}
 • 故事线: {'✅ 已完成' if 'storyline' in preparation_status and '已生成' in preparation_status['storyline'] else '⏳ 待生成'}
+• CosyVoice2: {'🎙️ 已启用' if hasattr(aign_instance, 'cosyvoice_mode') and aign_instance.cosyvoice_mode else '🔇 未启用'}
 
 💾 增强型自动保存: {auto_save_info}
 • 保存内容：用户想法、写作要求、润色要求、所有生成内容{overlength_display}
 
-📝 最新操作日志:
+📝 最新操作日志（最近5条）:
 {log_text}"""
 
                             # 获取实时流内容
@@ -2058,10 +2345,13 @@ def create_gradio5_original_app():
                             if hasattr(aign_instance, 'get_current_stream_content'):
                                 stream_content = aign_instance.get_current_stream_content()
 
+                            # 仅显示最近5章内容以降低浏览器负担
+                            recent_preview = getattr(aign_instance, 'get_recent_novel_preview', None)
+                            preview_text = recent_preview(5) if callable(recent_preview) else (getattr(aign_instance, 'novel_content', '') or '')
                             return [
                                 progress_text,
                                 getattr(aign_instance, 'current_output_file', '') or '',
-                                getattr(aign_instance, 'novel_content', '') or '',
+                                preview_text,
                                 stream_content
                             ]
                         else:
@@ -2085,9 +2375,22 @@ def create_gradio5_original_app():
                             except:
                                 auto_save_info = "检查失败"
 
-                            # 计算预计总字数（简化版）
+                            # 计算预计总字数（简化版，基于实际平均值）
                             target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
-                            estimated_total_chars = target_chapters * 2500  # 假设平均每章2500字
+                            current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
+                            
+                            # 基于已生成内容计算实际平均字数
+                            if current_chapter_count > 0 and content_chars > 0:
+                                actual_avg_per_chapter = content_chars / current_chapter_count
+                                print(f"📊 使用实际平均字数: {actual_avg_per_chapter:.0f} 字符/章 (已生成{current_chapter_count}章，共{content_chars}字符)")
+                                if actual_avg_per_chapter > 50000:
+                                    print(f"⚠️ 检测到异常平均字数: {actual_avg_per_chapter:.0f}，使用默认值12000")
+                                    actual_avg_per_chapter = 12000
+                            else:
+                                actual_avg_per_chapter = 12000
+                                print(f"📊 使用默认平均字数: {actual_avg_per_chapter} 字符/章 (尚未生成章节)")
+                            
+                            estimated_total_chars = int(target_chapters * actual_avg_per_chapter)
                             
                             progress_text = f"""📊 生成进度监控
 {'='*50}
@@ -2114,10 +2417,13 @@ def create_gradio5_original_app():
                             if hasattr(aign_instance, 'get_current_stream_content'):
                                 stream_content = aign_instance.get_current_stream_content()
 
+                            # 仅显示最近5章内容以降低浏览器负担
+                            recent_preview = getattr(aign_instance, 'get_recent_novel_preview', None)
+                            preview_text = recent_preview(5) if callable(recent_preview) else (getattr(aign_instance, 'novel_content', '') or '')
                             return [
                                 progress_text,
                                 getattr(aign_instance, 'current_output_file', '') or '',
-                                getattr(aign_instance, 'novel_content', '') or '',
+                                preview_text,
                                 stream_content
                             ]
                     except Exception as e:
@@ -2235,8 +2541,29 @@ def create_gradio5_original_app():
                                 plot_summary = plot_summary[:200] + "..."
 
                             formatted_text += f"【第{ch_num}章】{title}\n"
-                            formatted_text += f"{plot_summary}\n\n"
+                            formatted_text += f"{plot_summary}\n"
 
+                            # 显示4个剧情分段（如果存在）
+                            segments = []
+                            try:
+                                segments = chapter.get('plot_segments') or chapter.get('segments') or []
+                            except Exception:
+                                segments = []
+                            if isinstance(segments, list) and len(segments) > 0:
+                                formatted_text += "分段：\n"
+                                for seg in segments[:4]:
+                                    idx = seg.get('index', len(segments)) if isinstance(seg, dict) else None
+                                    seg_title = seg.get('segment_title', '') if isinstance(seg, dict) else ''
+                                    seg_sum = seg.get('segment_summary', '') if isinstance(seg, dict) else ''
+                                    # 截断摘要
+                                    if isinstance(seg_sum, str) and len(seg_sum) > 120:
+                                        seg_sum = seg_sum[:120] + "..."
+                                    idx_disp = f"{idx}" if idx is not None else "?"
+                                    title_disp = f"《{seg_title}》" if seg_title else ""
+                                    formatted_text += f"  - 第{idx_disp}段{title_disp}：{seg_sum}\n"
+                            formatted_text += "\n"
+
+                            
                         # 如果显示的是部分章节，添加提示
                         if is_generating and show_recent_only and len(chapters) > len(display_chapters):
                             formatted_text += f"... 还有 {len(chapters) - len(display_chapters)} 章内容 ...\n"
@@ -2252,6 +2579,32 @@ def create_gradio5_original_app():
                     import_auto_saved_data_handler,
                     [aign],
                     [import_result_text, import_result_text, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, novel_title_text, character_list_text, detailed_outline_text, target_chapters_slider, storyline_text]
+                )
+                
+                # 绑定写作要求扩展按钮
+                expand_writing_compact_btn.click(
+                    lambda user_idea, user_requirements, embellishment_idea: expand_writing_requirements(user_idea, user_requirements, embellishment_idea, "compact"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    [user_requirements_text, status_output]
+                )
+                
+                expand_writing_full_btn.click(
+                    lambda user_idea, user_requirements, embellishment_idea: expand_writing_requirements(user_idea, user_requirements, embellishment_idea, "full"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    [user_requirements_text, status_output]
+                )
+                
+                # 绑定润色要求扩展按钮
+                expand_embellishment_compact_btn.click(
+                    lambda user_idea, user_requirements, embellishment_idea: expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, "compact"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    [embellishment_idea_text, status_output]
+                )
+                
+                expand_embellishment_full_btn.click(
+                    lambda user_idea, user_requirements, embellishment_idea: expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, "full"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    [embellishment_idea_text, status_output]
                 )
                 
                 # 绑定生成大纲按钮
@@ -2271,23 +2624,43 @@ def create_gradio5_original_app():
                 # 绑定生成开头按钮
                 gen_beginning_button.click(
                     gen_beginning_button_clicked,
-                    [aign, status_output, novel_outline_text, user_requirements_text, embellishment_idea_text, enable_chapters_checkbox, enable_ending_checkbox],
+                    [aign, status_output, novel_outline_text, user_requirements_text, embellishment_idea_text, enable_chapters_checkbox, enable_ending_checkbox, novel_title_text, character_list_text],
                     [aign, status_output, writing_plan_text, temp_setting_text, novel_content_text, output_file_text, gen_beginning_button],
                 )
 
                 # 绑定生成下一段按钮
                 gen_next_paragraph_button.click(
                     gen_next_paragraph_button_clicked,
-                    [aign, status_output, user_idea_text, novel_outline_text, writing_memory_text, temp_setting_text, writing_plan_text, user_requirements_text, embellishment_idea_text, compact_mode_checkbox],
+                    [aign, status_output, user_idea_text, novel_outline_text, writing_memory_text, temp_setting_text, writing_plan_text, user_requirements_text, embellishment_idea_text, compact_mode_checkbox, long_chapter_feature_checkbox, novel_content_text],
                     [aign, status_output, writing_plan_text, temp_setting_text, writing_memory_text, novel_content_text, gen_next_paragraph_button],
                 )
 
-                # 绑定故事线生成按钮
-                gen_storyline_button.click(
-                    gen_storyline_button_clicked,
-                    [aign, user_idea_text, user_requirements_text, embellishment_idea_text, target_chapters_slider, status_output],
-                    [aign, status_output, gen_storyline_status, storyline_text]
-                )
+                # 绑定故事线生成按钮 - 已由app_event_handlers.py处理，此处注释以避免重复绑定
+                # def gen_storyline_button_clicked_wrapper(*args):
+                #     """包装函数用于调试故事线按钮"""
+                #     print("\n" + "="*80)
+                #     print("📖 故事线生成按钮被点击！")
+                #     print(f"📖 接收到的参数数量: {len(args)}")
+                #     print(f"📖 参数类型: {[type(arg).__name__ for arg in args]}")
+                #     print("="*80 + "\n")
+                #     try:
+                #         for result in gen_storyline_button_clicked(*args):
+                #             print("📖 生成器返回一个结果")
+                #             yield result
+                #     except Exception as e:
+                #         print(f"❌ 故事线生成包装器捕获异常: {e}")
+                #         import traceback
+                #         traceback.print_exc()
+                #         raise
+                # 
+                # print("🔵 正在绑定故事线生成按钮...")
+                # gen_storyline_button.click(
+                #     gen_storyline_button_clicked_wrapper,
+                #     [aign, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, character_list_text, target_chapters_slider, status_output],
+                #     [aign, status_output, gen_storyline_status, storyline_text]
+                # )
+                # print("✅ 故事线生成按钮绑定完成")
+                print("📖 故事线按钮将由app_event_handlers.py绑定")
 
                 # 绑定修复故事线按钮
                 repair_storyline_button.click(
@@ -2303,12 +2676,39 @@ def create_gradio5_original_app():
                     [aign, status_output, gen_storyline_status, storyline_text]
                 )
 
-                # 绑定自动生成按钮
+                # 添加测试按钮事件
+                def test_button_clicked():
+                    print("\n" + "="*80)
+                    print("🟢 测试按钮被点击！")
+                    print("🟢 如果你看到这条消息，说明Gradio事件系统工作正常")
+                    print("="*80 + "\n")
+                    return "🟢 测试成功！按钮响应正常"
+                
+                print("🔵 正在绑定测试按钮...")
+                test_button.click(
+                    test_button_clicked,
+                    [],
+                    [status_output]
+                )
+                print("✅ 测试按钮绑定完成")
+                
+                # 绑定自动生成按钮 - 添加调试包装函数
+                def auto_generate_button_clicked_wrapper(*args):
+                    """包装函数用于调试"""
+                    print("\n" + "="*80)
+                    print("🔴 按钮点击事件触发！")
+                    print(f"🔴 接收到的参数数量: {len(args)}")
+                    print(f"🔴 参数类型: {[type(arg).__name__ for arg in args]}")
+                    print("="*80 + "\n")
+                    return auto_generate_button_clicked(*args)
+                
+                print("🔵 正在绑定自动生成按钮...")
                 auto_generate_button.click(
-                    auto_generate_button_clicked,
-                    [aign, target_chapters_slider, enable_chapters_checkbox, enable_ending_checkbox, user_requirements_text, embellishment_idea_text, compact_mode_checkbox],
+                    auto_generate_button_clicked_wrapper,
+                    [aign, target_chapters_slider, enable_chapters_checkbox, enable_ending_checkbox, user_requirements_text, embellishment_idea_text, compact_mode_checkbox, long_chapter_feature_checkbox],
                     [aign, status_output, progress_text, auto_generate_button, stop_generate_button]
                 )
+                print("✅ 自动生成按钮绑定完成")
 
                 # 绑定停止生成按钮
                 stop_generate_button.click(
@@ -2345,7 +2745,7 @@ def create_gradio5_original_app():
                         # 确保aign_instance是AIGN对象而不是字符串
                         if isinstance(aign_instance, str):
                             print(f"⚠️ 进度刷新错误: 接收到字符串而不是AIGN对象")
-                            return ["刷新失败：参数错误", "", "", "", "暂无故事线内容", gr.Button(visible=True), gr.Button(visible=False)]
+                            return ["刷新失败：参数错误", "", "", "", "暂无故事线内容", gr.update(visible=True), gr.update(visible=False)]
 
                         progress_info = update_progress(aign_instance)
 
@@ -2367,11 +2767,11 @@ def create_gradio5_original_app():
                             auto_btn_visible = True
                             stop_btn_visible = False
 
-                        return progress_info + [storyline_display, gr.Button(visible=auto_btn_visible), gr.Button(visible=stop_btn_visible)]
+                        return progress_info + [storyline_display, gr.update(visible=auto_btn_visible), gr.update(visible=stop_btn_visible)]
                     except Exception as e:
                         print(f"⚠️ 进度刷新失败: {e}")
                         print(f"⚠️ aign_instance类型: {type(aign_instance)}")
-                        return ["刷新失败", "", "", "", "暂无故事线内容", gr.Button(visible=True), gr.Button(visible=False)]
+                        return ["刷新失败", "", "", "", "暂无故事线内容", gr.update(visible=True), gr.update(visible=False)]
 
                 refresh_progress_btn.click(
                     auto_refresh_progress,
@@ -2515,6 +2915,8 @@ def create_gradio5_original_app():
                     print("✅ 手动保存按钮绑定成功")
                 else:
                     print("⚠️ 数据管理组件或手动保存按钮未找到")
+
+                # 已移动TTS事件绑定到TTS初始化部分
 
                 # 移除浏览器保存触发器 - 不再需要cookie保存功能
 
@@ -2714,6 +3116,152 @@ def create_gradio5_original_app():
     
     return demo
 
+def create_gradio5_modular_app():
+    """模块化版本的Gradio 5.0+ 应用（薄包装：UI与事件来源于拆分模块）"""
+    gradio_info = get_gradio_info()
+    theme = gr.themes.Default(primary_hue="blue", secondary_hue="gray", neutral_hue="slate")
+
+    with gr.Blocks(title="AI网络小说生成器", theme=theme, analytics_enabled=False) as demo:
+        # 初始化AIGN实例（与原逻辑一致，尽量精简但不改变行为）
+        if ORIGINAL_MODULES_LOADED:
+            try:
+                # 动态获取chatLLM实例（不包含系统提示词，避免与Agent的sys_prompt重复）
+                current_chatLLM = get_chatllm(allow_incomplete=True, include_system_prompt=False)
+                aign_instance = AIGN(current_chatLLM)
+                update_aign_settings(aign_instance)
+
+                from aign_manager import get_aign_manager
+                aign_manager = get_aign_manager()
+                aign_manager.set_instance(aign_instance)
+                print(f"📋 AIGN实例已注册到管理器: {type(aign_instance)}")
+                print(f"📋 管理器实例可用性: {aign_manager.is_available()}")
+            except Exception as e:
+                print(f"⚠️ AIGN初始化失败: {e}")
+                aign_instance = type('DummyAIGN', (), {
+                    'novel_outline': '', 'novel_title': '', 'novel_content': '',
+                    'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
+                    'current_output_file': '', 'character_list': '', 'detailed_outline': '',
+                    'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
+                    'target_chapter_count': 20
+                })()
+        else:
+            aign_instance = type('DummyAIGN', (), {
+                'novel_outline': '', 'novel_title': '', 'novel_content': '',
+                'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
+                'current_output_file': '', 'character_list': '', 'detailed_outline': '',
+                'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
+                'target_chapter_count': 20
+            })()
+
+        aign = gr.State(aign_instance)
+
+        # 初始数据
+        loaded_data = {
+            "outline": "",
+            "title": "",
+            "character_list": "",
+            "detailed_outline": "",
+            "storyline": "点击'生成故事线'按钮后，这里将显示每章的详细梗概...\n\n💡 提示：生成大量章节时，为避免界面卡顿，生成过程中仅显示最新章节，完成后将显示全部内容",
+            "storyline_status": "未生成",
+            "status_message": f"📱 欢迎使用AI网络小说生成器！\n\n🚀 使用Gradio {gradio_info['version']} + SSR渲染",
+            "user_idea": "",
+            "user_requirements": "",
+            "embellishment_idea": "",
+            "target_chapters": 20
+        }
+        try:
+            # 复用现有函数，保证与原逻辑一致
+            loaded_data = get_loaded_data_values()
+        except Exception as _e:
+            pass
+
+        # 标题与配置
+        title_md, provider_info_display = create_title_and_header(f"{get_current_provider_info()} (Gradio {gradio_info['version']})")
+        config_accordion, config_components = create_config_section(config_is_valid, ORIGINAL_MODULES_LOADED)
+
+        # 主布局
+        components = {}
+        components['provider_info_display'] = provider_info_display
+        if isinstance(config_components, dict):
+            components['config_components'] = config_components
+        main_components = create_main_layout(config_is_valid, loaded_data)
+        components.update(main_components)
+        components['aign'] = aign
+
+        # TTS文件处理（沿用原逻辑的精简版绑定）
+        if ORIGINAL_MODULES_LOADED:
+            try:
+                tts_components = create_tts_interface(True)
+                if tts_components:
+                    from tts_file_processor import get_tts_processor
+                    tts_processor = get_tts_processor()
+
+                    def update_tts_model_info():
+                        try:
+                            cfg = get_config_manager()
+                            p, m = cfg.get_effective_tts_config()
+                            return f"当前AI模型: {p.upper()} - {m}"
+                        except Exception as e:
+                            print(f"更新TTS模型信息失败: {e}")
+                            return "当前AI模型: 未配置"
+
+                    def tts_process_with_buttons(files, tts_model):
+                        try:
+                            current_model_info = update_tts_model_info()
+                            yield ("🎙️ 开始处理...", gr.Button(visible=False), gr.Button(visible=True), current_model_info)
+                            if not files:
+                                yield ("❌ 请先上传TXT文件", gr.Button(visible=True), gr.Button(visible=False), current_model_info)
+                                return
+                            file_paths = [f.name for f in files]
+                            for status in tts_processor.process_files(file_paths, tts_model):
+                                yield (status, gr.Button(visible=False), gr.Button(visible=True), current_model_info)
+                        except Exception as e:
+                            yield (f"❌ TTS处理出错: {str(e)}", gr.Button(visible=True), gr.Button(visible=False), update_tts_model_info())
+                        finally:
+                            yield ("✅ 处理完成", gr.Button(visible=True), gr.Button(visible=False), update_tts_model_info())
+
+                    def tts_stop_processing():
+                        for status in tts_processor.stop_processing():
+                            yield status
+
+                    # 事件绑定
+                    tts_components['tts_refresh_info_btn'].click(
+                        fn=update_tts_model_info, outputs=[tts_components['tts_current_model_info']]
+                    )
+                    tts_components['tts_process_btn'].click(
+                        fn=tts_process_with_buttons,
+                        inputs=[tts_components['tts_file_upload'], tts_components['tts_model_selector']],
+                        outputs=[tts_components['tts_status_display'], tts_components['tts_process_btn'], tts_components['tts_stop_btn'], tts_components['tts_current_model_info']]
+                    )
+                    tts_components['tts_stop_btn'].click(
+                        fn=tts_stop_processing, outputs=[tts_components['tts_status_display']]
+                    )
+
+                    components.update(tts_components)
+                    print("✅ TTS事件绑定成功(模块化)")
+            except Exception as e:
+                print(f"⚠️ TTS初始化失败(模块化): {e}")
+
+        # 数据管理
+        if ORIGINAL_MODULES_LOADED:
+            try:
+                dm = create_data_management_interface(aign)
+            except Exception as e:
+                print(f"⚠️ 数据管理界面创建失败: {e}")
+                dm = None
+        else:
+            dm = None
+        if dm:
+            components['data_management_components'] = dm
+
+        # 绑定所有事件（页面加载/主界面/配置）
+        try:
+            bind_all_events(demo, components, aign_instance, ORIGINAL_MODULES_LOADED)
+        except Exception as e:
+            print(f"⚠️ 事件绑定失败: {e}")
+
+    return demo
+
 def main():
     """主函数"""
     print("=" * 80)
@@ -2739,7 +3287,7 @@ def main():
     
     # 创建应用
     try:
-        demo = create_gradio5_original_app()
+        demo = create_gradio5_modular_app()
         print("✅ Gradio 5.0+ 原版结构应用创建成功")
     except Exception as e:
         print(f"❌ 应用创建失败: {e}")

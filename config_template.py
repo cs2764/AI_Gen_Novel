@@ -43,9 +43,10 @@ FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
 GROK_API_KEY = "your_grok_api_key_here"
 GROK_BASE_URL = "https://api.x.ai/v1"
 
-# Lambda Labs配置
+# OpenAI兼容模式配置 (Lambda AI)
+# 提供OpenAI兼容的API服务，支持多种开源模型
 LAMBDA_API_KEY = "your_lambda_api_key_here"
-LAMBDA_BASE_URL = "https://api.lambdalabs.com/v1"
+LAMBDA_BASE_URL = "https://api.lambda.ai/v1"
 
 # ===========================================
 # 🎛️ 默认设置
@@ -124,7 +125,7 @@ FILE_CONFIG = {
 • 阿里云: https://dashscope.console.aliyun.com/
 • Fireworks: https://fireworks.ai/
 • Grok: https://console.x.ai/
-• Lambda: https://lambdalabs.com/
+• Lambda (OpenAI兼容模式): https://lambda.ai/
 
 🛡️ 安全提醒：
 

@@ -89,6 +89,7 @@ GROK_CONFIG = {
     "system_prompt": ""
 }
 
+# OpenAI兼容模式配置 (Lambda)
 LAMBDA_CONFIG = {
     "api_key": "your-lambda-api-key-here",
     "model_name": "llama-4-maverick-17b-128e-instruct-fp8",
@@ -177,6 +178,7 @@ NETWORK_SETTINGS = {
                     sys.exit(1)
         
         # 验证当前提供商设置
+        # lambda: OpenAI兼容模式
         provider = config_module.CURRENT_PROVIDER
         valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda"]
         

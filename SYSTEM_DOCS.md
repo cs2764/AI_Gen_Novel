@@ -1,285 +1,331 @@
-# 📚 AI网络小说生成器 - 系统文档
+# AI Novel Generator - System Documentation
+# AI 网络小说生成器 - 系统文档
 
-## 📋 项目信息
-
-**项目名称**: AI网络小说生成器
-**版本**: v3.3.0
-**发布日期**: 2025-08-16
-**技术栈**: Python 3.10+ + Gradio 5.38.0
-**许可证**: MIT License
-**维护状态**: 🟢 积极维护
-
-## 🏗️ 系统架构
-
-### 核心组件
-
-```
-AI_Gen_Novel/
-├── 🎯 核心应用
-│   ├── app.py                 # 主应用程序 (Gradio 5.38.0)
-│   ├── AIGN.py               # AI生成核心引擎
-│   ├── LLM.py                # 大语言模型接口
-│   └── AIGN_Prompt.py        # 提示词管理
-│
-├── 🤖 AI提供商
-│   └── uniai/                # 统一AI接口
-│       ├── openrouterAI.py   # OpenRouter
-│       ├── claudeAI.py       # Claude (Anthropic)
-│       ├── geminiAI.py       # Gemini (Google)
-│       ├── deepseekAI.py     # DeepSeek
-│       ├── lmstudioAI.py     # LM Studio
-│       ├── zhipuAI.py        # 智谱AI (GLM)
-│       ├── aliAI.py         # 阿里云通义千问
-│       ├── fireworksAI.py    # Fireworks AI
-│       ├── grokAI.py         # Grok (xAI)
-│       └── lambdaAI.py       # Lambda Labs
-│
-├── 🛠️ 工具模块
-│   ├── utils.py              # 工具函数
-│   ├── local_data_manager.py # 本地数据管理
-│   ├── auto_save_manager.py  # 自动保存管理
-│   └── json_auto_repair.py   # JSON自动修复
-│
-├── ⚙️ 配置管理
-│   ├── config_template.py    # 配置模板 (安全)
-│   ├── config.py            # 实际配置 (本地)
-│   └── version.py           # 版本信息
-│
-├── 📁 数据目录
-│   ├── output/              # 生成的小说文件
-│   ├── autosave/           # 自动保存数据
-│   └── metadata/           # 元数据文件
-│
-└── 🔧 环境和脚本
-    ├── gradio5_env/        # Python虚拟环境
-    ├── start.bat           # Windows启动脚本
-    ├── requirements_gradio5.txt # 依赖文件
-    └── .gitignore          # Git忽略规则
-```
-
-### 技术架构
-
-```mermaid
-graph TB
-    A[用户界面 - Gradio 5.38.0] --> B[应用核心 - app.py]
-    B --> C[AI生成引擎 - AIGN.py]
-    C --> D[LLM接口 - LLM.py]
-    D --> E[AI提供商 - uniai/]
-    
-    C --> F[提示词管理 - AIGN_Prompt.py]
-    C --> G[数据管理 - local_data_manager.py]
-    G --> H[自动保存 - auto_save_manager.py]
-    
-    B --> I[配置管理 - config.py]
-    B --> J[工具函数 - utils.py]
-    
-    K[数据目录] --> L[output/]
-    K --> M[autosave/]
-    K --> N[metadata/]
-```
-
-## 🔧 核心功能模块
-
-### 1. AI生成引擎 (AIGN.py)
-
-**功能**: 小说生成的核心逻辑
-- `genNovelOutline()`: 生成小说大纲
-- `genDetailedOutline()`: 生成详细大纲
-- `genBeginning()`: 生成小说开头
-- `genNextParagraph()`: 生成下一段落
-- `genStoryline()`: 生成故事线
-- `autoGenerate()`: 自动生成功能
-
-### 2. 用户界面 (app.py)
-
-**技术**: Gradio 5.38.0
-**特性**:
-- 实时状态显示
-- 分阶段进度跟踪
-- 用户确认机制
-- 智能错误处理
-- 类型安全绑定
-
-### 3. AI提供商接口 (uniai/)
-
-**支持的提供商**:
-- OpenRouter (多模型聚合)
-- Claude (Anthropic)
-- Gemini (Google)
-- DeepSeek (高性价比)
-- LM Studio (本地部署)
-- 智谱AI (GLM模型)
-- 阿里云通义千问
-- Fireworks AI
-- Grok (xAI)
-- Lambda Labs
-
-### 4. 数据管理系统
-
-**本地数据管理** (`local_data_manager.py`):
-- 自动保存用户数据
-- 智能数据加载
-- 数据导入导出
-
-**自动保存** (`auto_save_manager.py`):
-- 定时自动保存
-- 增量保存优化
-- 数据完整性检查
-
-## 🔒 安全设计
-
-### 敏感数据保护
-
-1. **API密钥安全**:
-   - 使用 `config_template.py` 作为安全模板
-   - 实际配置 `config.py` 不上传到GitHub
-   - 完善的 `.gitignore` 保护
-
-2. **用户数据保护**:
-   - `output/` 目录: 用户生成的小说
-   - `autosave/` 目录: 自动保存数据
-   - `metadata/` 目录: 元数据文件
-   - 所有用户数据严格本地保存
-
-3. **GitHub上传安全**:
-   - 详细的上传指南
-   - 自动安全检查脚本
-   - 敏感文件自动忽略
-
-### 数据流安全
-
-```
-用户输入 → 本地处理 → API调用 → 结果处理 → 本地保存
-    ↓
-所有敏感数据仅在本地处理，不会泄露到外部
-```
-
-## 🚀 性能优化
-
-### 1. 内存优化
-- 减少不必要的组件创建
-- 智能数据缓存
-- 及时释放临时对象
-
-### 2. 网络优化
-- API调用超时控制
-- 重试机制
-- 连接池管理
-
-### 3. 用户体验优化
-- 实时状态反馈
-- 分阶段加载
-- 错误友好提示
-
-## 📊 监控和日志
-
-### 状态监控
-- 生成进度实时显示
-- 错误状态自动捕获
-- 性能指标统计
-
-### 日志系统
-- 详细的操作日志
-- 错误日志记录
-- 调试信息输出
-
-## 🔄 版本管理
-
-### 版本号规则
-- **主版本号**: 重大架构变更
-- **次版本号**: 新功能添加
-- **修订号**: 错误修复
-
-### 发布流程
-1. 代码开发和测试
-2. 版本号更新
-3. 文档更新
-4. 安全检查
-5. GitHub发布
-
-## 🛠️ 开发指南
-
-### 环境要求
-- Python 3.10+
-- Gradio 5.38.0
-- 4GB+ 内存
-- 稳定网络连接
-
-### 开发环境设置
-```bash
-# 1. 克隆项目
-git clone https://github.com/cs2764/AI_Gen_Novel.git
-cd AI_Gen_Novel
-
-# 2. 创建虚拟环境
-python -m venv gradio5_env
-source gradio5_env/bin/activate  # Linux/Mac
-# gradio5_env\Scripts\activate.bat  # Windows
-
-# 3. 安装依赖
-pip install -r requirements_gradio5.txt
-
-# 4. 配置API密钥
-cp config_template.py config.py
-# 编辑 config.py
-
-# 5. 启动开发服务器
-python app.py
-```
-
-### 代码规范
-- 遵循PEP 8编码规范
-- 使用类型注解
-- 完善的错误处理
-- 详细的注释文档
-
-## 📈 未来规划
-
-### v3.3.0 GitHub发布版 (2025-08-16)
-- 🚀 **GitHub开源发布**: 完整的开源项目结构
-- 🔒 **安全措施完善**: 完善的隐私保护和API密钥安全
-- 📚 **文档体系完整**: 详细的安装指南、使用文档和开发文档
-- 🛡️ **自动安全检查**: GitHub上传前的自动安全验证
-- 🎯 **项目结构优化**: 清理临时文件，优化目录结构
-- ✨ **开源友好**: 完善的贡献指南和开源协议
-- 🔄 **版本管理优化**: 自动化版本更新和日期同步
-- 🧹 **文件清理**: 智能清理不需要的临时和测试文件
-- 📝 **文档更新**: 系统性更新所有相关文档
-
-### 短期目标 (v3.3.x)
-- 社区反馈收集和处理
-- 安装体验优化
-- 文档持续完善
-- 错误处理和恢复机制增强
-
-### 中期目标 (v3.4.x)
-- 多语言支持
-- 高级创作功能
-- 协作功能
-- 云端同步
-
-### 长期目标 (v4.0.x)
-- 全新架构设计
-- 微服务化
-- 移动端支持
-- 企业级功能
-
-## 📞 技术支持
-
-### 问题反馈
-- **GitHub Issues**: 技术问题和功能建议
-- **文档**: 详细的使用指南和FAQ
-- **社区**: 用户交流和经验分享
-
-### 贡献指南
-- 欢迎提交Pull Request
-- 遵循代码规范
-- 完善的测试覆盖
-- 详细的提交说明
+[中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-**文档版本**: v3.3.0
-**最后更新**: 2025-08-16
-**维护者**: Claude Code
-**联系方式**: GitHub Issues
+## English Documentation
+
+### Version Information
+- **Version**: 3.5.0
+- **Release Date**: 2025-11-05
+- **Python**: 3.10+
+- **Gradio**: 5.38.0
+
+### System Architecture
+
+#### Core Components
+
+1. **AIGN.py** - Novel Generation Engine
+   - Multi-agent system for novel generation
+   - Specialized agents for different writing tasks
+   - Memory management and context tracking
+   - Storyline generation and management
+
+2. **app.py** - Web Interface
+   - Gradio 5.38.0 based UI
+   - Real-time status updates
+   - User confirmation mechanisms
+   - Auto-save and data management
+
+3. **uniai/** - AI Provider Layer
+   - Unified interface for 10 AI providers
+   - OpenRouter, Claude, Gemini, DeepSeek
+   - LM Studio, 智谱AI, 阿里云
+   - Fireworks, Grok, Lambda
+
+4. **Configuration System**
+   - config_manager.py - Configuration management
+   - dynamic_config_manager.py - Runtime configuration
+   - config_template.py - Configuration template
+
+5. **Data Management**
+   - auto_save_manager.py - Auto-save functionality
+   - aign_local_storage.py - Local data storage
+   - secure_file_manager.py - Secure file operations
+
+#### Agent System
+
+The AIGN engine uses specialized agents:
+
+- **NovelOutlineWriter** - Story structure planning
+- **TitleGenerator** - Title creation
+- **NovelBeginningWriter** - Opening chapters
+- **NovelWriter** - Main content generation
+- **NovelWriterCompact** - Compact content generation
+- **NovelEmbellisher** - Content polishing
+- **MemoryMaker** - Context compression
+- **StorylineGenerator** - Chapter planning
+- **CharacterGenerator** - Character profiles
+
+### Key Features
+
+1. **Multi-AI Provider Support**
+   - 10 major AI providers integrated
+   - Unified API interface
+   - Easy provider switching
+
+2. **Intelligent Generation**
+   - Multi-agent collaboration
+   - Context-aware writing
+   - Storyline tracking
+   - Memory management
+
+3. **User-Friendly Interface**
+   - Modern Gradio 5.38.0 UI
+   - Real-time progress tracking
+   - Confirmation mechanisms
+   - Auto-save functionality
+
+4. **Data Security**
+   - Local data storage
+   - Secure file operations
+   - API key protection
+   - User privacy protection
+
+### Installation
+
+See [INSTALL.md](INSTALL.md) for detailed installation instructions.
+
+Quick start:
+```bash
+# Clone repository
+git clone https://github.com/cs2764/AI_Gen_Novel.git
+cd AI_Gen_Novel
+
+# Create virtual environment
+python -m venv gradio5_env
+gradio5_env\Scripts\activate  # Windows
+source gradio5_env/bin/activate  # Linux/Mac
+
+# Install dependencies
+pip install -r requirements_gradio5.txt
+
+# Configure API keys
+cp config_template.py config.py
+# Edit config.py with your API keys
+
+# Start application
+python app.py
+```
+
+### Configuration
+
+1. Copy `config_template.py` to `config.py`
+2. Add your API keys for desired providers
+3. Configure generation parameters
+4. Set Gradio interface options
+
+See [README_Provider_Config.md](README_Provider_Config.md) for provider-specific configuration.
+
+### Usage
+
+1. Start the application: `python app.py`
+2. Open browser: `http://localhost:7861`
+3. Enter your novel idea
+4. Configure generation parameters
+5. Click "Generate" and wait for completion
+6. Export your novel in TXT or EPUB format
+
+### Project Structure
+
+```
+AI_Gen_Novel/
+├── AIGN.py                 # Core generation engine
+├── app.py                  # Web interface
+├── config_template.py      # Configuration template
+├── version.py              # Version information
+├── uniai/                  # AI provider adapters
+│   ├── openrouterAI.py
+│   ├── claudeAI.py
+│   ├── geminiAI.py
+│   └── ...
+├── aign_*.py              # AIGN modules
+├── app_*.py               # App modules
+├── *_manager.py           # Manager modules
+├── docs/                  # Documentation
+├── test/                  # Test scripts
+└── output/                # Generated novels (not in repo)
+```
+
+### Security
+
+- API keys stored in `config.py` (not in repository)
+- User data in `output/` and `autosave/` (not in repository)
+- Virtual environment in `gradio5_env/` (not in repository)
+- See [CONFIG_SECURITY_GUIDE.md](CONFIG_SECURITY_GUIDE.md) for security best practices
+
+### Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+
+### License
+
+See [LICENSE](LICENSE) for license information.
+
+---
+
+## 中文文档
+
+### 版本信息
+- **版本**: 3.5.0
+- **发布日期**: 2025-11-05
+- **Python**: 3.10+
+- **Gradio**: 5.38.0
+
+### 系统架构
+
+#### 核心组件
+
+1. **AIGN.py** - 小说生成引擎
+   - 多智能体小说生成系统
+   - 专业化写作任务智能体
+   - 记忆管理和上下文跟踪
+   - 故事线生成和管理
+
+2. **app.py** - Web界面
+   - 基于Gradio 5.38.0的用户界面
+   - 实时状态更新
+   - 用户确认机制
+   - 自动保存和数据管理
+
+3. **uniai/** - AI提供商层
+   - 10个AI提供商的统一接口
+   - OpenRouter、Claude、Gemini、DeepSeek
+   - LM Studio、智谱AI、阿里云
+   - Fireworks、Grok、Lambda
+
+4. **配置系统**
+   - config_manager.py - 配置管理
+   - dynamic_config_manager.py - 运行时配置
+   - config_template.py - 配置模板
+
+5. **数据管理**
+   - auto_save_manager.py - 自动保存功能
+   - aign_local_storage.py - 本地数据存储
+   - secure_file_manager.py - 安全文件操作
+
+#### 智能体系统
+
+AIGN引擎使用专业化智能体:
+
+- **NovelOutlineWriter** - 故事结构规划
+- **TitleGenerator** - 标题创作
+- **NovelBeginningWriter** - 开篇章节
+- **NovelWriter** - 主要内容生成
+- **NovelWriterCompact** - 紧凑内容生成
+- **NovelEmbellisher** - 内容润色
+- **MemoryMaker** - 上下文压缩
+- **StorylineGenerator** - 章节规划
+- **CharacterGenerator** - 角色档案
+
+### 主要功能
+
+1. **多AI提供商支持**
+   - 集成10个主流AI提供商
+   - 统一API接口
+   - 轻松切换提供商
+
+2. **智能生成**
+   - 多智能体协作
+   - 上下文感知写作
+   - 故事线跟踪
+   - 记忆管理
+
+3. **用户友好界面**
+   - 现代化Gradio 5.38.0界面
+   - 实时进度跟踪
+   - 确认机制
+   - 自动保存功能
+
+4. **数据安全**
+   - 本地数据存储
+   - 安全文件操作
+   - API密钥保护
+   - 用户隐私保护
+
+### 安装
+
+详细安装说明请参见 [INSTALL.md](INSTALL.md)。
+
+快速开始:
+```bash
+# 克隆仓库
+git clone https://github.com/cs2764/AI_Gen_Novel.git
+cd AI_Gen_Novel
+
+# 创建虚拟环境
+python -m venv gradio5_env
+gradio5_env\Scripts\activate  # Windows
+source gradio5_env/bin/activate  # Linux/Mac
+
+# 安装依赖
+pip install -r requirements_gradio5.txt
+
+# 配置API密钥
+cp config_template.py config.py
+# 编辑config.py填入您的API密钥
+
+# 启动应用
+python app.py
+```
+
+### 配置
+
+1. 复制 `config_template.py` 为 `config.py`
+2. 添加所需提供商的API密钥
+3. 配置生成参数
+4. 设置Gradio界面选项
+
+提供商特定配置请参见 [README_Provider_Config.md](README_Provider_Config.md)。
+
+### 使用
+
+1. 启动应用: `python app.py`
+2. 打开浏览器: `http://localhost:7861`
+3. 输入您的小说创意
+4. 配置生成参数
+5. 点击"生成"并等待完成
+6. 导出TXT或EPUB格式的小说
+
+### 项目结构
+
+```
+AI_Gen_Novel/
+├── AIGN.py                 # 核心生成引擎
+├── app.py                  # Web界面
+├── config_template.py      # 配置模板
+├── version.py              # 版本信息
+├── uniai/                  # AI提供商适配器
+│   ├── openrouterAI.py
+│   ├── claudeAI.py
+│   ├── geminiAI.py
+│   └── ...
+├── aign_*.py              # AIGN模块
+├── app_*.py               # 应用模块
+├── *_manager.py           # 管理器模块
+├── docs/                  # 文档
+├── test/                  # 测试脚本
+└── output/                # 生成的小说（不在仓库中）
+```
+
+### 安全
+
+- API密钥存储在 `config.py` 中（不在仓库中）
+- 用户数据在 `output/` 和 `autosave/` 中（不在仓库中）
+- 虚拟环境在 `gradio5_env/` 中（不在仓库中）
+- 安全最佳实践请参见 [CONFIG_SECURITY_GUIDE.md](CONFIG_SECURITY_GUIDE.md)
+
+### 贡献
+
+贡献指南请参见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+### 许可证
+
+许可证信息请参见 [LICENSE](LICENSE)。
+
+---
+
+**Last Updated / 最后更新**: 2025-11-05
+**Version / 版本**: 3.5.0

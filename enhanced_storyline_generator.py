@@ -171,7 +171,7 @@ class EnhancedStorylineGenerator:
             print(f"⚠️ 记录成功案例失败: {e}")
         
     def get_storyline_schema(self, expected_count: int = 10) -> Dict[str, Any]:
-        """获取故事线的JSON Schema，动态设置章节数量约束"""
+        """获取故事线的JSON Schema，动态设置章节数量约束；强制每章包含4个plot_segments"""
         return {
             "type": "json_schema",
             "json_schema": {
@@ -194,31 +194,36 @@ class EnhancedStorylineGenerator:
                                         "items": {"type": "string"}
                                     },
                                     "character_development": {"type": "string"},
-                                    "chapter_mood": {"type": "string"}
+                                    "chapter_mood": {"type": "string"},
+                                    "plot_segments": {
+                                        "type": "array",
+                                        "minItems": 4,
+                                        "maxItems": 4,
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "index": {"type": "integer"},
+                                                "segment_title": {"type": "string"},
+                                                "segment_summary": {"type": "string"},
+                                                "segment_key_events": {
+                                                    "type": "array",
+                                                    "items": {"type": "string"}
+                                                },
+                                                "segment_purpose": {"type": "string"},
+                                                "segment_transition": {"type": "string"}
+                                            },
+                                            "required": ["index", "segment_title", "segment_summary"]
+                                        }
+                                    }
                                 },
-                                "required": ["chapter_number", "title", "plot_summary"]
+                                "required": ["chapter_number", "title", "plot_summary", "plot_segments"]
                             }
-                        },
-                        "batch_info": {
-                            "type": "object",
-                            "properties": {
-                                "start_chapter": {"type": "integer"},
-                                "end_chapter": {"type": "integer"},
-                                "total_chapters": {"type": "integer"}
-                            },
-                            "required": ["start_chapter", "end_chapter"]
                         }
                     },
-                    "required": ["chapters", "batch_info"]
-                },
-                "strict": True
-                        }
+                    "required": ["chapters"]
+                }
+            }
         }
-    
-    def _extract_chapter_count_from_messages(self, messages: List[Dict[str, str]]) -> int:
-        """从提示词中提取期望的章节数量"""
-        if not messages:
-            return 10  # 默认值
     
     def get_statistics_report(self) -> str:
         """获取详细的统计报告"""
@@ -345,13 +350,13 @@ class EnhancedStorylineGenerator:
                     print(f"📝 发现重复章节号: {duplicates}")
 
     def get_storyline_tools(self, expected_count: int = 10) -> List[Dict[str, Any]]:
-        """获取故事线生成的工具定义，动态设置章节数量约束"""
+        """获取故事线生成的工具定义，动态设置章节数量约束；强制每章包含4个plot_segments"""
         return [
             {
                 "type": "function",
                 "function": {
                     "name": "generate_storyline_batch",
-                    "description": f"生成一批故事线章节（必须生成{expected_count}章）",
+                    "description": f"生成一批故事线章节（必须生成{expected_count}章，且每章包含4个plot_segments）",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -363,33 +368,31 @@ class EnhancedStorylineGenerator:
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "chapter_number": {
-                                            "type": "integer",
-                                            "description": "章节号"
-                                        },
-                                        "title": {
-                                            "type": "string",
-                                            "description": "章节标题"
-                                        },
-                                        "plot_summary": {
-                                            "type": "string",
-                                            "description": "情节梗概"
-                                        },
-                                        "key_events": {
+                                        "chapter_number": {"type": "integer", "description": "章节号"},
+                                        "title": {"type": "string", "description": "章节标题"},
+                                        "plot_summary": {"type": "string", "description": "情节梗概"},
+                                        "key_events": {"type": "array", "description": "关键事件列表", "items": {"type": "string"}},
+                                        "character_development": {"type": "string", "description": "人物发展"},
+                                        "chapter_mood": {"type": "string", "description": "章节情绪"},
+                                        "plot_segments": {
                                             "type": "array",
-                                            "description": "关键事件列表",
-                                            "items": {"type": "string"}
-                                        },
-                                        "character_development": {
-                                            "type": "string",
-                                            "description": "人物发展"
-                                        },
-                                        "chapter_mood": {
-                                            "type": "string",
-                                            "description": "章节情绪"
+                                            "minItems": 4,
+                                            "maxItems": 4,
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "index": {"type": "integer"},
+                                                    "segment_title": {"type": "string"},
+                                                    "segment_summary": {"type": "string"},
+                                                    "segment_key_events": {"type": "array", "items": {"type": "string"}},
+                                                    "segment_purpose": {"type": "string"},
+                                                    "segment_transition": {"type": "string"}
+                                                },
+                                                "required": ["index", "segment_title", "segment_summary"]
+                                            }
                                         }
                                     },
-                                    "required": ["chapter_number", "title", "plot_summary"]
+                                    "required": ["chapter_number", "title", "plot_summary", "plot_segments"]
                                 }
                             },
                             "batch_info": {
@@ -400,7 +403,7 @@ class EnhancedStorylineGenerator:
                                     "end_chapter": {"type": "integer"},
                                     "total_chapters": {"type": "integer"}
                                 },
-                                "required": ["start_chapter", "end_chapter"]
+                                "required": ["start_chapter", "end_chapter", "total_chapters"]
                             }
                         },
                         "required": ["chapters", "batch_info"]
@@ -678,7 +681,8 @@ class EnhancedStorylineGenerator:
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
-                response_format=self.get_storyline_schema(expected_count)
+                response_format=self.get_storyline_schema(expected_count),
+                stream=False  # Structured outputs不支持流式输出
             )
             
             if response.get("content"):
@@ -741,7 +745,8 @@ class EnhancedStorylineGenerator:
                 messages=messages,
                 temperature=temperature,
                 tools=self.get_storyline_tools(expected_count),
-                tool_choice=tool_choice_param
+                tool_choice=tool_choice_param,
+                stream=False  # Tool calling不支持流式输出
             )
             
             if response.get("tool_calls"):
@@ -815,7 +820,8 @@ class EnhancedStorylineGenerator:
 
                 response = self.chatLLM(
                     messages=current_messages,
-                    temperature=max(0.3, temperature - retry * 0.1)  # 重试时降低温度
+                    temperature=max(0.3, temperature - retry * 0.1),  # 重试时降低温度
+                    stream=False  # 需要完整响应以便解析JSON
                 )
 
                 if response.get("content"):
@@ -884,7 +890,7 @@ class EnhancedStorylineGenerator:
 
         json_instructions = """
 
-**重要：请严格按照以下JSON格式返回，不要添加任何解释或其他文本：**
+**重要：请严格按照以下JSON格式返回，不要添加任何解释或其他文本（每章必须包含4个plot_segments）:**
 
 ```json
 {
@@ -895,7 +901,13 @@ class EnhancedStorylineGenerator:
       "plot_summary": "详细的情节梗概，至少50字",
       "key_events": ["关键事件1", "关键事件2", "关键事件3"],
       "character_development": "人物发展描述",
-      "chapter_mood": "章节情绪氛围"
+      "chapter_mood": "章节情绪氛围",
+      "plot_segments": [
+        {"index": 1, "segment_title": "分段1", "segment_summary": "分段1内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接2"},
+        {"index": 2, "segment_title": "分段2", "segment_summary": "分段2内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接3"},
+        {"index": 3, "segment_title": "分段3", "segment_summary": "分段3内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接4"},
+        {"index": 4, "segment_title": "分段4", "segment_summary": "分段4内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "承上启下至下一章"}
+      ]
     }
   ],
   "batch_info": {
@@ -911,7 +923,8 @@ class EnhancedStorylineGenerator:
 2. 确保所有字符串都用双引号包围
 3. 确保所有括号和大括号正确配对
 4. 不要在最后一个元素后添加逗号
-5. key_events必须是字符串数组，至少包含3个事件"""
+5. key_events必须是字符串数组，至少包含3个事件
+6. plot_segments必须是长度为4的数组，index从1到4且每段都有segment_summary"""
 
         messages[-1]["content"] = last_message + json_instructions
         return messages
@@ -950,7 +963,7 @@ class EnhancedStorylineGenerator:
                     print(f"❌ 章节 {i+1} 不是对象")
                     return False
 
-                required_fields = ["chapter_number", "title", "plot_summary"]
+                required_fields = ["chapter_number", "title", "plot_summary", "plot_segments"]
                 for field in required_fields:
                     if field not in chapter:
                         print(f"❌ 章节 {i+1} 缺少必需字段: {field}")
@@ -968,6 +981,21 @@ class EnhancedStorylineGenerator:
                 if not isinstance(chapter["plot_summary"], str) or len(chapter["plot_summary"].strip()) < 10:
                     print(f"❌ 章节 {i+1} 的 plot_summary 必须是至少10字符的字符串")
                     return False
+
+                # 检查plot_segments结构
+                segments = chapter.get("plot_segments", [])
+                if not isinstance(segments, list) or len(segments) != 4:
+                    print(f"❌ 章节 {i+1} 的 plot_segments 必须是长度为4的数组")
+                    return False
+                for idx, seg in enumerate(segments, 1):
+                    if not isinstance(seg, dict):
+                        print(f"❌ 章节 {i+1} 的 第{idx}段 不是对象")
+                        return False
+                    if "segment_summary" not in seg or not str(seg.get("segment_summary", "")).strip():
+                        print(f"❌ 章节 {i+1} 的 第{idx}段 缺少segment_summary")
+                        return False
+                    if "index" in seg and isinstance(seg["index"], int) and seg["index"] != idx:
+                        print(f"⚠️ 章节 {i+1} 的 第{idx}段 index不为{idx}（将接受但建议修正）")
 
             print("✅ 故事线结构验证通过")
             return True
@@ -1107,7 +1135,7 @@ class EnhancedStorylineGenerator:
         
         # 构建简化的提示词
         simplified_prompt = f"""
-请严格按照JSON格式生成{target_count}章故事线：
+请严格按照JSON格式生成{target_count}章故事线（每章必须包含4个plot_segments）：
 
 {key_info.get('大纲', '')}
 {key_info.get('人物列表', '')}
@@ -1125,7 +1153,13 @@ class EnhancedStorylineGenerator:
       "plot_summary": "详细剧情梗概，至少50字",
       "key_events": ["事件1", "事件2", "事件3"],
       "character_development": "人物发展描述",
-      "chapter_mood": "情绪氛围"
+      "chapter_mood": "情绪氛围",
+      "plot_segments": [
+        {{"index": 1, "segment_title": "分段1", "segment_summary": "分段1内容"}},
+        {{"index": 2, "segment_title": "分段2", "segment_summary": "分段2内容"}},
+        {{"index": 3, "segment_title": "分段3", "segment_summary": "分段3内容"}},
+        {{"index": 4, "segment_title": "分段4", "segment_summary": "分段4内容"}}
+      ]
     }}
   ],
   "batch_info": {{

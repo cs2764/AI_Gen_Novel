@@ -33,6 +33,12 @@ jsonschema>=4.20.0
 # EPUB file processing
 ebooklib>=0.18
 
+# Character encoding detection for TXT files
+chardet>=5.0.0
+
+# Token counting for AI models
+tiktoken>=0.5.1
+
 # System Dependencies
 # Windows system support (Windows only)
 pywin32>=306; sys_platform == "win32"

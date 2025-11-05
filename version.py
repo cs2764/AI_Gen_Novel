@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "3.3.0"
+__version__ = "3.5.0"
 __author__ = "Claude Code, qwen3-code"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2025-08-16)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2025-11-05)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -38,7 +38,10 @@ VERSION_INFO = {
         "开源友好的项目结构",
         "GitHub上传准备自动化",
         "文件清理和版本管理",
-        "日期更新和系统文档"
+        "日期更新和系统文档",
+        "测试文件组织和管理",
+        "安全检查和隐私保护",
+        "双语文档支持"
     ],
     "ai_providers": [
         "OpenRouter",

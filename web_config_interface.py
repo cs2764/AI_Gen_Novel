@@ -23,10 +23,18 @@ class WebConfigInterface:
         self._test_lock = threading.Lock()
         # 添加模型刷新的超时控制
         self._refresh_timeout = 1200  # 1200秒超时(20分钟)
+        # TTS配置更新回调列表
+        self._tts_update_callbacks = []
     
     def get_provider_choices(self):
-        """获取提供商选择列表"""
+        """获取提供商选择列表（返回内部名称，不显示名称）"""
         return self.config_manager.get_provider_list()
+    
+    def get_provider_choices_with_display_names(self):
+        """获取提供商选择列表（显示名: 内部名）"""
+        display_map = self.config_manager.get_provider_display_list()
+        # 返回 [(display_name, internal_name), ...] 格式的列表
+        return [(display, name) for name, display in display_map.items()]
     
     def get_model_choices(self, provider_name, refresh=False):
         """根据提供商获取模型列表"""
@@ -39,7 +47,9 @@ class WebConfigInterface:
         if not provider_name:
             return gr.update(choices=[], value=""), gr.update(visible=False, value=""), "", "", "", ""
         
-        print(f"🔄 切换到提供商 {provider_name.upper()}")
+        # 获取显示名称
+        display_name = self.config_manager.get_provider_display_name(provider_name)
+        print(f"🔄 切换到提供商 {display_name}")
         
         # 获取当前配置
         current_config = self.config_manager.get_provider_config(provider_name)
@@ -60,7 +70,7 @@ class WebConfigInterface:
                 current_api_key,  # 更新API key
                 current_base_url or "",  # 更新API地址
                 current_system_prompt,  # 更新系统提示词
-                f"已切换到 {provider_name.upper()}，可选择预设模型或输入自定义模型名称"  # 状态信息
+                f"已切换到 {display_name}，可选择预设模型或输入自定义模型名称"  # 状态信息
             )
         else:
             # 其他提供商的常规处理
@@ -77,7 +87,7 @@ class WebConfigInterface:
                 models.append(current_model)
                 print(f"🔧 添加当前模型到列表: {current_model}")
             
-            print(f"✅ {provider_name.upper()} 模型列表已更新，共 {len(models)} 个模型")
+            print(f"✅ {display_name} 模型列表已更新，共 {len(models)} 个模型")
             
             # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, status)
             return (
@@ -86,7 +96,7 @@ class WebConfigInterface:
                 current_api_key,  # 更新API key
                 current_base_url or "",  # 更新API地址
                 current_system_prompt,  # 更新系统提示词
-                f"已切换到 {provider_name.upper()}，模型列表已加载（{len(models)}个模型）"  # 状态信息
+                f"已切换到 {display_name}，模型列表已加载（{len(models)}个模型）"  # 状态信息
             )
     
     def save_config(self, provider_name, api_key, model_name, base_url, system_prompt, custom_model_name=""):
@@ -121,9 +131,11 @@ class WebConfigInterface:
             # 保存到文件
             self.config_manager.save_config_to_file()
             
+            # 获取显示名称
+            display_name = self.config_manager.get_provider_display_name(provider_name)
             prompt_info = f" (系统提示词: {len(system_prompt)}字符)" if system_prompt else ""
             url_info = f" (API地址: {base_url})" if base_url else ""
-            return f"✅ 配置已保存: {provider_name.upper()} - {final_model_name}{url_info}{prompt_info}"
+            return f"✅ 配置已保存: {display_name} - {final_model_name}{url_info}{prompt_info}"
             
         except Exception as e:
             return f"❌ 保存配置失败: {str(e)}"
@@ -137,8 +149,8 @@ class WebConfigInterface:
         if save_result.startswith("✅"):
             try:
                 from config_manager import get_chatllm
-                # 刷新ChatLLM以使用新的配置，允许不完整配置以避免启动失败
-                get_chatllm(allow_incomplete=True)
+                # 刷新ChatLLM以使用新的配置（不包含系统提示词，避免与Agent的sys_prompt重复）
+                get_chatllm(allow_incomplete=True, include_system_prompt=False)
                 save_result += " | ChatLLM已刷新"
                 
                 # 刷新AIGN实例的ChatLLM
@@ -184,9 +196,11 @@ class WebConfigInterface:
             if not model_name:
                 return "❌ 请选择模型"
             
+            # 获取显示名称
+            display_name = self.config_manager.get_provider_display_name(provider_name)
             # 这里可以添加实际的连接测试逻辑
             # 暂时返回成功状态
-            return f"✅ 连接测试成功: {provider_name.upper()} - {model_name}"
+            return f"✅ 连接测试成功: {display_name} - {model_name}"
             
         except Exception as e:
             return f"❌ 连接测试失败: {str(e)}"
@@ -414,6 +428,80 @@ class WebConfigInterface:
         except Exception as e:
             return f"❌ 获取JSON自动修复配置失败: {str(e)}"
     
+    def get_cosyvoice_info(self):
+        """获取CosyVoice2配置信息"""
+        try:
+            # 从动态配置管理器获取CosyVoice2状态
+            current_status = self.config_manager.get_cosyvoice_mode()
+            
+            status_display = "🎙️ 已启用" if current_status else "🔇 已关闭"
+            
+            info = f"""⚙️ CosyVoice2语音标记配置:
+📊 当前状态: {status_display}
+
+📋 功能说明:
+• 启用后，所有生成的文章都会自动添加CosyVoice2语音合成控制标记
+• 包含细粒度控制：[breath]、[sigh]、[laughter]、[whisper]等30+种标记
+• 支持情感表达：通过标记组合表现复杂情感变化
+• 生成两个版本：带标记版本用于语音合成，纯净版本用于阅读
+• 适用于小说转有声书的完整解决方案
+
+💡 使用建议:
+• 如果需要生成有声书，建议启用此功能
+• 如果只需要文字阅读，可以关闭以简化输出
+• 启用后会略微增加生成时间，但提供更丰富的语音表现力
+
+💾 配置已保存到 runtime_config.json 文件，重启应用后自动加载"""
+            
+            return info
+            
+        except Exception as e:
+            return f"❌ 获取CosyVoice2配置失败: {str(e)}"
+    
+    def get_tts_config_info(self):
+        """获取TTS模型配置信息"""
+        try:
+            # 从动态配置管理器获取TTS配置
+            tts_provider = self.config_manager.get_tts_provider()
+            tts_model = self.config_manager.get_tts_model()
+            tts_api_key = self.config_manager.get_tts_api_key()
+            tts_base_url = self.config_manager.get_tts_base_url()
+            effective_provider, effective_model = self.config_manager.get_effective_tts_config()
+            
+            provider_display = tts_provider if tts_provider else "使用当前提供商"
+            model_display = tts_model if tts_model else "使用当前模型"
+            api_key_display = "已设置独立密钥" if tts_api_key else "使用主配置密钥"
+            base_url_display = f"独立URL: {tts_base_url}" if tts_base_url else "使用主配置URL"
+            
+            info = f"""🤖 TTS处理模型配置:
+📊 当前配置:
+• TTS专用提供商: {provider_display}
+• TTS专用模型: {model_display}
+• TTS专用API密钥: {api_key_display}
+• TTS专用基础URL: {base_url_display}
+
+🔧 实际使用配置:
+• 有效提供商: {effective_provider}
+• 有效模型: {effective_model}
+
+📋 功能说明:
+• 可以为TTS文本处理指定专用的AI模型和配置
+• TTS配置完全独立于文章生成配置
+• 如果未设置专用配置，将使用当前文章生成配置
+• TTS处理包括文本分段、添加CosyVoice标记、整理格式等
+
+💡 使用建议:
+• 可以为TTS设置不同的提供商和模型以获得最佳效果
+• 支持独立的API密钥和基础URL，适用于不同账号或服务
+• 建议选择理解能力强、遵循指令准确的模型用于TTS处理
+
+💾 配置已保存到 runtime_config.json 文件，重启应用后自动加载"""
+            
+            return info
+            
+        except Exception as e:
+            return f"❌ 获取TTS配置失败: {str(e)}"
+    
     def save_json_auto_repair(self, enabled):
         """保存JSON自动修复配置"""
         try:
@@ -434,6 +522,91 @@ class WebConfigInterface:
             
         except Exception as e:
             return f"❌ 保存JSON自动修复配置失败: {str(e)}", self.get_json_auto_repair_info()
+    
+    def save_cosyvoice_mode(self, enabled):
+        """保存CosyVoice2模式配置"""
+        try:
+            # 使用动态配置管理器保存CosyVoice2状态
+            success = self.config_manager.set_cosyvoice_mode(enabled)
+            
+            status_text = "启用" if enabled else "关闭"
+            
+            if success:
+                status = f"✅ CosyVoice2模式已{status_text}，已保存到配置文件"
+            else:
+                status = f"⚠️ CosyVoice2模式已{status_text}，但保存到配置文件失败"
+            
+            # 重新获取配置信息
+            updated_info = self.get_cosyvoice_info()
+            
+            return status, updated_info
+            
+        except Exception as e:
+            return f"❌ 保存CosyVoice2配置失败: {str(e)}", self.get_cosyvoice_info()
+    
+    def save_tts_config(self, tts_provider, tts_model, tts_api_key, tts_base_url):
+        """保存TTS模型配置"""
+        try:
+            # 使用动态配置管理器保存TTS配置
+            success = self.config_manager.set_tts_config(tts_provider, tts_model, tts_api_key, tts_base_url)
+            
+            provider_desc = tts_provider if tts_provider else "使用当前提供商"
+            model_desc = tts_model if tts_model else "使用当前模型"
+            api_key_desc = "已设置独立密钥" if tts_api_key else "使用主配置密钥"
+            base_url_desc = f"独立URL: {tts_base_url}" if tts_base_url else "使用主配置URL"
+            
+            if success:
+                status = f"✅ TTS配置已保存:\n• 提供商: {provider_desc}\n• 模型: {model_desc}\n• API密钥: {api_key_desc}\n• 基础URL: {base_url_desc}"
+            else:
+                status = f"⚠️ TTS配置已设置，但保存到配置文件失败"
+            
+            # 调用所有注册的TTS更新回调
+            for callback in self._tts_update_callbacks:
+                try:
+                    callback()
+                except Exception as e:
+                    print(f"TTS更新回调执行失败: {e}")
+            
+            # 重新获取配置信息
+            updated_info = self.get_tts_config_info()
+            
+            return status, updated_info
+            
+        except Exception as e:
+            return f"❌ 保存TTS配置失败: {str(e)}", self.get_tts_config_info()
+    
+    def register_tts_update_callback(self, callback):
+        """注册TTS配置更新回调"""
+        self._tts_update_callbacks.append(callback)
+    
+    def on_tts_provider_change(self, provider_name):
+        """当TTS提供商改变时的回调"""
+        if not provider_name:
+            return gr.update(choices=[], value=""), f"已清空TTS专用提供商，将使用当前提供商"
+        
+        try:
+            # 获取显示名称
+            display_name = self.config_manager.get_provider_display_name(provider_name)
+            print(f"🔄 TTS配置：切换到提供商 {display_name}")
+            
+            # 获取模型列表
+            models = self.get_model_choices(provider_name, refresh=False)
+            
+            # 获取当前TTS模型配置
+            current_tts_model = self.config_manager.get_tts_model()
+            
+            # 如果当前TTS模型不在列表中，添加它
+            if current_tts_model and current_tts_model not in models:
+                models.append(current_tts_model)
+            
+            return (
+                gr.update(choices=models, value=current_tts_model),
+                f"已切换TTS提供商到 {display_name}，模型列表已加载（{len(models)}个模型）"
+            )
+            
+        except Exception as e:
+            print(f"⚠️ TTS提供商切换出错: {e}")
+            return gr.update(choices=[], value=""), f"❌ 切换TTS提供商失败: {str(e)}"
     
     def get_default_ideas_info(self):
         """获取默认想法配置信息"""
@@ -544,7 +717,7 @@ class WebConfigInterface:
                     # 配置表单
                     with gr.Row():
                         provider_dropdown = gr.Dropdown(
-                            choices=self.get_provider_choices(),
+                            choices=self.get_provider_choices_with_display_names(),
                             label="提供商",
                             value=self.config_manager.get_current_provider(),
                             interactive=True
@@ -638,6 +811,100 @@ class WebConfigInterface:
                     
                     # 状态信息
                     debug_status_output = gr.Textbox(
+                        label="状态",
+                        lines=2,
+                        interactive=False
+                    )
+                
+                with gr.TabItem("⚙️ 通用设置"):
+                    gr.Markdown("### ⚙️ 通用功能设置")
+                    
+                    # CosyVoice2配置信息
+                    cosyvoice_info = gr.Textbox(
+                        label="当前CosyVoice2配置",
+                        value=self.get_cosyvoice_info(),
+                        lines=6,
+                        interactive=False
+                    )
+                    
+                    # CosyVoice2开关
+                    cosyvoice_checkbox = gr.Checkbox(
+                        label="启用CosyVoice2语音标记",
+                        value=self.config_manager.get_cosyvoice_mode(),
+                        interactive=True,
+                        info="🎙️ 启用后，所有生成的文章都会添加语音合成控制标记，用于生成有声书"
+                    )
+                    
+                    # 操作按钮
+                    with gr.Row():
+                        cosyvoice_save_btn = gr.Button("💾 应用设置", variant="primary")
+                        cosyvoice_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
+                    
+                    # 状态信息
+                    cosyvoice_status_output = gr.Textbox(
+                        label="状态",
+                        lines=2,
+                        interactive=False
+                    )
+                
+                with gr.TabItem("🤖 TTS模型配置"):
+                    gr.Markdown("### 🤖 TTS处理模型配置")
+                    
+                    # TTS配置信息
+                    tts_config_info = gr.Textbox(
+                        label="当前TTS模型配置",
+                        value=self.get_tts_config_info(),
+                        lines=8,
+                        interactive=False
+                    )
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            # TTS提供商选择 - 使用显示名称
+                            tts_provider_dropdown = gr.Dropdown(
+                                choices=[("使用主配置提供商", "")] + self.get_provider_choices_with_display_names(),
+                                label="TTS专用提供商",
+                                value=self.config_manager.get_tts_provider(),
+                                interactive=True,
+                                info="选择用于TTS文本处理的AI提供商，留空则使用当前提供商"
+                            )
+                            
+                            # TTS模型选择
+                            tts_model_dropdown = gr.Dropdown(
+                                choices=[],
+                                label="TTS专用模型",
+                                value=self.config_manager.get_tts_model(),
+                                interactive=True,
+                                allow_custom_value=True,
+                                info="选择用于TTS文本处理的AI模型，留空则使用当前模型"
+                            )
+                        
+                        with gr.Column(scale=1):
+                            # TTS API密钥
+                            tts_api_key_input = gr.Textbox(
+                                label="TTS专用API密钥",
+                                type="password",
+                                placeholder="留空则使用主配置的API密钥",
+                                interactive=True,
+                                info="为TTS处理设置独立的API密钥"
+                            )
+                            
+                            # TTS基础URL
+                            tts_base_url_input = gr.Textbox(
+                                label="TTS专用基础URL",
+                                placeholder="留空则使用主配置的基础URL",
+                                interactive=True,
+                                info="为TTS处理设置独立的基础URL"
+                            )
+                    
+                    # 操作按钮
+                    with gr.Row():
+                        tts_save_btn = gr.Button("💾 保存TTS配置", variant="primary")
+                        tts_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
+                        tts_refresh_models_btn = gr.Button("🔄 刷新模型", variant="secondary")
+                    
+                    # 状态信息
+                    tts_status_output = gr.Textbox(
                         label="状态",
                         lines=2,
                         interactive=False
@@ -797,6 +1064,42 @@ class WebConfigInterface:
                 outputs=[debug_level_info]
             )
             
+            # CosyVoice2相关事件绑定
+            cosyvoice_save_btn.click(
+                fn=self.save_cosyvoice_mode,
+                inputs=[cosyvoice_checkbox],
+                outputs=[cosyvoice_status_output, cosyvoice_info]
+            )
+            
+            cosyvoice_refresh_btn.click(
+                fn=self.get_cosyvoice_info,
+                outputs=[cosyvoice_info]
+            )
+            
+            # TTS配置相关事件绑定
+            tts_provider_dropdown.change(
+                fn=self.on_tts_provider_change,
+                inputs=[tts_provider_dropdown],
+                outputs=[tts_model_dropdown, tts_status_output]
+            )
+            
+            tts_save_btn.click(
+                fn=self.save_tts_config,
+                inputs=[tts_provider_dropdown, tts_model_dropdown, tts_api_key_input, tts_base_url_input],
+                outputs=[tts_status_output, tts_config_info]
+            )
+            
+            tts_refresh_btn.click(
+                fn=self.get_tts_config_info,
+                outputs=[tts_config_info]
+            )
+            
+            tts_refresh_models_btn.click(
+                fn=self.refresh_models,
+                inputs=[tts_provider_dropdown, tts_api_key_input, tts_base_url_input],
+                outputs=[tts_model_dropdown, tts_status_output]
+            )
+            
             # JSON自动修复相关事件绑定
             json_repair_save_btn.click(
                 fn=self.save_json_auto_repair,
@@ -840,7 +1143,16 @@ class WebConfigInterface:
                 'json_repair_save_btn': json_repair_save_btn,
                 'json_repair_refresh_btn': json_repair_refresh_btn,
                 'json_repair_status_output': json_repair_status_output,
-                'json_repair_info': json_repair_info
+                'json_repair_info': json_repair_info,
+                'tts_provider_dropdown': tts_provider_dropdown,
+                'tts_model_dropdown': tts_model_dropdown,
+                'tts_api_key_input': tts_api_key_input,
+                'tts_base_url_input': tts_base_url_input,
+                'tts_save_btn': tts_save_btn,
+                'tts_refresh_btn': tts_refresh_btn,
+                'tts_refresh_models_btn': tts_refresh_models_btn,
+                'tts_status_output': tts_status_output,
+                'tts_config_info': tts_config_info
             }
 
 # 全局实例
