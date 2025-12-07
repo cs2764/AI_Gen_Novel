@@ -50,7 +50,8 @@ class LocalStorageManager:
                     user_idea,
                     user_requirements,
                     embellishment_idea,
-                    kwargs.get("target_chapters", 0) or getattr(self.aign, 'target_chapter_count', 0)
+                    kwargs.get("target_chapters", 0) or getattr(self.aign, 'target_chapter_count', 0),
+                    getattr(self.aign, 'style_name', '无')
                 )
             elif data_type == "title":
                 # 在保存标题时，如果用户输入数据存在，也一并保存到大纲文件中以确保不丢失
@@ -63,7 +64,8 @@ class LocalStorageManager:
                         user_idea,
                         user_requirements,
                         embellishment_idea,
-                        getattr(self.aign, 'target_chapter_count', 0)
+                        getattr(self.aign, 'target_chapter_count', 0),
+                        getattr(self.aign, 'style_name', '无')
                     )
                 return title_saved
             elif data_type == "character_list":
@@ -77,7 +79,8 @@ class LocalStorageManager:
                         user_idea,
                         user_requirements,
                         embellishment_idea,
-                        getattr(self.aign, 'target_chapter_count', 0)
+                        getattr(self.aign, 'target_chapter_count', 0),
+                        getattr(self.aign, 'style_name', '无')
                     )
                 return char_saved
             elif data_type == "detailed_outline":
@@ -86,7 +89,8 @@ class LocalStorageManager:
                     kwargs.get("target_chapters", 0),
                     user_idea,
                     user_requirements,
-                    embellishment_idea
+                    embellishment_idea,
+                    getattr(self.aign, 'style_name', '无')
                 )
             elif data_type == "storyline":
                 return self.auto_save_manager.save_storyline(
@@ -94,7 +98,8 @@ class LocalStorageManager:
                     kwargs.get("target_chapters", 0),
                     user_idea,
                     user_requirements,
-                    embellishment_idea
+                    embellishment_idea,
+                    getattr(self.aign, 'style_name', '无')
                 )
             elif data_type == "user_settings":
                 return self.auto_save_manager.save_user_settings(kwargs.get("settings", {}))
@@ -131,11 +136,11 @@ class LocalStorageManager:
                 user_idea_loaded = outline_data.get("user_idea", "")
                 user_requirements_loaded = outline_data.get("user_requirements", "")
                 embellishment_idea_loaded = outline_data.get("embellishment_idea", "")
-                # 从大纲中加载目标章节数（优先级最低）
+                # 从大纲中加载目标章节数（优先级最低，可能被后续覆盖）
                 saved_target_chapters = outline_data.get("target_chapters", 0)
                 if saved_target_chapters > 0:
                     self.aign.target_chapter_count = saved_target_chapters
-                    print(f"📊 从大纲载入目标章节数: {self.aign.target_chapter_count}")
+                    print(f"📊 从大纲载入目标章节数: {self.aign.target_chapter_count}（可能被用户设置覆盖）")
                 if self.aign.novel_outline:
                     loaded_items.append(f"大纲 ({len(self.aign.novel_outline)}字符)")
             
@@ -164,11 +169,11 @@ class LocalStorageManager:
             if all_data["detailed_outline"]:
                 detail_data = all_data["detailed_outline"]
                 self.aign.detailed_outline = detail_data.get("detailed_outline", "")
-                # 从详细大纲中加载目标章节数
+                # 从详细大纲中加载目标章节数（优先级中等，可能被用户设置覆盖）
                 saved_target_chapters = detail_data.get("target_chapters", 0)
                 if saved_target_chapters > 0:
                     self.aign.target_chapter_count = saved_target_chapters
-                    print(f"📊 从详细大纲载入目标章节数: {self.aign.target_chapter_count}")
+                    print(f"📊 从详细大纲载入目标章节数: {self.aign.target_chapter_count}（可能被用户设置覆盖）")
                 # 如果大纲中没有用户输入数据，从详细大纲中加载
                 if not user_idea_loaded:
                     user_idea_loaded = detail_data.get("user_idea", "")
@@ -184,11 +189,11 @@ class LocalStorageManager:
             if all_data["storyline"]:
                 story_data = all_data["storyline"]
                 self.aign.storyline = story_data.get("storyline", {})
-                # 从故事线中加载目标章节数（如果详细大纲中没有的话）
+                # 从故事线中加载目标章节数（只在还是默认值时更新，可能被用户设置覆盖）
                 storyline_target_chapters = story_data.get("target_chapters", 0)
                 if storyline_target_chapters > 0 and self.aign.target_chapter_count <= 20:  # 只在还是默认值时更新
                     self.aign.target_chapter_count = storyline_target_chapters
-                    print(f"📊 从故事线载入目标章节数: {self.aign.target_chapter_count}")
+                    print(f"📊 从故事线载入目标章节数: {self.aign.target_chapter_count}（可能被用户设置覆盖）")
                 # 如果前面没有用户输入数据，从故事线中加载
                 if not user_idea_loaded:
                     user_idea_loaded = story_data.get("user_idea", "")
@@ -219,13 +224,14 @@ class LocalStorageManager:
             if user_input_items:
                 loaded_items.append(f"用户输入数据: {', '.join(user_input_items)}")
             
-            # 加载用户设置
+            # 加载用户设置（最高优先级，会覆盖之前所有来源的值）
             if all_data["user_settings"]:
                 user_settings = all_data["user_settings"]
                 settings = user_settings.get("settings", {})
                 # 加载用户设置相关的属性
                 if "target_chapter_count" in settings:
                     self.aign.target_chapter_count = settings["target_chapter_count"]
+                    print(f"📊 从用户设置载入目标章节数: {self.aign.target_chapter_count}（最高优先级）")
                     loaded_items.append(f"目标章节数: {self.aign.target_chapter_count}章")
                 if "compact_mode" in settings:
                     self.aign.compact_mode = settings["compact_mode"]
@@ -235,9 +241,16 @@ class LocalStorageManager:
                     self.aign.enable_ending = settings["enable_ending"]
                 if "long_chapter_mode" in settings:
                     self.aign.long_chapter_mode = settings["long_chapter_mode"]
+                    loaded_items.append(f"长章节模式: {'启用' if self.aign.long_chapter_mode else '禁用'}")
                     # 切换提示词以匹配加载的设置
                     if hasattr(self.aign, 'updateWriterPromptsForLongChapter'):
                         self.aign.updateWriterPromptsForLongChapter()
+                if "cosyvoice_mode" in settings:
+                    self.aign.cosyvoice_mode = settings["cosyvoice_mode"]
+                    loaded_items.append(f"CosyVoice模式: {'启用' if self.aign.cosyvoice_mode else '禁用'}")
+                    # 更新润色器以匹配加载的设置
+                    if hasattr(self.aign, 'updateEmbellishersForCosyVoice'):
+                        self.aign.updateEmbellishersForCosyVoice()
             
             if loaded_items:
                 print(f"✅ 本地数据加载完成，已加载 {len(loaded_items)} 项:")
@@ -317,12 +330,13 @@ class LocalStorageManager:
                 "compact_mode": getattr(self.aign, 'compact_mode', True),
                 "enable_chapters": getattr(self.aign, 'enable_chapters', True),
                 "enable_ending": getattr(self.aign, 'enable_ending', True),
-                "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', True)
+                "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', 0),
+                "cosyvoice_mode": getattr(self.aign, 'cosyvoice_mode', False)
             }
             
             result = self.save_to_local("user_settings", settings=settings)
             if result:
-                print(f"💾 用户设置已自动保存 (目标章节数: {self.aign.target_chapter_count}章)")
+                print(f"💾 用户设置已自动保存 (目标章节数: {self.aign.target_chapter_count}章, 长章节: {settings['long_chapter_mode']}, CosyVoice: {settings['cosyvoice_mode']})")
             return result
         except Exception as e:
             print(f"❌ 保存用户设置失败: {e}")

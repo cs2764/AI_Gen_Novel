@@ -146,6 +146,34 @@ def create_idea_input_tab(
                 lines=8,
                 interactive=True,
             )
+            
+            # 风格选择下拉菜单
+            try:
+                from style_config import get_style_choices, get_style_description
+                style_choices = get_style_choices()
+                components['style_dropdown'] = gr.Dropdown(
+                    choices=style_choices,
+                    value="无",
+                    label="📚 小说风格",
+                    interactive=True,
+                    info="选择小说风格后，将使用对应风格的正文和润色提示词。选择'无'则使用默认提示词。"
+                )
+                # 风格描述显示
+                components['style_description'] = gr.Markdown(
+                    "💡 **风格说明**: 选择'无'使用默认提示词，不应用特定风格",
+                    visible=True
+                )
+            except Exception as e:
+                print(f"⚠️ 风格选择组件创建失败: {e}")
+                components['style_dropdown'] = gr.Dropdown(
+                    choices=["无"],
+                    value="无",
+                    label="📚 小说风格",
+                    interactive=False,
+                    info="风格选择功能暂不可用"
+                )
+                components['style_description'] = gr.Markdown("", visible=False)
+            
             components['user_requirements_text'] = gr.Textbox(
                 loaded_data.get("user_requirements", ""),
                 label="写作要求",
@@ -304,12 +332,13 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             label="目标章节数", 
             interactive=True
         )
-        # 新的长章节功能开关（将一章拆分为4个剧情段分批生成）
-        components['long_chapter_feature_checkbox'] = gr.Checkbox(
-            label="长章节功能（分4段生成并合并）",
-            value=True,
+        # 长章节功能下拉菜单（支持关闭、2段、3段、4段合并）
+        components['long_chapter_mode_dropdown'] = gr.Dropdown(
+            choices=["关闭", "2段合并", "3段合并", "4段合并"],
+            value="关闭",
+            label="长章节模式",
             interactive=True,
-            info="开启后：每章拆分为4个剧情段，逐段生成与润色，最后自动合并为完整一章"
+            info="选择章节分段生成模式：关闭=传统单次生成；2/3/4段=将章节拆分为多个剧情段，逐段生成与润色后合并"
         )
         components['gen_detailed_outline_button'] = gr.Button("生成详细大纲", variant="secondary")
         components['detailed_outline_text'] = gr.Textbox(

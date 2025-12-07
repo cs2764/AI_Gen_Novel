@@ -18,6 +18,13 @@ class EnhancedStorylineGenerator:
         self.max_retries = 2
         self.provider_name = self._detect_provider()
         
+        # Token 计数（用于显示详细token使用信息）
+        try:
+            import tiktoken
+            self.encoding = tiktoken.get_encoding("cl100k_base")
+        except:
+            self.encoding = None
+        
         # 截断检测配置
         self.truncation_detection = {
             "enabled": True,              # 是否启用截断检测
@@ -170,8 +177,47 @@ class EnhancedStorylineGenerator:
         except Exception as e:
             print(f"⚠️ 记录成功案例失败: {e}")
         
-    def get_storyline_schema(self, expected_count: int = 10) -> Dict[str, Any]:
-        """获取故事线的JSON Schema，动态设置章节数量约束；强制每章包含4个plot_segments"""
+    def get_storyline_schema(self, expected_count: int = 10, require_segments: bool = True) -> Dict[str, Any]:
+        """获取故事线的JSON Schema，动态设置章节数量约束；根据require_segments控制是否强制4分段"""
+        # 基础章节属性（不强制分段）
+        chapter_properties_base = {
+            "chapter_number": {"type": "integer"},
+            "title": {"type": "string"},
+            "plot_summary": {"type": "string"},
+            "key_events": {
+                "type": "array",
+                "items": {"type": "string"}
+            },
+            "character_development": {"type": "string"},
+            "chapter_mood": {"type": "string"}
+        }
+
+        chapter_required_fields = ["chapter_number", "title", "plot_summary"]
+
+        # 如果需要分段，添加plot_segments约束
+        if require_segments:
+            chapter_properties_base["plot_segments"] = {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "index": {"type": "integer"},
+                        "segment_title": {"type": "string"},
+                        "segment_summary": {"type": "string"},
+                        "segment_key_events": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "segment_purpose": {"type": "string"},
+                        "segment_transition": {"type": "string"}
+                    },
+                    "required": ["index", "segment_title", "segment_summary"]
+                }
+            }
+            chapter_required_fields = ["chapter_number", "title", "plot_summary", "plot_segments"]
+
         return {
             "type": "json_schema",
             "json_schema": {
@@ -185,38 +231,8 @@ class EnhancedStorylineGenerator:
                             "maxItems": expected_count,
                             "items": {
                                 "type": "object",
-                                "properties": {
-                                    "chapter_number": {"type": "integer"},
-                                    "title": {"type": "string"},
-                                    "plot_summary": {"type": "string"},
-                                    "key_events": {
-                                        "type": "array",
-                                        "items": {"type": "string"}
-                                    },
-                                    "character_development": {"type": "string"},
-                                    "chapter_mood": {"type": "string"},
-                                    "plot_segments": {
-                                        "type": "array",
-                                        "minItems": 4,
-                                        "maxItems": 4,
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "index": {"type": "integer"},
-                                                "segment_title": {"type": "string"},
-                                                "segment_summary": {"type": "string"},
-                                                "segment_key_events": {
-                                                    "type": "array",
-                                                    "items": {"type": "string"}
-                                                },
-                                                "segment_purpose": {"type": "string"},
-                                                "segment_transition": {"type": "string"}
-                                            },
-                                            "required": ["index", "segment_title", "segment_summary"]
-                                        }
-                                    }
-                                },
-                                "required": ["chapter_number", "title", "plot_summary", "plot_segments"]
+                                "properties": chapter_properties_base,
+                                "required": chapter_required_fields
                             }
                         }
                     },
@@ -349,14 +365,48 @@ class EnhancedStorylineGenerator:
                 if duplicates:
                     print(f"📝 发现重复章节号: {duplicates}")
 
-    def get_storyline_tools(self, expected_count: int = 10) -> List[Dict[str, Any]]:
-        """获取故事线生成的工具定义，动态设置章节数量约束；强制每章包含4个plot_segments"""
+    def get_storyline_tools(self, expected_count: int = 10, require_segments: bool = True) -> List[Dict[str, Any]]:
+        """获取故事线生成的工具定义，动态设置章节数量约束；根据require_segments控制4分段要求"""
+        # 基础章节属性
+        chapter_properties_base = {
+            "chapter_number": {"type": "integer", "description": "章节号"},
+            "title": {"type": "string", "description": "章节标题"},
+            "plot_summary": {"type": "string", "description": "情节梗概"},
+            "key_events": {"type": "array", "description": "关键事件列表", "items": {"type": "string"}},
+            "character_development": {"type": "string", "description": "人物发展"},
+            "chapter_mood": {"type": "string", "description": "章节情绪"}
+        }
+
+        chapter_required_fields = ["chapter_number", "title", "plot_summary"]
+
+        # 如果需要分段，添加plot_segments
+        if require_segments:
+            chapter_properties_base["plot_segments"] = {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "index": {"type": "integer"},
+                        "segment_title": {"type": "string"},
+                        "segment_summary": {"type": "string"},
+                        "segment_key_events": {"type": "array", "items": {"type": "string"}},
+                        "segment_purpose": {"type": "string"},
+                        "segment_transition": {"type": "string"}
+                    },
+                    "required": ["index", "segment_title", "segment_summary"]
+                }
+            }
+            chapter_required_fields = ["chapter_number", "title", "plot_summary", "plot_segments"]
+
+        description_suffix = "且每章包含4个plot_segments" if require_segments else "（仅需梗概，不要求分段）"
         return [
             {
                 "type": "function",
                 "function": {
                     "name": "generate_storyline_batch",
-                    "description": f"生成一批故事线章节（必须生成{expected_count}章，且每章包含4个plot_segments）",
+                    "description": f"生成一批故事线章节（必须生成{expected_count}章，{description_suffix}）",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -367,32 +417,8 @@ class EnhancedStorylineGenerator:
                                 "maxItems": expected_count,
                                 "items": {
                                     "type": "object",
-                                    "properties": {
-                                        "chapter_number": {"type": "integer", "description": "章节号"},
-                                        "title": {"type": "string", "description": "章节标题"},
-                                        "plot_summary": {"type": "string", "description": "情节梗概"},
-                                        "key_events": {"type": "array", "description": "关键事件列表", "items": {"type": "string"}},
-                                        "character_development": {"type": "string", "description": "人物发展"},
-                                        "chapter_mood": {"type": "string", "description": "章节情绪"},
-                                        "plot_segments": {
-                                            "type": "array",
-                                            "minItems": 4,
-                                            "maxItems": 4,
-                                            "items": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "index": {"type": "integer"},
-                                                    "segment_title": {"type": "string"},
-                                                    "segment_summary": {"type": "string"},
-                                                    "segment_key_events": {"type": "array", "items": {"type": "string"}},
-                                                    "segment_purpose": {"type": "string"},
-                                                    "segment_transition": {"type": "string"}
-                                                },
-                                                "required": ["index", "segment_title", "segment_summary"]
-                                            }
-                                        }
-                                    },
-                                    "required": ["chapter_number", "title", "plot_summary", "plot_segments"]
+                                    "properties": chapter_properties_base,
+                                    "required": chapter_required_fields
                                 }
                             },
                             "batch_info": {
@@ -663,7 +689,9 @@ class EnhancedStorylineGenerator:
     def generate_with_structured_output(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.8
+        temperature: float = 0.8,
+        require_segments: bool = True,
+        segment_count: int = 4
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         """使用structured output生成故事线"""
         # 检查是否支持structured outputs
@@ -681,9 +709,12 @@ class EnhancedStorylineGenerator:
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
-                response_format=self.get_storyline_schema(expected_count),
+                response_format=self.get_storyline_schema(expected_count, require_segments),
                 stream=False  # Structured outputs不支持流式输出
             )
+            
+            # 显示token使用信息
+            self._log_token_usage("Structured Outputs", messages, response)
             
             if response.get("content"):
                 try:
@@ -717,7 +748,9 @@ class EnhancedStorylineGenerator:
     def generate_with_tool_calling(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.8
+        temperature: float = 0.8,
+        require_segments: bool = True,
+        segment_count: int = 4
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         """使用tool calling生成故事线"""
         # 检查是否支持tool calling
@@ -740,14 +773,17 @@ class EnhancedStorylineGenerator:
             else:
                 # OpenRouter和其他提供商支持对象格式
                 tool_choice_param = {"type": "function", "function": {"name": "generate_storyline_batch"}}
-            
+
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
-                tools=self.get_storyline_tools(expected_count),
+                tools=self.get_storyline_tools(expected_count, require_segments),
                 tool_choice=tool_choice_param,
                 stream=False  # Tool calling不支持流式输出
             )
+            
+            # 显示token使用信息
+            self._log_token_usage("Tool Calling", messages, response)
             
             if response.get("tool_calls"):
                 for tool_call in response["tool_calls"]:
@@ -801,14 +837,16 @@ class EnhancedStorylineGenerator:
     def generate_with_fallback_repair(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.8
+        temperature: float = 0.8,
+        require_segments: bool = True,
+        segment_count: int = 4
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         """使用传统方法+增强JSON修复生成故事线"""
         try:
             print("🔧 尝试使用传统方法+增强JSON修复生成故事线...")
 
             # 增强提示词，提高JSON格式正确率
-            enhanced_messages = self._enhance_json_prompt(messages.copy())
+            enhanced_messages = self._enhance_json_prompt(messages.copy(), require_segments)
 
             for retry in range(self.max_retries + 1):
                 print(f"🔄 第{retry+1}次尝试生成...")
@@ -823,6 +861,9 @@ class EnhancedStorylineGenerator:
                     temperature=max(0.3, temperature - retry * 0.1),  # 重试时降低温度
                     stream=False  # 需要完整响应以便解析JSON
                 )
+                
+                # 显示token使用信息
+                self._log_token_usage(f"传统方法(第{retry+1}次尝试)", current_messages, response)
 
                 if response.get("content"):
                     print(f"📝 收到响应，长度: {len(response['content'])}字符")
@@ -880,15 +921,21 @@ class EnhancedStorylineGenerator:
             print(f"❌ 增强传统方法调用失败: {e}")
             return None, f"enhanced_traditional_error: {e}"
 
-    def _enhance_json_prompt(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
-        """增强提示词以提高JSON格式正确率"""
+    def _enhance_json_prompt(self, messages: List[Dict[str, str]], require_segments: bool = True) -> List[Dict[str, str]]:
+        """增强提示词以提高JSON格式正确率
+        
+        Args:
+            messages: 消息列表
+            require_segments: 是否要求每章包含4个plot_segments
+        """
         if not messages:
             return messages
 
         # 在最后一个用户消息后添加JSON格式要求
         last_message = messages[-1]["content"]
 
-        json_instructions = """
+        if require_segments:
+            json_instructions = """
 
 **重要：请严格按照以下JSON格式返回，不要添加任何解释或其他文本（每章必须包含4个plot_segments）:**
 
@@ -925,10 +972,85 @@ class EnhancedStorylineGenerator:
 4. 不要在最后一个元素后添加逗号
 5. key_events必须是字符串数组，至少包含3个事件
 6. plot_segments必须是长度为4的数组，index从1到4且每段都有segment_summary"""
+        else:
+            json_instructions = """
+
+**重要：请严格按照以下JSON格式返回，不要添加任何解释或其他文本（本次生成不需要分段，只返回每章梗概；剧情推进更缓慢，一般8-10章讲述一个剧情）:**
+
+```json
+{
+  "chapters": [
+    {
+      "chapter_number": 1,
+      "title": "章节标题",
+      "plot_summary": "详细的情节梗概，至少80字，概述本章整体发展（非分段）",
+      "key_events": ["关键事件1", "关键事件2"],
+      "character_development": "人物发展描述",
+      "chapter_mood": "章节情绪氛围"
+    }
+  ],
+  "batch_info": {
+    "start_chapter": 1,
+    "end_chapter": 1,
+    "total_chapters": 1
+  }
+}
+```
+
+**格式要求：**
+1. 只返回JSON，不要包含任何解释文字
+2. 确保所有字符串都用双引号包围
+3. 确保所有括号和大括号正确配对
+4. 不要在最后一个元素后添加逗号
+5. 不要包含plot_segments字段"""
 
         messages[-1]["content"] = last_message + json_instructions
         return messages
 
+    def _log_token_usage(self, method: str, messages: List[Dict[str, str]], response: Dict[str, Any]):
+        """记录并显示token使用信息"""
+        try:
+            # 计算输入token
+            input_text = ""
+            for msg in messages:
+                input_text += msg.get("content", "")
+            
+            if self.encoding:
+                input_tokens = len(self.encoding.encode(input_text))
+            else:
+                # 如果没有tiktoken，使用简单估算
+                input_tokens = len(input_text) // 3
+            
+            # 获取输出token（优先使用API返回的值）
+            output_tokens = None
+            total_tokens = response.get("total_tokens", 0)
+            
+            # 如果API没有返回token信息，尝试计算输出内容
+            if not total_tokens:
+                output_text = response.get("content", "")
+                if output_text and self.encoding:
+                    output_tokens = len(self.encoding.encode(output_text))
+                elif output_text:
+                    output_tokens = len(output_text) // 3
+                
+                if output_tokens:
+                    total_tokens = input_tokens + output_tokens
+            else:
+                output_tokens = total_tokens - input_tokens
+            
+            # 显示token使用信息（类似aign_agents.py的格式）
+            print("\n" + "="*80)
+            print(f"📊 [{method}] Token使用统计:")
+            print("-"*80)
+            print(f"📥 输入Token: {input_tokens:,} ({len(input_text):,} 字符)")
+            if output_tokens:
+                print(f"📤 输出Token: {output_tokens:,}")
+            print(f"🧮 总Token数: {total_tokens:,}")
+            print("="*80 + "\n")
+            
+        except Exception as e:
+            print(f"⚠️ 计算token使用失败: {e}")
+    
     def _add_retry_instructions(self, messages: List[Dict[str, str]], retry_count: int) -> List[Dict[str, str]]:
         """根据重试次数添加特定指令"""
         retry_instructions = {
@@ -963,7 +1085,8 @@ class EnhancedStorylineGenerator:
                     print(f"❌ 章节 {i+1} 不是对象")
                     return False
 
-                required_fields = ["chapter_number", "title", "plot_summary", "plot_segments"]
+                # 基础必需字段（分段非必需）
+                required_fields = ["chapter_number", "title", "plot_summary"]
                 for field in required_fields:
                     if field not in chapter:
                         print(f"❌ 章节 {i+1} 缺少必需字段: {field}")
@@ -982,20 +1105,21 @@ class EnhancedStorylineGenerator:
                     print(f"❌ 章节 {i+1} 的 plot_summary 必须是至少10字符的字符串")
                     return False
 
-                # 检查plot_segments结构
-                segments = chapter.get("plot_segments", [])
-                if not isinstance(segments, list) or len(segments) != 4:
-                    print(f"❌ 章节 {i+1} 的 plot_segments 必须是长度为4的数组")
-                    return False
-                for idx, seg in enumerate(segments, 1):
-                    if not isinstance(seg, dict):
-                        print(f"❌ 章节 {i+1} 的 第{idx}段 不是对象")
+                # 如果存在plot_segments，则进行基本结构校验（不强制长度为4）
+                if "plot_segments" in chapter:
+                    segments = chapter.get("plot_segments", [])
+                    if not isinstance(segments, list):
+                        print(f"❌ 章节 {i+1} 的 plot_segments 必须是数组")
                         return False
-                    if "segment_summary" not in seg or not str(seg.get("segment_summary", "")).strip():
-                        print(f"❌ 章节 {i+1} 的 第{idx}段 缺少segment_summary")
-                        return False
-                    if "index" in seg and isinstance(seg["index"], int) and seg["index"] != idx:
-                        print(f"⚠️ 章节 {i+1} 的 第{idx}段 index不为{idx}（将接受但建议修正）")
+                    for idx, seg in enumerate(segments, 1):
+                        if not isinstance(seg, dict):
+                            print(f"❌ 章节 {i+1} 的 第{idx}段 不是对象")
+                            return False
+                        if "segment_summary" not in seg or not str(seg.get("segment_summary", "")).strip():
+                            print(f"❌ 章节 {i+1} 的 第{idx}段 缺少segment_summary")
+                            return False
+                        if "index" in seg and isinstance(seg["index"], int) and seg["index"] != idx:
+                            print(f"⚠️ 章节 {i+1} 的 第{idx}段 index不为{idx}（将接受但建议修正）")
 
             print("✅ 故事线结构验证通过")
             return True
@@ -1007,27 +1131,45 @@ class EnhancedStorylineGenerator:
     def generate_storyline_batch(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.8
+        temperature: float = 0.8,
+        require_segments: bool = True,
+        segment_count: int = 4
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         生成故事线批次，按优先级尝试不同方法：
         1. OpenRouter Structured Outputs (仅OpenRouter)
         2. OpenRouter Tool Calling (仅OpenRouter)
         3. 传统方法 + JSON修复（重试2次）
+        
+        Args:
+            messages: 消息列表
+            temperature: 温度参数
+            require_segments: 是否要求每章包含plot_segments（长章节模式=True，非长章节模式=False）
+            segment_count: 每章的分段数量（2、3或4）
         """
 
+        print("\n" + "🚀" * 35)
+        print("🚀🚀🚀 增强生成器接收到的参数 🚀🚀🚀")
+        print("🚀" * 35)
         print(f"🔧 当前提供商: {self.provider_name.upper()}")
+        print(f"📋 require_segments: {require_segments} (类型: {type(require_segments).__name__})")
+        print(f"📦 segment_count: {segment_count} (类型: {type(segment_count).__name__})")
+        if require_segments:
+            print(f"✅ 分段要求: 需要{segment_count}段plot_segments")
+        else:
+            print(f"✅ 分段要求: 仅需梗概，不要求分段")
+        print("🚀" * 35 + "\n")
 
         # 方法1: Structured Outputs (仅OpenRouter)
         if self._supports_advanced_features():
-            data, status = self.generate_with_structured_output(messages, temperature)
+            data, status = self.generate_with_structured_output(messages, temperature, require_segments, segment_count)
             if data:
                 self._log_successful_generation("structured_output", 1, data)
                 return data, status
 
         # 方法2: Tool Calling (OpenRouter和LM Studio)
         if self._supports_tool_calling():
-            data, status = self.generate_with_tool_calling(messages, temperature)
+            data, status = self.generate_with_tool_calling(messages, temperature, require_segments, segment_count)
             if data:
                 self._log_successful_generation("tool_calling", 1, data)
                 return data, status
@@ -1035,7 +1177,7 @@ class EnhancedStorylineGenerator:
             print(f"🔧 {self.provider_name.upper()} 不支持Tool Calling，跳过此方法")
 
         # 方法3: 传统方法 + JSON修复（所有提供商都支持）
-        data, status = self.generate_with_fallback_repair(messages, temperature)
+        data, status = self.generate_with_fallback_repair(messages, temperature, require_segments, segment_count)
         if data:
             # 成功案例已在 generate_with_fallback_repair 中记录
             return data, status
@@ -1119,19 +1261,67 @@ class EnhancedStorylineGenerator:
         key_info = {}
         lines = original_content.split('\n')
         
-        # 提取关键章节范围信息
+        # 提取实际的章节范围
+        start_chapter = 1
+        end_chapter = target_count
+        
+        # 从原始内容中提取章节范围
+        for line in lines:
+            # 匹配 "请为第X章到第Y章生成详细的故事线"
+            match = re.search(r'第(\d+)章到第(\d+)章', line)
+            if match:
+                original_start = int(match.group(1))
+                original_end = int(match.group(2))
+                # 保持原始的起始章节号
+                start_chapter = original_start
+                end_chapter = start_chapter + target_count - 1
+                break
+            # 匹配 "章节范围: X-Y章"
+            match = re.search(r'章节范围.*?(\d+)-(\d+)章', line)
+            if match:
+                original_start = int(match.group(1))
+                original_end = int(match.group(2))
+                start_chapter = original_start
+                end_chapter = start_chapter + target_count - 1
+                break
+        
+        # 提取其他关键信息
         for line in lines:
             if "章节范围:" in line:
                 key_info["章节范围"] = line
             elif line.startswith("**大纲:**"):
-                # 提取大纲的关键部分（只保留相关章节）
-                key_info["大纲"] = "**大纲:** 经过调教，柳如烟彻底沦为性奴，正在进行母狗养成训练。"
+                # 提取大纲（保留原始内容或使用简化版本）
+                idx = lines.index(line)
+                # 尝试获取接下来的几行作为大纲内容
+                outline_lines = []
+                for i in range(idx + 1, min(idx + 10, len(lines))):
+                    if lines[i].startswith("**"):
+                        break
+                    outline_lines.append(lines[i])
+                if outline_lines:
+                    key_info["大纲"] = "**大纲:**\n" + "\n".join(outline_lines[:5])  # 只保留前5行
+                else:
+                    key_info["大纲"] = "**大纲:** (请根据上下文生成)"
             elif line.startswith("**人物列表:**"):
-                key_info["人物列表"] = "**人物列表:** 林浩(主角), 柳如烟(江南名妓, 性奴)"
+                idx = lines.index(line)
+                char_lines = []
+                for i in range(idx + 1, min(idx + 10, len(lines))):
+                    if lines[i].startswith("**"):
+                        break
+                    char_lines.append(lines[i])
+                if char_lines:
+                    key_info["人物列表"] = "**人物列表:**\n" + "\n".join(char_lines[:5])
+                else:
+                    key_info["人物列表"] = "**人物列表:** (请根据上下文生成)"
             elif line.startswith("**写作要求:**"):
-                key_info["写作要求"] = "**写作要求:** 重点性爱描写，爽文风格，直白露骨"
-            elif "前置故事线:" in line:
-                key_info["前置故事线"] = line
+                idx = lines.index(line)
+                req_lines = []
+                for i in range(idx + 1, min(idx + 5, len(lines))):
+                    if lines[i].startswith("**"):
+                        break
+                    req_lines.append(lines[i])
+                if req_lines:
+                    key_info["写作要求"] = "**写作要求:**\n" + "\n".join(req_lines)
         
         # 构建简化的提示词
         simplified_prompt = f"""
@@ -1141,14 +1331,14 @@ class EnhancedStorylineGenerator:
 {key_info.get('人物列表', '')}
 {key_info.get('写作要求', '')}
 
-**要求生成第31-{30+target_count}章，共{target_count}章**
+**要求生成第{start_chapter}-{end_chapter}章，共{target_count}章**
 
 必须返回完整JSON格式：
 ```json
 {{
   "chapters": [
     {{
-      "chapter_number": 31,
+      "chapter_number": {start_chapter},
       "title": "章节标题",  
       "plot_summary": "详细剧情梗概，至少50字",
       "key_events": ["事件1", "事件2", "事件3"],
@@ -1163,8 +1353,8 @@ class EnhancedStorylineGenerator:
     }}
   ],
   "batch_info": {{
-    "start_chapter": 31,
-    "end_chapter": {30+target_count},
+    "start_chapter": {start_chapter},
+    "end_chapter": {end_chapter},
     "total_chapters": {target_count}
   }}
 }}
@@ -1172,9 +1362,10 @@ class EnhancedStorylineGenerator:
 
 **关键要求：**
 1. 只返回JSON，不要其他文字
-2. 确保生成{target_count}章完整内容
+2. 确保生成{target_count}章完整内容，章节号从{start_chapter}到{end_chapter}
 3. 确保JSON语法正确
 4. 每章都要有完整的字段
+5. 章节号必须连续，不能跳号
 """
         
         return simplified_prompt

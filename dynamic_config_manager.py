@@ -137,10 +137,12 @@ class DynamicConfigManager:
             "grok": ProviderConfig(
                 name="grok",
                 api_key="your-grok-api-key-here",
-                model_name="grok-3-mini",
+                model_name="grok-3",
                 base_url="https://api.x.ai/v1",
                 models=[
-                    "grok-3-mini", "grok-beta", "grok-vision-beta"
+                    "grok-code-fast-1", "grok-4-fast-reasoning", "grok-4-fast-non-reasoning",
+                    "grok-4-0709", "grok-3-mini", "grok-3", 
+                    "grok-2-vision-1212", "grok-2-image-1212"
                 ]
             ),
             "fireworks": ProviderConfig(

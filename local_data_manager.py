@@ -221,7 +221,7 @@ def create_data_management_interface(aign) -> Tuple:
         except Exception as e:
             return f"❌ 刷新存储状态失败: {e}"
     
-    def manual_save_handler(aign_state, target_chapters=None, user_idea="", user_requirements="", embellishment_idea=""):
+    def manual_save_handler(aign_state, target_chapters=None, user_idea="", user_requirements="", embellishment_idea="", long_chapter_feature=True):
         """处理手动保存"""
         try:
             # 从Gradio State对象获取实际的AIGN实例
@@ -231,6 +231,13 @@ def create_data_management_interface(aign) -> Tuple:
             if target_chapters is not None:
                 aign_instance.target_chapter_count = target_chapters
                 print(f"💾 手动保存：更新目标章节数为 {target_chapters} 章")
+            
+            # 同步长章节模式设置（从下拉菜单）
+            if hasattr(aign_instance, 'long_chapter_mode'):
+                mode_map = {"关闭": 0, "2段合并": 2, "3段合并": 3, "4段合并": 4}
+                aign_instance.long_chapter_mode = mode_map.get(long_chapter_feature, 0)
+                mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                print(f"💾 手动保存：同步长章节模式设置: {mode_desc.get(aign_instance.long_chapter_mode, '关闭')}")
             
             # 更新AIGN实例中的用户输入数据
             if user_idea is not None:
@@ -315,6 +322,15 @@ def create_data_management_interface(aign) -> Tuple:
                                            embellishment_idea=embellishment_idea)
                 data_count += 1
                 saved_items.append(f"📝 用户输入数据（{', '.join(user_input_items)}）")
+            
+            # 保存用户设置（包括目标章节数和长章节模式）
+            if hasattr(aign_instance, 'save_user_settings'):
+                aign_instance.save_user_settings()
+                data_count += 1
+                segment_count = getattr(aign_instance, 'long_chapter_mode', 0)
+                mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                long_chapter_status = mode_desc.get(segment_count, "关闭")
+                saved_items.append(f"⚙️ 用户设置 (目标{aign_instance.target_chapter_count}章, 长章节: {long_chapter_status})")
 
             if data_count > 0:
                 result = f"✅ 手动保存完成！已保存 {data_count} 项数据:\n\n"

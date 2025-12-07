@@ -1,40 +1,114 @@
-# 🤖 AI Novel Generator v3.5.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.6.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.5.0 (2025-11-05)
+## 🎉 What's New in v3.6.0 (2025-12-07)
 
-**Major Feature Update!** Enhanced generation capabilities, TTS support, and production-ready documentation.
+**Major Release!** Multi-style prompt system with 40+ writing styles and token monitoring.
 
 ### ✨ New Features | 新功能
 
-- 🎙️ **TTS File Processing**: Batch process text files with CosyVoice2 markers for audiobook generation
-- 📏 **Long Chapter Mode**: 4-segment generation system for longer, higher-quality chapters
-- 📊 **Token Statistics**: Real-time tracking of API token usage during auto-generation
-- 🧹 **Text Sanitization**: Automatic removal of structural tags and non-content annotations
-- 📖 **Recent Preview**: Display only recent 5 chapters in UI to reduce browser load
-- 🚫 **Anti-Repetition**: Enhanced prompts to prevent repetitive content generation
-- 🔧 **Modular Refactoring**: Split app.py and AIGN.py into smaller modules for easier maintenance
+#### 🎨 Multi-Style Prompt System (Core Feature)
+- **40+ writing styles**: Xianxia, Urban, Suspense, Romance, Sci-Fi, Fantasy, System-lit, Ancient Romance, etc.
+- **Style-specific prompts**: Each style has dedicated writer and embellisher prompts optimized for that genre
+- **Children's content**: Special styles for toddler stories, picture books, and fairy tales (ages 0-12)
+- **Dynamic loading**: Style prompts loaded dynamically based on user selection
+
+#### 📊 Token Monitor System
+- **Real-time tracking**: Monitor API token usage during generation
+- **Category breakdown**: Separate statistics for writer, embellisher, memory agents
+- **Cost estimation**: Estimate token costs for Chinese and English text
+
+#### 📄 Prompt File Tracker
+- **Source tracking**: Display which prompt file is being used for each agent
+- **Style awareness**: Track style-specific prompt file paths
 
 ### 🔧 Improvements | 功能改进
 
-- 🤖 **Enhanced Storyline Generator**: Support for Structured Outputs and Tool Calling
-- � **SModel Fetcher**: Improved Lambda AI model fetching with fallback defaults
-- 💾 **State Persistence**: Save/load long chapter mode and CosyVoice settings
-- 🎨 **UI Enhancements**: New checkboxes for long chapter and TTS features
-- 📚 **Prompt Modules**: Separated CosyVoice and anti-repetition prompts for maintainability
-- 📦 **Code Organization**: 18 AIGN modules + 4 app modules for better structure
+#### 🎨 Style Management System
+- **style_config.py**: Centralized style configuration with 40+ style mappings
+- **style_manager.py**: Unified style selection, prompt loading, and caching
+- **style_prompt_loader.py**: Dynamic prompt loading from Python files
 
-### 📚 Documentation & Security | 文档与安全
+#### 📚 Comprehensive Prompt Library
+- **prompts/compact/**: 80+ compact mode prompts (writer + embellisher for each style)
+- **prompts/long_chapter/**: 70+ long chapter mode prompts
+- **prompts/common/**: Shared prompts (outline, character, storyline, etc.)
 
-- 📖 **Complete Documentation**: Comprehensive bilingual guides (19 core documents)
-- 🔒 **Enhanced Security**: Automated security checks and improved .gitignore
-- 🛡️ **Data Protection**: Virtual environment and user data fully safeguarded
-- 🏗️ **System Architecture**: Detailed SYSTEM_DOCS.md with multi-agent system explanation
+### 🐛 Bug Fixes | 问题修复
 
-**Perfect for**: Developers wanting to understand the codebase, contributors, and users seeking comprehensive documentation.
+- Improved Lambda AI model fetching with fallback defaults
+- Enhanced state persistence for settings
+
+---
+
+### 📚 Previous Version: v3.5.0 (2025-11-05)
+
+- 📏 **Long Chapter Mode**: 4-segment generation system for longer, higher-quality chapters
+- 🎙️ **TTS File Processing**: Batch process text files with CosyVoice2 markers for audiobook generation
+- 📊 **Token Statistics**: Real-time tracking of API token usage during auto-generation
+- 🧹 **Text Sanitization**: Automatic removal of structural tags and non-content annotations
+- � **Recenit Preview**: Display only recent 5 chapters in UI to reduce browser load
+- 🚫 **Anti-Repetition**: Enhanced prompts to prevent repetitive content generation
+- 🔧 **Modular Refactoring**: Split app.py and AIGN.py into 18 AIGN modules + 4 app modules
+
+### v3.4.0 (2025-10-30)
+- 🔍 **Smart Title Validation**: Automatically filter invalid title content
+- 🚀 **Enhanced Storyline Generator**: Support for Structured Outputs and Tool Calling
+- 🔧 **JSON Auto-Repair**: Intelligent JSON parsing error fixes
+
+### v3.3.0 (2025-08-16)
+- 🔧 **Core Engine Refactoring**: AIGN.py significantly optimized, code lines increased from 4447 to 5126
+  - Added compact mode (`compact_mode`) to reduce token consumption
+  - Introduced global status history system (`global_status_history`)
+  - Integrated auto-save manager for data safety
+  - Added overlength content detection statistics system
+  - Support for detailed outline functionality
+- 🏷️ **Variable Standardization**: Fixed variable name typo in app.py
+- 🤖 **Claude AI Optimization**: Simplified system prompt processing logic
+- ⚙️ **LM Studio Debug Enhancement**: Added detailed system prompt debug information
+- 🛠️ **Generation Logic Optimization**: Smart strategy selection balancing quality and efficiency
+
+### v3.1.0 (2025-08-02)
+- ✨ **API Timeout Optimization**: Extended timeout from 10 to 20 minutes for longer text generation
+- 🎯 **Auto-refresh Default On**: Auto-refresh now enabled by default
+- 🎨 **Smart Button State Management**: Generate button auto-hides during generation
+- 🔧 **Configuration System Enhancement**: Improved dynamic configuration management
+- 📚 **Documentation Updates**: Updated CLAUDE.md, system docs, and project descriptions
+- 🛡️ **Security Optimization**: Improved GitHub upload preparation process
+
+### v3.0.1 (2025-07-26)
+- ✨ **Version Update**: Updated to v3.0.1
+- 👥 **Contributor Acknowledgment**: Added qwen3-code as project contributor
+- 🛡️ **Security Enhancement**: Improved GitHub upload security checks
+- 📚 **Documentation Updates**: Updated README and related documentation
+- ⚙️ **Configuration Optimization**: Improved user configuration auto-save logic
+- 🔧 **Stability Improvements**: Fixed known issues, improved system stability
+
+### v3.0.0 (2025-07-26) - [Detailed System Documentation](SYSTEM_DOCS.md)
+- 🎉 **Major Update**: Full upgrade to Gradio 5.38.0 modern interface
+- 🚀 **Complete Feature Implementation**: All generation features upgraded from demo to full implementation
+- 📊 **Real-time Status Display**: Stage-by-stage generation progress display
+- ✅ **User Confirmation Mechanism**: Prevent accidental overwriting of generated content
+- 🛠️ **Intelligent Error Handling**: Comprehensive error handling and recovery mechanisms
+- 🔧 **Type-safe Binding**: Ensure correct component parameter matching
+- 📖 **Smart Storyline Formatting**: Support for intelligent display of large number of chapters
+- 🔍 **New AI Providers**: Fireworks AI, Grok (xAI), Lambda Labs
+- 🔒 **Security Enhancement**: Improved configuration templates and sensitive file protection
+
+### v2.4.2 (2025-07-23)
+- ✨ **GitHub File Management Guidelines**: Created universal file management guide for all software projects
+- 🛡️ **GitHub Upload Security**: Comprehensive security checks and .gitignore configuration
+- 📚 **Documentation Time Correction**: Corrected incorrect time information in all documents
+- 🔧 **Security Script**: Built-in github_upload_ready.py security check tool
+- 💾 **Local Data Auto-save**: Intelligent data save and recovery mechanism
+- 📊 **Smart Data Import/Export**: Support for complete data management
+- 🌐 **Web File Direct Download**: Improved file download experience
+- 🔍 **Smart Title Validation Filtering**: Automatically filter invalid title content
+- 🚀 **Enhanced Storyline Generation**: Support for Structured Outputs and Tool Calling
+- 🔧 **JSON Format Auto-repair**: Intelligent JSON parsing error fixes
 
 [View Full Changelog](#version-history--版本历史) | [查看完整更新日志](#version-history--版本历史)
 
@@ -56,20 +130,6 @@
 
 ```bash
 # Run security check
-python github_upload_ready.py
-```
-
-## 🔒 重要安全提醒
-
-**⚠️ 在使用和分享本项目前，请务必注意：**
-
-- 🚨 **配置文件包含API密钥**：`config.py` 文件包含您的AI提供商API密钥，绝对不能上传到公开仓库
-- 🛡️ **用户数据保护**：`output/` 和 `autosave/` 目录包含您的创作内容，应保持私有
-- ✅ **安全检查**：项目内置 `github_upload_ready.py` 脚本，上传前请运行安全检查
-- 📖 **详细指南**：参见 [GitHub上传安全指南](GITHUB_UPLOAD_GUIDE.md) 了解完整的安全措施
-
-```bash
-# 运行安全检查
 python github_upload_ready.py
 ```
 
@@ -523,24 +583,55 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.5.0 版本更新 (2025-11-05)
+### 🎉 v3.6.0 版本更新 (2025-12-07)
 
-**GitHub开源发布！** 生产就绪版本，增强文档和安全性。
+**重大发布！** 多风格提示词系统，支持40+写作风格和Token监控。
 
-#### ✨ 主要改进
+#### ✨ 新功能
 
-- 📚 **完整文档**：全面的双语指南，涵盖安装、配置、安全和架构
-- � **文安全增强**：自动化安全检查和改进的.gitignore，保护API密钥和用户数据
-- �️* **数据保护**：虚拟环境和用户生成内容完全保护
-- �  **系统架构**：详细的SYSTEM_DOCS.md，解释多智能体系统和AI提供商集成
-- �️ **统更好的组织**：更清晰的项目结构和有序的测试套件
-- ✅ **生产就绪**：经过全面测试和文档化，适合社区使用
+##### 🎨 多风格提示词系统（核心功能）
+- **40+写作风格**：仙侠、都市、悬疑、甜宠、科幻、玄幻、系统文、古言等
+- **风格专属提示词**：每种风格都有针对该类型优化的写手和润色提示词
+- **儿童内容**：特别支持幼儿故事、儿童绘本、儿童童话（0-12岁）
+- **动态加载**：根据用户选择动态加载风格提示词
 
-**适合**：希望了解代码库的开发者、贡献者和寻求全面文档的用户。
+##### 📊 Token监控系统
+- **实时追踪**：生成过程中监控API Token使用情况
+- **分类统计**：分别统计写手、润色、记忆智能体的Token消耗
+- **成本估算**：估算中英文文本的Token成本
 
-[查看完整更新日志](#version-history--版本历史)
+##### 📄 提示词文件追踪器
+- **来源追踪**：显示每个智能体使用的提示词文件
+- **风格感知**：追踪风格特定的提示词文件路径
+
+#### 🔧 功能改进
+
+##### 🎨 风格管理系统
+- **style_config.py**：集中式风格配置，40+风格映射
+- **style_manager.py**：统一的风格选择、提示词加载和缓存
+- **style_prompt_loader.py**：从Python文件动态加载提示词
+
+##### 📚 完整提示词库
+- **prompts/compact/**：80+精简模式提示词
+- **prompts/long_chapter/**：70+长章节模式提示词
+- **prompts/common/**：共享提示词（大纲、人物、故事线等）
+
+#### 🐛 问题修复
+- 改进Lambda AI模型获取
+- 增强设置状态持久化
 
 ---
+
+### � 上一版本：v3.5.0 (2025-11-05)
+
+- 📏 **长章节模式**：4段式生成系统，支持更长、更高质量的章节
+- 🎙️ **TTS文件处理**：批量处理文本文件，添加CosyVoice2标记
+- 📊 **Token统计**：实时追踪API Token使用情况
+- 🧹 **文本净化**：自动移除结构化标签
+- 🚫 **防重复机制**：增强提示词防止重复内容
+- 🔧 **模块化重构**：18个AIGN模块+4个app模块
+
+[查看完整更新日志](#version-history--版本历史)
 
 ### 🔒 重要安全提醒
 

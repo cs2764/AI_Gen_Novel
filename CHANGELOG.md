@@ -1,5 +1,43 @@
 # 更新日志 | Changelog
 
+## [3.6.0] - 2025-12-07 🚀 重大发布 | Major Release
+
+### ✨ 新功能 | New Features
+
+#### 🎨 多风格提示词系统 | Multi-Style Prompt System
+- **40+写作风格**：仙侠、都市、悬疑、甜宠、科幻、玄幻、系统文、古言、升级流等
+- **风格专属提示词**：每种风格都有针对该类型优化的写手和润色提示词
+- **儿童内容支持**：幼儿故事、儿童绘本、儿童童话（0-12岁）
+- **动态加载**：根据用户选择动态加载风格提示词
+
+#### 📊 Token监控系统 | Token Monitor System
+- **实时追踪**：生成过程中监控API Token使用情况
+- **分类统计**：分别统计写手、润色、记忆智能体的Token消耗
+- **成本估算**：估算中英文文本的Token成本
+
+#### 📄 提示词文件追踪器 | Prompt File Tracker
+- **来源追踪**：显示每个智能体使用的提示词文件
+- **风格感知**：追踪风格特定的提示词文件路径
+
+### 🔧 功能改进 | Improvements
+
+#### 🎨 风格管理系统 | Style Management System
+- **style_config.py**：集中式风格配置，40+风格映射
+- **style_manager.py**：统一的风格选择、提示词加载和缓存
+- **style_prompt_loader.py**：从Python文件动态加载提示词
+
+#### 📚 完整提示词库 | Comprehensive Prompt Library
+- **prompts/compact/**：80+精简模式提示词（每种风格的写手+润色）
+- **prompts/long_chapter/**：70+长章节模式提示词
+- **prompts/common/**：共享提示词（大纲、人物、故事线等）
+- **prompts/standard/**：标准模式提示词，支持分段
+
+### 🐛 问题修复 | Bug Fixes
+- 改进Lambda AI模型获取，添加回退默认值
+- 增强设置状态持久化
+
+---
+
 ## [3.5.0] - 2025-11-05 🎉 重大功能更新
 
 ### ✨ 新功能 | New Features

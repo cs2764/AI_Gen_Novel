@@ -2124,6 +2124,7 @@ def create_gradio5_original_app():
                         if hasattr(aign, 'long_chapter_mode'):
                             # 新长章节功能：仅作为分段生成开关使用，不再调整提示词
                             aign.long_chapter_mode = bool(long_chapter_feature)
+                            print(f"🔧 自动生成：从界面同步长章节模式设置: {'启用' if aign.long_chapter_mode else '禁用'}")
                         
                         # 设置CosyVoice2模式
                         aign.cosyvoice_mode = cosyvoice_mode
@@ -2300,13 +2301,10 @@ def create_gradio5_original_app():
                             # 基于已生成内容计算实际平均字数
                             if current_chapter_count > 0 and current_chars > 0:
                                 actual_avg_per_chapter = current_chars / current_chapter_count
-                                print(f"📊 使用实际平均字数: {actual_avg_per_chapter:.0f} 字符/章 (已生成{current_chapter_count}章，共{current_chars}字符)")
                                 if actual_avg_per_chapter > 50000:
-                                    print(f"⚠️ 检测到异常平均字数: {actual_avg_per_chapter:.0f}，使用默认值12000")
                                     actual_avg_per_chapter = 12000
                             else:
                                 actual_avg_per_chapter = 12000
-                                print(f"📊 使用默认平均字数: {actual_avg_per_chapter} 字符/章 (尚未生成章节)")
                             
                             estimated_total_chars = int(target_chapters * actual_avg_per_chapter)
                             
@@ -2382,13 +2380,10 @@ def create_gradio5_original_app():
                             # 基于已生成内容计算实际平均字数
                             if current_chapter_count > 0 and content_chars > 0:
                                 actual_avg_per_chapter = content_chars / current_chapter_count
-                                print(f"📊 使用实际平均字数: {actual_avg_per_chapter:.0f} 字符/章 (已生成{current_chapter_count}章，共{content_chars}字符)")
                                 if actual_avg_per_chapter > 50000:
-                                    print(f"⚠️ 检测到异常平均字数: {actual_avg_per_chapter:.0f}，使用默认值12000")
                                     actual_avg_per_chapter = 12000
                             else:
                                 actual_avg_per_chapter = 12000
-                                print(f"📊 使用默认平均字数: {actual_avg_per_chapter} 字符/章 (尚未生成章节)")
                             
                             estimated_total_chars = int(target_chapters * actual_avg_per_chapter)
                             
@@ -2909,7 +2904,7 @@ def create_gradio5_original_app():
                 if data_management_components and 'manual_save_btn' in data_management_components:
                     data_management_components['manual_save_btn'].click(
                         fn=data_management_components['manual_save_handler'],
-                        inputs=[aign, target_chapters_slider, user_idea_text, user_requirements_text, embellishment_idea_text],
+                        inputs=[aign, target_chapters_slider, user_idea_text, user_requirements_text, embellishment_idea_text, long_chapter_feature_checkbox],
                         outputs=[data_management_components['storage_status']]
                     )
                     print("✅ 手动保存按钮绑定成功")

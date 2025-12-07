@@ -41,11 +41,48 @@ class StorylineManager:
         
         # 根据长章节功能动态调整批次大小
         try:
-            if getattr(self.aign, 'long_chapter_mode', True) and chapters_per_batch == 10:
-                chapters_per_batch = 5
-                print("📦 长章节模式启用：将每批章节数调整为 5")
-        except Exception:
-            pass
+            segment_count_raw = getattr(self.aign, 'long_chapter_mode', 0)
+            mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
+            
+            # 🔍 调试：显示原始值和类型
+            print(f"🔍 故事线生成开始：当前长章节模式原始值: {segment_count_raw} (类型: {type(segment_count_raw).__name__})")
+            print(f"🔍 传入的批次大小: {chapters_per_batch} 章")
+            
+            # 确保转换为整数
+            try:
+                segment_count = int(segment_count_raw) if segment_count_raw else 0
+            except (ValueError, TypeError):
+                print(f"⚠️ 无法转换为整数，使用默认值0")
+                segment_count = 0
+            
+            print(f"🔍 转换后的segment_count: {segment_count} (类型: {type(segment_count).__name__})")
+            print(f"🔍 当前长章节模式: {mode_desc.get(segment_count, '关闭')}")
+            
+            # 只在使用默认值时自动调整
+            if chapters_per_batch == 10:
+                # 确保segment_count是数字类型
+                try:
+                    segment_count_int = int(segment_count) if segment_count else 0
+                except (ValueError, TypeError):
+                    print(f"⚠️ long_chapter_mode 值无效: {segment_count}，使用默认值0")
+                    segment_count_int = 0
+                
+                if segment_count_int > 0:
+                    # 长章节模式：每批5章（因为每章有多个分段，结构更复杂）
+                    chapters_per_batch = 5
+                    print(f"📦 长章节模式启用（{mode_desc.get(segment_count_int, '未知')}）：将每批章节数调整为 5")
+                else:
+                    # 非长章节模式：保持每批10章（只需梗概，结构简单）
+                    print("📦 非长章节模式：保持每批章节数为 10")
+            else:
+                # 用户手动指定了批次大小，不自动调整
+                print(f"📦 使用手动指定的批次大小: {chapters_per_batch} 章")
+        except Exception as e:
+            print(f"⚠️ 批次大小调整异常: {e}")
+            import traceback
+            traceback.print_exc()
+            # 不要忽略异常，继续使用默认值
+            print(f"⚠️ 使用默认批次大小: {chapters_per_batch} 章")
         
         # 获取当前大纲
         if hasattr(self.aign, 'getCurrentOutline'):
@@ -149,14 +186,42 @@ class StorylineManager:
                     from enhanced_storyline_generator import EnhancedStorylineGenerator
                     enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM)
                     
-                    # 准备消息
-                    prompt = self._build_storyline_prompt(inputs, start_chapter, end_chapter)
+                    # 准备消息（_build_storyline_prompt 返回 prompt 和 segment_count）
+                    prompt, segment_count = self._build_storyline_prompt(inputs, start_chapter, end_chapter)
                     messages = [{"role": "user", "content": prompt}]
                     
+                    # 使用从 _build_storyline_prompt 返回的 segment_count
+                    # 不再重新获取，避免不一致
+                    require_segments = segment_count > 0
+                    
+                    print("\n" + "=" * 70)
+                    print(f"🔍 使用提示词构建时确定的 segment_count")
+                    print("=" * 70)
+                    print(f"📦 segment_count: {segment_count} (类型: {type(segment_count).__name__})")
+                    print(f"📋 require_segments: {require_segments}")
+                    print("=" * 70 + "\n")
+                    
+                    print("\n" + "⚡" * 35)
+                    print(f"⚡⚡⚡ 准备调用增强生成器（批次{batch_count}）⚡⚡⚡")
+                    print("⚡" * 35)
+                    print(f"📋 require_segments: {require_segments} (类型: {type(require_segments).__name__})")
+                    print(f"📦 segment_count: {segment_count} (类型: {type(segment_count).__name__})")
+                    print(f"📏 完整提示词长度: {len(prompt)} 字符")
+                    print(f"🎯 期望生成: {end_chapter - start_chapter + 1} 章")
+                    if require_segments:
+                        print(f"❌ 输出格式: 每章包含 {segment_count} 个 plot_segments")
+                    else:
+                        print(f"✅ 输出格式: 仅梗概，不含 plot_segments")
+                    print("⚡" * 35 + "\n")
+                    
                     # 使用增强生成器生成故事线
+                    print(f"🚀 正在调用 enhanced_generator.generate_storyline_batch()...")
+                    print(f"   参数: require_segments={require_segments}, segment_count={segment_count}")
                     batch_storyline, generation_status = enhanced_generator.generate_storyline_batch(
                         messages=messages,
-                        temperature=0.8
+                        temperature=0.8,
+                        require_segments=require_segments,
+                        segment_count=segment_count
                     )
                     
                     if batch_storyline is None:
@@ -274,13 +339,74 @@ class StorylineManager:
         
         return self.aign.storyline
     
-    def _build_storyline_prompt(self, inputs: dict, start_chapter: int, end_chapter: int) -> str:
-        """构建故事线生成的提示词"""
+    def _build_storyline_prompt(self, inputs: dict, start_chapter: int, end_chapter: int):
+        """构建故事线生成的提示词
+        
+        Returns:
+            tuple: (prompt, segment_count) - 提示词文本和分段数量
+        """
+        print("\n" + "🔥" * 35)
+        print("🔥🔥🔥 开始构建故事线提示词 🔥🔥🔥")
+        print("🔥" * 35 + "\n")
+        
+        # 根据长章节模式选择不同的基础提示词
+        segment_count_raw = getattr(self.aign, 'long_chapter_mode', 0)
+        
+        # 🔍 调试：显示原始值和类型
+        print("=" * 70)
+        print("📋 故事线提示词配置")
+        print("=" * 70)
+        print(f"🔍 segment_count_raw: {segment_count_raw} (类型: {type(segment_count_raw).__name__})")
+        
+        # 确保转换为整数
         try:
-            from AIGN_Prompt_Enhanced import storyline_generator_prompt
-            base_prompt = storyline_generator_prompt
+            segment_count = int(segment_count_raw) if segment_count_raw else 0
+        except (ValueError, TypeError):
+            print(f"⚠️ 无法转换为整数，使用默认值0")
+            segment_count = 0
+        
+        print(f"🔍 segment_count (转换后): {segment_count} (类型: {type(segment_count).__name__})")
+        
+        prompt_file_used = "未知"
+        
+        try:
+            if segment_count > 0:
+                # 长章节模式：使用包含分段的提示词
+                from AIGN_Prompt_Enhanced import storyline_generator_prompt
+                base_prompt = storyline_generator_prompt
+                prompt_file_used = "AIGN_Prompt_Enhanced.py"
+                print(f"✅ 提示词版本: 长章节模式（WITH SEGMENTS）")
+                print(f"📦 分段要求: 每章包含 {segment_count} 个 plot_segments")
+                print(f"📄 提示词文件: {prompt_file_used}")
+                print(f"🔧 输出格式: 包含 plot_segments 字段")
+            else:
+                # 非长章节模式：使用简化提示词
+                try:
+                    from prompts.common.storyline_prompt_simple import storyline_generator_prompt_simple
+                    base_prompt = storyline_generator_prompt_simple
+                    prompt_file_used = "prompts/common/storyline_prompt_simple.py"
+                    print(f"✅ 提示词版本: 简化模式（WITHOUT SEGMENTS）")
+                    print(f"📦 分段要求: 无分段，仅梗概")
+                    print(f"📄 提示词文件: {prompt_file_used}")
+                    print(f"🔧 输出格式: 不包含 plot_segments 字段")
+                except ImportError:
+                    # 如果简化提示词不存在，使用标准提示词
+                    from AIGN_Prompt_Enhanced import storyline_generator_prompt
+                    base_prompt = storyline_generator_prompt
+                    prompt_file_used = "AIGN_Prompt_Enhanced.py (回退)"
+                    print(f"⚠️ 提示词版本: 标准模式（回退）")
+                    print(f"⚠️ 简化提示词不可用，使用标准提示词")
+                    print(f"📄 提示词文件: {prompt_file_used}")
+                    print(f"🔧 输出格式: 可能包含 plot_segments 字段")
         except ImportError:
             base_prompt = "请根据以下信息生成故事线："
+            prompt_file_used = "内置默认字符串"
+            print(f"❌ 提示词版本: 默认模式（降级）")
+            print(f"❌ 提示词模块不可用，使用默认提示词")
+            print(f"📄 提示词文件: {prompt_file_used}")
+        
+        print(f"📏 基础提示词长度: {len(base_prompt)} 字符")
+        print("=" * 70 + "\n")
         
         prompt = base_prompt + "\n\n"
         
@@ -306,11 +432,34 @@ class StorylineManager:
         expected_count = end_chapter - start_chapter + 1
         prompt += f"## 生成要求:\n"
         prompt += f"请为第{start_chapter}章到第{end_chapter}章生成详细的故事线。\n"
-        prompt += f"每一章都必须包含 plot_segments 字段，且包含严格的4段剧情（index=1..4），分段内容互不重叠并首尾衔接。\n"
+        # 注意：segment_count 已经在方法开始时转换为整数，这里直接使用
+        if segment_count > 0:
+            prompt += f"每一章都必须包含 plot_segments 字段，且包含严格的{segment_count}段剧情（index=1..{segment_count}），分段内容互不重叠并首尾衔接。\n"
+        else:
+            prompt += f"不需要剧情分段（不含 plot_segments），仅返回每一章的梗概（plot_summary）。\n"
+            prompt += f"如上方模板存在分段要求，请忽略分段相关要求，按本次指示执行。\n"
         prompt += f"**重要：必须生成完整的{expected_count}章内容，一章都不能少！**\n"
         prompt += f"必须严格按照JSON格式输出，不要包含任何其他文本。\n"
         prompt += f"确保每章都有有意义的标题和详细的剧情梗概。\n\n"
-        
+
+        # 根据模式追加精简/长章节指导
+        try:
+            if getattr(self.aign, 'compact_mode', False):
+                prompt += "### 精简模式额外约束\n"
+                prompt += "- 信息密度与短句输出：plot_summary控制在200-350字，用动词短句描述'当章目标→冲突/阻碍→关键行动→结果/代价→承接下一章'，避免修辞与空话。\n"
+                prompt += "- 分段严格约束：plot_segments的每个segment_summary≤2句、聚焦一个核心动作或信息揭示；segment_key_events必须是可执行动作，不用抽象词。\n"
+                prompt += "- 明确承接：每章最后一段的segment_transition必须具体（下一章目标/悬念/时间或场景转换），禁止泛化表达如'推动剧情发展'。\n"
+                prompt += "- 角色焦点：main_characters不超过3人，聚焦主角与关键配角，减少并行多线。\n"
+                prompt += "- 标题策略：标题使用核心事件关键词，不含【】（）、特殊修饰符或字数说明。\n"
+                # 注意：segment_count 已经在方法开始时转换为整数，这里直接使用
+                if segment_count > 0:
+                    prompt += f"- 长章节优化（{segment_count}段模式）：每段更紧凑，避免并行展开；key_events给出3-5条可执行动作或信息揭示。\n"
+                else:
+                    prompt += "- 标准章节优化：plot_summary建议180-260字；key_events给出2-4条。\n"
+                prompt += "\n"
+        except Exception:
+            pass
+
         prompt += f"输出格式示例（必须包含所有{expected_count}章）:\n"
         prompt += f"```json\n"
         prompt += f'{{\n'
@@ -327,13 +476,17 @@ class StorylineManager:
             prompt += f'      "plot_summary": "第{chapter_num}章的详细剧情梗概（全章总览）",\n'
             prompt += f'      "key_events": ["关键事件1", "关键事件2", "关键事件3"],\n'
             prompt += f'      "character_development": "人物发展描述",\n'
-            prompt += f'      "chapter_mood": "章节情绪氛围",\n'
-            prompt += f'      "plot_segments": [\n'
-            prompt += f'        {{"index": 1, "segment_title": "分段1", "segment_summary": "分段1内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接2"}},\n'
-            prompt += f'        {{"index": 2, "segment_title": "分段2", "segment_summary": "分段2内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接3"}},\n'
-            prompt += f'        {{"index": 3, "segment_title": "分段3", "segment_summary": "分段3内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接4"}},\n'
-            prompt += f'        {{"index": 4, "segment_title": "分段4", "segment_summary": "分段4内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "承上启下至下一章"}}\n'
-            prompt += f'      ]\n'
+            prompt += f'      "chapter_mood": "章节情绪氛围"'
+            if segment_count > 0:
+                prompt += f',\n      "plot_segments": [\n'
+                for seg_idx in range(1, segment_count + 1):
+                    next_seg = seg_idx + 1 if seg_idx < segment_count else "下一章"
+                    prompt += f'        {{"index": {seg_idx}, "segment_title": "分段{seg_idx}", "segment_summary": "分段{seg_idx}内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接{next_seg}"}}'
+                    if seg_idx < segment_count:
+                        prompt += ',\n'
+                    else:
+                        prompt += '\n'
+                prompt += f'      ]\n'
             prompt += f'    }}'
         
         # 如果有更多章节，用省略号表示
@@ -348,9 +501,21 @@ class StorylineManager:
         prompt += f'  }}\n'
         prompt += f'}}\n'
         prompt += f"```\n\n"
-        prompt += f"**再次强调：必须生成{expected_count}章完整内容，且每章必须包含4个分段！**"
+        if segment_count > 0:
+            prompt += f"**再次强调：必须生成{expected_count}章完整内容，且每章必须包含{segment_count}个分段！**"
+        else:
+            prompt += f"**再次强调：必须生成{expected_count}章完整内容；本次不需要分段，只返回每章梗概！**"
         
-        return prompt
+        # 最终总结
+        print("\n" + "🔥" * 35)
+        print("🔥🔥🔥 提示词构建完成 🔥🔥🔥")
+        print("🔥" * 35)
+        print(f"📄 使用的提示词文件: {prompt_file_used}")
+        print(f"📦 分段模式: {'需要' + str(segment_count) + '段' if segment_count > 0 else '不需要分段'}")
+        print(f"📏 完整提示词长度: {len(prompt)} 字符")
+        print("🔥" * 35 + "\n")
+        
+        return prompt, segment_count
     
     def _format_prev_storyline(self, prev_chapters):
         """格式化前置故事线用于上下文"""
@@ -386,7 +551,14 @@ class StorylineManager:
         # 计算缺失的章节数
         missing_count = expected_count - len(chapters)
         
-        if len(chapters) != expected_count:
+        # 特殊情况：渐进式生成可能只生成了5章（当期望10章时）
+        # 这是增强生成器的降级策略，应该接受
+        if missing_count == 5 and len(chapters) == 5 and expected_count == 10:
+            print(f"🔍 检测到渐进式生成：期望{expected_count}章，实际生成{len(chapters)}章")
+            print(f"   这是增强生成器的降级策略，接受此结果")
+            # 不进行修复，直接接受5章的结果
+            # 后续批次会继续生成剩余章节
+        elif len(chapters) != expected_count:
             # 如果章节数量不匹配，尝试智能修复
             if missing_count > 0 and missing_count <= 3:
                 # 缺失1-3章，尝试补充缺失章节
@@ -511,25 +683,36 @@ class StorylineManager:
             if not value or (isinstance(value, str) and len(value.strip()) == 0):
                 issues.append(f"第{expected_number}章: 字段 '{field}' 为空")
         
-        # 分段结构校验（新要求）
+        # 分段结构校验（根据模式可选）
+        segment_count_raw = getattr(self.aign, 'long_chapter_mode', 0)
+        # 确保转换为整数
+        try:
+            segment_count = int(segment_count_raw) if segment_count_raw else 0
+        except (ValueError, TypeError):
+            segment_count = 0
+        
         segments = chapter.get("plot_segments")
-        if segments is None:
-            issues.append(f"第{expected_number}章: 缺少'plot_segments'分段结构")
-        elif not isinstance(segments, list):
-            issues.append(f"第{expected_number}章: 'plot_segments'必须为列表")
-        else:
-            if len(segments) != 4:
-                issues.append(f"第{expected_number}章: 'plot_segments'数量应为4，实际为{len(segments)}")
+        if segment_count > 0:
+            if segments is None:
+                issues.append(f"第{expected_number}章: 缺少'plot_segments'分段结构")
+            elif not isinstance(segments, list):
+                issues.append(f"第{expected_number}章: 'plot_segments'必须为列表")
             else:
-                # 基础字段校验
-                for i, seg in enumerate(segments, 1):
-                    if not isinstance(seg, dict):
-                        issues.append(f"第{expected_number}章: 分段{i}结构应为对象")
-                        continue
-                    if str(seg.get("index")) != str(i):
-                        issues.append(f"第{expected_number}章: 分段{i}的index应为{i}")
-                    if not seg.get("segment_summary"):
-                        issues.append(f"第{expected_number}章: 分段{i}缺少segment_summary")
+                if len(segments) != segment_count:
+                    issues.append(f"第{expected_number}章: 'plot_segments'数量应为{segment_count}，实际为{len(segments)}")
+                else:
+                    # 基础字段校验
+                    for i, seg in enumerate(segments, 1):
+                        if not isinstance(seg, dict):
+                            issues.append(f"第{expected_number}章: 分段{i}结构应为对象")
+                            continue
+                        if str(seg.get("index")) != str(i):
+                            issues.append(f"第{expected_number}章: 分段{i}的index应为{i}")
+                        if not seg.get("segment_summary"):
+                            issues.append(f"第{expected_number}章: 分段{i}缺少segment_summary")
+        else:
+            # 非长章节模式下不要求分段，若存在则不强制检查数量结构
+            pass
         
         # 内容质量验证
         if "plot_summary" in chapter:
@@ -560,11 +743,40 @@ class StorylineManager:
         target_chapters = self.aign.target_chapter_count
         completion_rate = (generated_chapters / target_chapters * 100) if target_chapters > 0 else 0
         
-        print(f"\n🎉 故事线生成完成！")
+        print(f"\n" + "=" * 70)
+        print(f"🎉 故事线生成完成！")
+        print("=" * 70)
         print(f"📊 生成统计：")
         print(f"   • 成功生成章节：{generated_chapters}")
         print(f"   • 目标章节数：{target_chapters}")
         print(f"   • 完成率：{completion_rate:.1f}%")
+        
+        # 🔍 调试：显示实际章节号范围
+        if self.aign.storyline['chapters']:
+            chapter_numbers = [ch.get('chapter_number', 0) for ch in self.aign.storyline['chapters']]
+            min_chapter = min(chapter_numbers) if chapter_numbers else 0
+            max_chapter = max(chapter_numbers) if chapter_numbers else 0
+            print(f"   • 章节号范围：第{min_chapter}章 - 第{max_chapter}章")
+            print(f"   • 实际章节列表长度：{len(self.aign.storyline['chapters'])}")
+            
+            # 检查是否有重复或缺失的章节号
+            expected_chapters = set(range(1, target_chapters + 1))
+            actual_chapters = set(chapter_numbers)
+            missing_chapters = expected_chapters - actual_chapters
+            duplicate_chapters = [ch for ch in chapter_numbers if chapter_numbers.count(ch) > 1]
+            
+            if missing_chapters:
+                missing_list = sorted(list(missing_chapters))
+                print(f"   ⚠️ 缺失章节：{len(missing_list)}章")
+                if len(missing_list) <= 10:
+                    print(f"      {missing_list}")
+                else:
+                    print(f"      前10个：{missing_list[:10]}...")
+            
+            if duplicate_chapters:
+                print(f"   ⚠️ 重复章节：{set(duplicate_chapters)}")
+        
+        print("=" * 70)
         
         # 检查是否有失败的批次
         if hasattr(self.aign, 'failed_batches') and self.aign.failed_batches:

@@ -68,15 +68,12 @@ def update_progress(aign_instance):
             # 基于已生成内容计算实际平均字数
             if current_chapter_count > 0 and current_novel_content:
                 actual_avg_per_chapter = len(current_novel_content) / current_chapter_count
-                print(f"📊 使用实际平均字数: {actual_avg_per_chapter:.0f} 字符/章 (已生成{current_chapter_count}章，共{len(current_novel_content)}字符)")
                 # 防止异常值
                 if actual_avg_per_chapter > 50000:
-                    print(f"⚠️ 检测到异常平均字数: {actual_avg_per_chapter:.0f}，使用默认值12000")
                     actual_avg_per_chapter = 12000
             else:
                 # 使用更合理的默认值（12000字符/章，适应长章节模式）
                 actual_avg_per_chapter = 12000
-                print(f"📊 使用默认平均字数: {actual_avg_per_chapter} 字符/章 (尚未生成章节)")
             
             estimated_total_chars = int(target_chapters * actual_avg_per_chapter)
             
@@ -115,10 +112,19 @@ def update_progress(aign_instance):
             if hasattr(aign_instance, 'get_current_stream_content'):
                 stream_content = aign_instance.get_current_stream_content()
 
+            # 获取小说内容 - 只显示最近5章
+            novel_content_display = ""
+            if hasattr(aign_instance, 'get_recent_novel_preview'):
+                # 使用get_recent_novel_preview方法获取最近5章
+                novel_content_display = aign_instance.get_recent_novel_preview(limit_chapters=5)
+            else:
+                # 回退到显示完整内容
+                novel_content_display = getattr(aign_instance, 'novel_content', '') or ''
+            
             return [
                 progress_text,
                 getattr(aign_instance, 'current_output_file', '') or '',
-                getattr(aign_instance, 'novel_content', '') or '',
+                novel_content_display,
                 stream_content
             ]
         else:
@@ -205,6 +211,14 @@ def import_auto_saved_data_handler(aign_state):
             if hasattr(aign_instance, 'storyline') and aign_instance.storyline:
                 storyline_display = format_storyline_display_detailed(aign_instance.storyline)
             
+            # 获取长章节模式设置
+            segment_count = getattr(aign_instance, 'long_chapter_mode', 0)
+            mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
+            long_chapter_mode_value = mode_desc.get(segment_count, "关闭")
+            
+            # 获取风格设置
+            style_name = getattr(aign_instance, 'style_name', '无')
+            
             return [
                 result_message,
                 getattr(aign_instance, 'user_idea', '') or '',
@@ -215,18 +229,20 @@ def import_auto_saved_data_handler(aign_state):
                 getattr(aign_instance, 'novel_title', '') or '',
                 getattr(aign_instance, 'character_list', '') or '',
                 getattr(aign_instance, 'detailed_outline', '') or '',
-                storyline_display
+                storyline_display,
+                long_chapter_mode_value,
+                style_name
             ]
         else:
             return [
                 "⚠️ 未找到可导入的自动保存数据",
-                "", "", "", 20, "", "", "", "", "暂无故事线内容"
+                "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无"
             ]
             
     except Exception as e:
         return [
             f"❌ 导入失败: {str(e)}",
-            "", "", "", 20, "", "", "", "", "暂无故事线内容"
+            "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无"
         ]
 
 
@@ -376,10 +392,19 @@ def _update_progress_simple(aign_instance):
     if hasattr(aign_instance, 'get_current_stream_content'):
         stream_content = aign_instance.get_current_stream_content()
 
+    # 获取小说内容 - 只显示最近5章
+    novel_content_display = ""
+    if hasattr(aign_instance, 'get_recent_novel_preview'):
+        # 使用get_recent_novel_preview方法获取最近5章
+        novel_content_display = aign_instance.get_recent_novel_preview(limit_chapters=5)
+    else:
+        # 回退到显示完整内容
+        novel_content_display = getattr(aign_instance, 'novel_content', '') or ''
+
     return [
         progress_text,
         getattr(aign_instance, 'current_output_file', '') or '',
-        getattr(aign_instance, 'novel_content', '') or '',
+        novel_content_display,
         stream_content
     ]
 

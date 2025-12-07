@@ -22,6 +22,59 @@ from typing import Tuple, Dict, Any, List
 # 事件处理函数导入标记（在绑定时动态导入）
 _event_handlers_imported = False
 
+def convert_long_chapter_mode(mode_str):
+    """
+    将长章节模式字符串转换为数值
+    
+    Args:
+        mode_str: 模式字符串（"关闭"、"2段合并"、"3段合并"、"4段合并"）
+    
+    Returns:
+        int: 0=关闭，2=2段合并，3=3段合并，4=4段合并
+    """
+    mode_map = {"关闭": 0, "2段合并": 2, "3段合并": 3, "4段合并": 4}
+    result = mode_map.get(mode_str, 0)
+    print(f"🔄 convert_long_chapter_mode: '{mode_str}' -> {result}")
+    return result
+
+def sync_long_chapter_mode_from_ui(aign_instance, ui_value, context=""):
+    """
+    从UI同步长章节模式设置到AIGN实例
+    
+    Args:
+        aign_instance: AIGN实例
+        ui_value: UI下拉菜单的值
+        context: 调用上下文（用于调试）
+    """
+    if not hasattr(aign_instance, 'long_chapter_mode'):
+        return
+    
+    print(f"\n{'='*70}")
+    print(f"🔍 同步长章节模式 ({context})")
+    print(f"{'='*70}")
+    print(f"   AIGN实例当前值: {aign_instance.long_chapter_mode} (类型: {type(aign_instance.long_chapter_mode).__name__})")
+    print(f"   UI下拉菜单传入: {ui_value} (类型: {type(ui_value).__name__})")
+    
+    converted_value = convert_long_chapter_mode(ui_value)
+    print(f"   转换后的值: {converted_value} (类型: {type(converted_value).__name__})")
+    
+    aign_instance.long_chapter_mode = converted_value
+    print(f"✅ 同步完成: {get_long_chapter_mode_desc(aign_instance.long_chapter_mode)}")
+    print(f"{'='*70}\n")
+
+def get_long_chapter_mode_desc(mode_value):
+    """
+    获取长章节模式的描述文本
+    
+    Args:
+        mode_value: 模式数值（0、2、3、4）
+    
+    Returns:
+        str: 模式描述
+    """
+    mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
+    return mode_desc.get(mode_value, "关闭")
+
 def _ensure_handlers_imported():
     """确保所有必要的处理函数已导入"""
     global _event_handlers_imported
@@ -165,11 +218,17 @@ def create_page_load_handler(aign_instance, original_modules_loaded: bool = True
             # 检查是否有自动保存数据，决定导入按钮的可见性
             import_button_state = check_auto_saved_data()
             
-            # 返回合并的结果，包含按钮状态
-            return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state]
+            # 获取长章节模式设置
+            segment_count = getattr(aign_inst, 'long_chapter_mode', 0)
+            mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
+            long_chapter_mode_value = mode_desc.get(segment_count, "关闭")
+            print(f"📊 页面加载：长章节模式 = {long_chapter_mode_value}")
+            
+            # 返回合并的结果，包含按钮状态和长章节模式
+            return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, long_chapter_mode_value]
         except Exception as e:
             print(f"⚠️ 合并页面加载失败: {e}")
-            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False)]
+            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), "关闭"]
     
     return combined_page_load
 
@@ -465,7 +524,7 @@ def bind_main_events(
 
         # 绑定其他生成按钮（如果存在）
         # 生成故事线包装（生成器版本）
-        def _wrap_gen_storyline(aign_state, user_idea, user_requirements, outline, character_list, target_chapters):
+        def _wrap_gen_storyline(aign_state, user_idea, user_requirements, outline, character_list, target_chapters, long_chapter_feature):
             """生成故事线（生成器版本，支持实时状态更新）"""
             import threading
             import time
@@ -482,6 +541,9 @@ def bind_main_events(
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
                 a.character_list = character_list or getattr(a, 'character_list', '')
                 a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
+                
+                # 同步长章节模式设置（从下拉菜单）
+                sync_long_chapter_mode_from_ui(a, long_chapter_feature, "生成故事线")
                 
                 # 初始化状态历史
                 if not hasattr(a, 'global_status_history'):
@@ -506,11 +568,13 @@ def bind_main_events(
                 update_counter = 0
                 max_wait_time = 1200
                 last_chapter_count = 0
+                is_timeout = False  # 标记是否因超时退出循环
                 
                 while gen_thread.is_alive():
                     if time.time() - start_time > max_wait_time:
                         timeout_timestamp = datetime.now().strftime("%H:%M:%S")
                         status_history.append(["系统", "⚠️ 生成超时", timeout_timestamp, generation_start_time])
+                        is_timeout = True
                         break
                     
                     # 每1秒检查一次，但只有当章节数变化或每5秒强制更新时才更新UI
@@ -557,6 +621,9 @@ def bind_main_events(
                 gen_thread.join(timeout=30)
                 final_timestamp = datetime.now().strftime("%H:%M:%S")
                 
+                # 检查线程是否仍在运行（超时情况下可能还在后台生成）
+                thread_still_running = gen_thread.is_alive()
+                
                 # 等待线程完全结束后，确保获取最新数据
                 time.sleep(0.5)  # 给一点时间让数据完全写入
                 
@@ -565,19 +632,31 @@ def bind_main_events(
                     chapter_count = len(storyline_dict['chapters'])
                     
                     # 记录实际生成的章节数
-                    print(f"📊 故事线生成完成：实际生成 {chapter_count} 章，目标 {a.target_chapter_count} 章")
+                    print(f"📊 故事线生成状态：实际生成 {chapter_count} 章，目标 {a.target_chapter_count} 章，超时={is_timeout}，线程运行中={thread_still_running}")
                     
-                    summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
-                    status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
-                    
-                    # 显示全部章节，不限制
-                    storyline_display = format_storyline_display(storyline_dict, is_generating=False, show_recent_only=False)
-                    progress_info = update_progress(a)
+                    # 根据是否超时和线程状态决定显示内容
+                    if is_timeout or thread_still_running:
+                        # 超时或线程仍在运行：显示"仍在生成中"而不是"完成"
+                        summary_text = f"⏳ 故事线仍在后台生成中\n   • 已生成章节: {chapter_count}/{a.target_chapter_count}\n   • 已耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}\n   • 提示: 请稍后刷新查看最新进度"
+                        status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
+                        
+                        # 显示当前已生成的章节，标记为生成中
+                        storyline_display = format_storyline_display(storyline_dict, is_generating=True, show_recent_only=False)
+                        progress_status = f"⏳ 后台生成中... {chapter_count}/{a.target_chapter_count}章"
+                    else:
+                        # 正常完成
+                        summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
+                        status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
+                        
+                        # 显示全部章节，不限制
+                        storyline_display = format_storyline_display(storyline_dict, is_generating=False, show_recent_only=False)
+                        progress_info = update_progress(a)
+                        progress_status = progress_info[0]
                     
                     yield (
                         format_status_output(status_history),
                         storyline_display,
-                        progress_info[0]
+                        progress_status
                     )
                 else:
                     err = "❌ 故事线生成失败"
@@ -593,7 +672,7 @@ def bind_main_events(
                 yield (err, err, "生成失败")
 
         # 生成故事线包装（带状态组件版本）
-        def _wrap_gen_storyline_with_status(aign_state, user_idea, user_requirements, outline, character_list, target_chapters):
+        def _wrap_gen_storyline_with_status(aign_state, user_idea, user_requirements, outline, character_list, target_chapters, long_chapter_feature):
             """生成故事线（带状态组件，输出3个值）"""
             import threading
             import time
@@ -610,6 +689,9 @@ def bind_main_events(
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
                 a.character_list = character_list or getattr(a, 'character_list', '')
                 a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
+                
+                # 同步长章节模式设置（从下拉菜单）
+                sync_long_chapter_mode_from_ui(a, long_chapter_feature, "生成故事线")
                 
                 # 初始化状态历史
                 if not hasattr(a, 'global_status_history'):
@@ -634,11 +716,13 @@ def bind_main_events(
                 update_counter = 0
                 max_wait_time = 1200
                 last_chapter_count = 0
+                is_timeout = False  # 标记是否因超时退出循环
                 
                 while gen_thread.is_alive():
                     if time.time() - start_time > max_wait_time:
                         timeout_timestamp = datetime.now().strftime("%H:%M:%S")
                         status_history.append(["系统", "⚠️ 生成超时", timeout_timestamp, generation_start_time])
+                        is_timeout = True
                         break
                     
                     # 每1秒检查一次，但只有当章节数变化或每5秒强制更新时才更新UI
@@ -687,6 +771,9 @@ def bind_main_events(
                 gen_thread.join(timeout=30)
                 final_timestamp = datetime.now().strftime("%H:%M:%S")
                 
+                # 检查线程是否仍在运行（超时情况下可能还在后台生成）
+                thread_still_running = gen_thread.is_alive()
+                
                 # 等待线程完全结束后，确保获取最新数据
                 time.sleep(0.5)  # 给一点时间让数据完全写入
                 
@@ -695,14 +782,25 @@ def bind_main_events(
                     chapter_count = len(storyline_dict['chapters'])
                     
                     # 记录实际生成的章节数
-                    print(f"📊 故事线生成完成：实际生成 {chapter_count} 章，目标 {a.target_chapter_count} 章")
+                    print(f"📊 故事线生成状态：实际生成 {chapter_count} 章，目标 {a.target_chapter_count} 章，超时={is_timeout}，线程运行中={thread_still_running}")
                     
-                    summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
-                    status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
-                    
-                    # 显示全部章节，不限制
-                    storyline_display = format_storyline_display(storyline_dict, is_generating=False, show_recent_only=False)
-                    storyline_status = f"✅ 已完成 {chapter_count}/{a.target_chapter_count}章"
+                    # 根据是否超时和线程状态决定显示内容
+                    if is_timeout or thread_still_running:
+                        # 超时或线程仍在运行：显示"仍在生成中"而不是"完成"
+                        summary_text = f"⏳ 故事线仍在后台生成中\n   • 已生成章节: {chapter_count}/{a.target_chapter_count}\n   • 已耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}\n   • 提示: 请稍后刷新查看最新进度"
+                        status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
+                        
+                        # 显示当前已生成的章节，标记为生成中
+                        storyline_display = format_storyline_display(storyline_dict, is_generating=True, show_recent_only=False)
+                        storyline_status = f"⏳ 后台生成中... {chapter_count}/{a.target_chapter_count}章"
+                    else:
+                        # 正常完成
+                        summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
+                        status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
+                        
+                        # 显示全部章节，不限制
+                        storyline_display = format_storyline_display(storyline_dict, is_generating=False, show_recent_only=False)
+                        storyline_status = f"✅ 已完成 {chapter_count}/{a.target_chapter_count}章"
                     
                     yield (
                         format_status_output(status_history),
@@ -727,16 +825,17 @@ def bind_main_events(
             has_status_component = 'gen_storyline_status' in components
             
             if has_status_component:
-                # 新版UI：输出到4个组件（status_output, storyline_text, gen_storyline_status, aign）
+                # 新版UI：输出到3个组件（status_output, storyline_text, gen_storyline_status）
                 components['gen_storyline_button'].click(
-                    fn=lambda *args: _wrap_gen_storyline_with_status(*args),
+                    fn=_wrap_gen_storyline_with_status,
                     inputs=[
                         aign,
                         user_idea_text,
                         user_requirements_text,
                         novel_outline_text,
                         character_list_text,
-                        components.get('target_chapters_slider')
+                        components.get('target_chapters_slider'),
+                        components.get('long_chapter_mode_dropdown')
                     ],
                     outputs=[components.get('status_output'), storyline_text, components.get('gen_storyline_status')]
                 )
@@ -750,7 +849,8 @@ def bind_main_events(
                         user_requirements_text,
                         novel_outline_text,
                         character_list_text,
-                        components.get('target_chapters_slider')
+                        components.get('target_chapters_slider'),
+                        components.get('long_chapter_mode_dropdown')
                     ],
                     outputs=[components.get('status_output'), storyline_text, progress_text]
                 )
@@ -889,7 +989,7 @@ def bind_main_events(
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.compact_mode = bool(compact_mode)
                 if hasattr(a, 'long_chapter_mode'):
-                    a.long_chapter_mode = bool(long_chapter_feature)
+                    a.long_chapter_mode = convert_long_chapter_mode(long_chapter_feature)
                 
                 prev_content_len = len(novel_content) if novel_content else 0
                 a.novel_content = novel_content or getattr(a, 'novel_content', '')
@@ -988,7 +1088,7 @@ def bind_main_events(
                     user_requirements_text,
                     embellishment_idea_text,
                     components.get('compact_mode_checkbox'),
-                    components.get('long_chapter_feature_checkbox'),
+                    components.get('long_chapter_mode_dropdown'),
                     components.get('novel_content_text'),
                 ],
                 outputs=[components.get('status_output'), progress_text, output_file_text, components.get('novel_content_text')]
@@ -1126,7 +1226,9 @@ def bind_main_events(
                     novel_title_text,
                     character_list_text,
                     detailed_outline_text,
-                    storyline_text
+                    storyline_text,
+                    components.get('long_chapter_mode_dropdown'),
+                    components.get('style_dropdown')
                 ]
             )
         
@@ -1151,8 +1253,11 @@ def bind_main_events(
                     a.enable_chapters = bool(enable_chapters)
                     a.enable_ending = bool(enable_ending)
                     a.compact_mode = bool(compact_mode)
-                    if hasattr(a, 'long_chapter_mode'):
-                        a.long_chapter_mode = bool(long_chapter_feature)
+                    sync_long_chapter_mode_from_ui(a, long_chapter_feature, "自动生成")
+                    
+                    # 保存用户设置
+                    if hasattr(a, 'save_user_settings'):
+                        a.save_user_settings()
                     
                     # 初始化状态历史
                     if not hasattr(a, 'global_status_history'):
@@ -1197,7 +1302,7 @@ def bind_main_events(
                     user_requirements_text,
                     embellishment_idea_text,
                     components.get('compact_mode_checkbox'),
-                    components.get('long_chapter_feature_checkbox')
+                    components.get('long_chapter_mode_dropdown')
                 ],
                 outputs=[
                     components.get('status_output'),
@@ -1349,13 +1454,54 @@ def bind_main_events(
                     components.get('target_chapters_slider'),
                     user_idea_text,
                     user_requirements_text,
-                    embellishment_idea_text
+                    embellishment_idea_text,
+                    components.get('long_chapter_mode_dropdown')
                 ],
                 outputs=[data_management_components['storage_status']]
             )
             print("✅ 手动保存按钮绑定成功")
         else:
             print("⚠️ 数据管理组件或手动保存按钮未找到")
+        
+        # 绑定风格选择变化事件
+        if 'style_dropdown' in components:
+            def on_style_change(style_name, aign_state):
+                """风格选择变化时的处理"""
+                try:
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    
+                    # 更新AIGN实例的风格设置
+                    a.style_name = style_name
+                    print(f"📚 风格已更新为: {style_name}")
+                    
+                    # 返回风格说明
+                    try:
+                        from style_config import get_style_code, get_style_description
+                        style_code = get_style_code(style_name)
+                        style_desc = get_style_description(style_name)
+                        
+                        if style_code == "none":
+                            return f"💡 **当前风格**: {style_name}\n\n{style_desc if style_desc else '使用默认提示词'}"
+                        else:
+                            desc_text = f"💡 **当前风格**: {style_name}\n\n"
+                            if style_desc:
+                                desc_text += f"**风格特点**: {style_desc}"
+                            else:
+                                desc_text += "已应用专业风格提示词"
+                            return desc_text
+                    except:
+                        return f"💡 **当前风格**: {style_name}"
+                        
+                except Exception as e:
+                    print(f"❌ 风格更新失败: {e}")
+                    return f"❌ 风格更新失败: {str(e)}"
+            
+            components['style_dropdown'].change(
+                fn=on_style_change,
+                inputs=[components['style_dropdown'], aign],
+                outputs=[components.get('style_description')]
+            )
+            print("✅ 风格选择事件绑定成功")
         
         print("✅ 所有事件处理函数绑定成功")
         return True
@@ -1408,7 +1554,8 @@ def bind_page_load_events(
             components['detailed_outline_text'],
             components['novel_title_text'],
             components['storyline_text'],
-            components['import_auto_saved_button']
+            components['import_auto_saved_button'],
+            components['long_chapter_mode_dropdown']
         ]
         
         if original_modules_loaded:

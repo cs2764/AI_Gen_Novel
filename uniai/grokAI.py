@@ -2,14 +2,19 @@ import os
 from openai import OpenAI
 
 
-def grokChatLLM(model_name="grok-3-mini", api_key=None, system_prompt="", base_url=None):
+def grokChatLLM(model_name="grok-3", api_key=None, system_prompt="", base_url=None):
     """
     Grok AI Chat LLM
     
     model_name 取值示例:
-    - grok-3-mini
-    - grok-beta
-    - grok-vision-beta
+    - grok-code-fast-1 (Grok Code Fast 1 - 代码专用快速模型)
+    - grok-4-fast-reasoning (Grok 4 Fast Reasoning - 快速推理模型)
+    - grok-4-fast-non-reasoning (Grok 4 Fast Non-Reasoning - 快速非推理模型)
+    - grok-4-0709 (Grok 4 - 2025年7月9日版本)
+    - grok-3-mini (Grok 3 Mini - 轻量版)
+    - grok-3 (Grok 3)
+    - grok-2-vision-1212 (Grok 2 Vision - 2024年12月12日版本)
+    - grok-2-image-1212 (Grok 2 Image - 2024年12月12日版本)
     """
     api_key = os.environ.get("GROK_API_KEY", api_key)
     

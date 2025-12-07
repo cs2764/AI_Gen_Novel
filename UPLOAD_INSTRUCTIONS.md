@@ -32,7 +32,7 @@ git push origin main
 - [x] Security check passed | 安全检查通过
 - [x] All sensitive files ignored | 所有敏感文件已忽略
 - [x] Documentation updated | 文档已更新
-- [x] Version number updated (3.5.0) | 版本号已更新
+- [x] Version number updated (3.6.0) | 版本号已更新
 - [x] CHANGELOG updated | 更新日志已更新
 - [x] Test scripts organized | 测试脚本已整理
 
@@ -120,6 +120,6 @@ If you encounter any issues:
 
 ---
 
-**Version**: 3.5.0  
-**Date**: 2025-11-05  
+**Version**: 3.6.0  
+**Date**: 2025-12-07  
 **Status**: Ready to Upload ✅

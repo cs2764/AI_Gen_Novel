@@ -33,7 +33,7 @@ class AutoSaveManager:
         
         print(f"📁 自动保存管理器初始化完成，保存目录: {self.save_dir}")
     
-    def save_outline(self, outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", target_chapters: int = 0) -> bool:
+    def save_outline(self, outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", target_chapters: int = 0, style_name: str = "无") -> bool:
         """保存大纲"""
         try:
             data = {
@@ -42,6 +42,7 @@ class AutoSaveManager:
                 "user_requirements": user_requirements,
                 "embellishment_idea": embellishment_idea,
                 "target_chapters": target_chapters,
+                "style_name": style_name,
                 "timestamp": time.time(),
                 "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -94,7 +95,7 @@ class AutoSaveManager:
             print(f"❌ 人物列表保存失败: {e}")
             return False
     
-    def save_detailed_outline(self, detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
+    def save_detailed_outline(self, detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", style_name: str = "无") -> bool:
         """保存详细大纲"""
         try:
             data = {
@@ -103,6 +104,7 @@ class AutoSaveManager:
                 "user_idea": user_idea,
                 "user_requirements": user_requirements,
                 "embellishment_idea": embellishment_idea,
+                "style_name": style_name,
                 "timestamp": time.time(),
                 "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -116,7 +118,7 @@ class AutoSaveManager:
             print(f"❌ 详细大纲保存失败: {e}")
             return False
     
-    def save_storyline(self, storyline: Dict[str, Any], target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
+    def save_storyline(self, storyline: Dict[str, Any], target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", style_name: str = "无") -> bool:
         """保存故事线"""
         try:
             chapter_count = len(storyline.get('chapters', []))
@@ -127,6 +129,7 @@ class AutoSaveManager:
                 "user_idea": user_idea,
                 "user_requirements": user_requirements,
                 "embellishment_idea": embellishment_idea,
+                "style_name": style_name,
                 "timestamp": time.time(),
                 "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -652,9 +655,9 @@ def get_auto_save_manager() -> AutoSaveManager:
         _auto_save_manager = AutoSaveManager()
     return _auto_save_manager
 
-def auto_save_outline(outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", target_chapters: int = 0) -> bool:
+def auto_save_outline(outline: str, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", target_chapters: int = 0, style_name: str = "无") -> bool:
     """快捷保存大纲"""
-    return get_auto_save_manager().save_outline(outline, user_idea, user_requirements, embellishment_idea, target_chapters)
+    return get_auto_save_manager().save_outline(outline, user_idea, user_requirements, embellishment_idea, target_chapters, style_name)
 
 def auto_save_title(title: str) -> bool:
     """快捷保存标题"""
@@ -664,13 +667,13 @@ def auto_save_character_list(character_list: str) -> bool:
     """快捷保存人物列表"""
     return get_auto_save_manager().save_character_list(character_list)
 
-def auto_save_detailed_outline(detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
+def auto_save_detailed_outline(detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", style_name: str = "无") -> bool:
     """快捷保存详细大纲"""
-    return get_auto_save_manager().save_detailed_outline(detailed_outline, target_chapters, user_idea, user_requirements, embellishment_idea)
+    return get_auto_save_manager().save_detailed_outline(detailed_outline, target_chapters, user_idea, user_requirements, embellishment_idea, style_name)
 
-def auto_save_storyline(storyline: Dict[str, Any], target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "") -> bool:
+def auto_save_storyline(storyline: Dict[str, Any], target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", style_name: str = "无") -> bool:
     """快捷保存故事线"""
-    return get_auto_save_manager().save_storyline(storyline, target_chapters, user_idea, user_requirements, embellishment_idea)
+    return get_auto_save_manager().save_storyline(storyline, target_chapters, user_idea, user_requirements, embellishment_idea, style_name)
 
 def load_auto_saved_data() -> Dict[str, Any]:
     """快捷加载所有自动保存的数据"""

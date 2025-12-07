@@ -38,12 +38,39 @@ class MemoryManager:
         print(f"🧠 正在更新前文记忆...")
         print(f"   • 未记忆段落长度: {len(self.aign.no_memory_paragraph)} 字符")
         
+        # 根据模式决定记忆长度限制
+        compact_mode = getattr(self.aign, 'compact_mode', False)
+        long_chapter_mode = getattr(self.aign, 'long_chapter_mode', 0) > 0
+        
+        # 使用配置文件获取参数
         try:
+            from token_optimization_config import TokenOptimizationConfig
+            max_memory_length, target_memory_length, mode_name = \
+                TokenOptimizationConfig.get_memory_config(compact_mode, long_chapter_mode)
+        except ImportError:
+            # 如果配置文件不存在，使用默认值
+            if compact_mode:
+                if long_chapter_mode:
+                    max_memory_length = 500
+                    target_memory_length = 400
+                    mode_name = "长章节精简模式"
+                else:
+                    max_memory_length = 300
+                    target_memory_length = 250
+                    mode_name = "精简模式"
+            else:
+                max_memory_length = 2000
+                target_memory_length = 1800
+                mode_name = "标准模式"
+        
+        try:
+            # 传递长章节模式信息给提示词
             resp = self.memory_maker.invoke(
                 inputs={
                     "前文记忆": self.aign.writing_memory,
                     "正文内容": self.aign.no_memory_paragraph,
                     "人物列表": self.aign.character_list,
+                    "长章节模式": "是" if long_chapter_mode > 0 else "否",
                 },
                 output_keys=["新的记忆"],
             )
@@ -52,14 +79,17 @@ class MemoryManager:
             new_memory = resp["新的记忆"]
             
             # 检查记忆长度并进行保护性处理
-            if len(new_memory) > 2000:  # 如果超过2000字符
+            if len(new_memory) > max_memory_length:
                 print(f"⚠️ 前文记忆生成过长({len(new_memory)}字符)，进行截断处理...")
-                # 截断到1800字符，保留一些缓冲空间
-                new_memory = new_memory[:1800]
-                # 确保不在句子中间截断，找到最后一个句号
-                last_period = new_memory.rfind('。')
-                if last_period > 1000:  # 确保截断点不会太短
-                    new_memory = new_memory[:last_period + 1]
+                print(f"   模式: {mode_name}，目标长度: {target_memory_length}字符")
+                # 截断到目标长度，保留一些缓冲空间
+                new_memory = new_memory[:target_memory_length]
+                # 确保不在句子中间截断，找到最后一个分隔符
+                min_length = 150 if compact_mode else 1000
+                # 优先找"·"分隔符（极简格式），其次找句号
+                last_separator = max(new_memory.rfind('·'), new_memory.rfind('。'))
+                if last_separator > min_length:
+                    new_memory = new_memory[:last_separator + 1]
                 print(f"📏 记忆已截断至{len(new_memory)}字符")
             
             self.aign.writing_memory = new_memory

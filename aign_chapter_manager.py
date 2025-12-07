@@ -10,6 +10,7 @@ AIGN章节管理模块 - 处理章节生成和管理
 """
 
 import time
+from aign_setting_optimizer import SettingOptimizer
 
 
 class ChapterManager:
@@ -64,8 +65,10 @@ class ChapterManager:
         if getattr(self.aign, 'compact_mode', False):
             # 前2章的故事线
             prev_chapters = []
-            if bool(getattr(self.aign, 'long_chapter_mode', True)):
-                print("📦 长章节启用（精简模式）：仅使用前2/后2章总结，不发送原文")
+            segment_count = getattr(self.aign, 'long_chapter_mode', 0)
+            if segment_count > 0:
+                mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                print(f"📦 长章节启用（{mode_desc.get(segment_count, '精简模式')}）：仅使用前2/后2章总结，不发送原文")
             for i in range(max(1, self.aign.chapter_count - 1), self.aign.chapter_count + 1):
                 if i > 0:
                     for ch in self.aign.storyline.get("chapters", []):
@@ -152,12 +155,25 @@ class ChapterManager:
         if getattr(self.aign, 'compact_mode', False):
             # 精简模式：生成正文时只包含：原始大纲；写作要求；各种记忆，设定，计划；前2章后2章的故事线
             print("📦 使用精简模式生成正文...")
-            if bool(getattr(self.aign, 'long_chapter_mode', True)):
-                print("📦 长章节启用：仅传递前2/后2章总结，不发送原文")
+            segment_count = getattr(self.aign, 'long_chapter_mode', 0)
+            if segment_count > 0:
+                mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}）：仅传递前2/后2章总结，不发送原文")
+            
+            # 获取优化后的大纲
             if hasattr(self.aign, 'getCurrentOutline'):
                 current_outline = self.aign.getCurrentOutline()
             else:
                 current_outline = getattr(self.aign, 'novel_outline', '')
+            
+            # 在长章节模式下，使用超精简大纲
+            if segment_count > 0:
+                try:
+                    from aign_outline_optimizer import OutlineOptimizer
+                    optimizer = OutlineOptimizer(self.aign)
+                    current_outline = optimizer.get_compact_outline_summary(self.aign.chapter_count + 1)
+                except Exception as e:
+                    print(f"⚠️ 大纲优化失败，使用原大纲: {e}")
             
             inputs = {
                 "大纲": current_outline,
@@ -255,8 +271,10 @@ class ChapterManager:
         if getattr(self.aign, 'compact_mode', False):
             # 精简模式：润色阶段只包含原始内容、详细大纲、润色要求、前2章后2章的故事线
             print("📦 使用精简模式润色...")
-            if bool(getattr(self.aign, 'long_chapter_mode', True)):
-                print("📦 长章节启用（润色）：仅传递前2/后2章总结，不发送原文")
+            segment_count = getattr(self.aign, 'long_chapter_mode', 0)
+            if segment_count > 0:
+                mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}润色）：仅传递前2/后2章总结，不发送原文")
             embellish_inputs = {
                 "大纲": inputs.get("大纲", ""),
                 "润色要求": getattr(self.aign, 'embellishment_idea', ''),
@@ -330,14 +348,26 @@ class ChapterManager:
         embellished_paragraph = embellish_resp["润色内容"]
         print(f"✅ 段落润色完成，长度：{len(embellished_paragraph)}字符")
         
+        # 优化临时设定（在精简模式下）
+        if getattr(self.aign, 'compact_mode', False):
+            try:
+                optimizer = SettingOptimizer(self.aign)
+                optimized_setting = optimizer.optimize_temp_setting(next_temp_setting)
+                if len(optimized_setting) < len(next_temp_setting):
+                    print(f"⚙️ 临时设定已优化: {len(next_temp_setting)} → {len(optimized_setting)} 字符")
+                    next_temp_setting = optimized_setting
+            except Exception as e:
+                print(f"⚠️ 临时设定优化失败: {e}")
+        
         return next_paragraph, next_writing_plan, next_temp_setting, embellished_paragraph
     
-    def get_enhanced_context(self, chapter_number):
+    def get_enhanced_context(self, chapter_number, compact_mode=False):
         """
-        获取增强的上下文信息（前5章总结、后5章梗概、上一章原文）
+        获取增强的上下文信息（前N章总结、后N章梗概、上一章原文）
         
         Args:
             chapter_number (int): 章节编号
+            compact_mode (bool): 是否使用精简模式（前后2章而非5章）
             
         Returns:
             dict: 包含上下文信息的字典

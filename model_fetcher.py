@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 模型获取器 - 从各个AI提供商API获取实时模型列表
-支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Zhipu AI, Google Gemini
+支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Grok
 """
 
 import requests
@@ -51,7 +51,7 @@ class ModelFetcher:
         从指定提供商获取模型列表
         
         Args:
-            provider: 提供商名称 (openai, anthropic, deepseek, ali, zhipu, gemini, openrouter, lmstudio)
+            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, grok)
             api_key: API密钥
             **kwargs: 其他参数
             
@@ -81,6 +81,8 @@ class ModelFetcher:
                 return self._fetch_fireworks_models(api_key, **kwargs)
             elif provider == 'lambda':
                 return self._fetch_lambda_models(api_key, **kwargs)
+            elif provider == 'grok':
+                return self._fetch_grok_models(api_key, **kwargs)
             else:
                 logger.warning(f"不支持的提供商: {provider}")
                 return []
@@ -426,6 +428,96 @@ class ModelFetcher:
                 provider='lambda',
                 owned_by='lambda',
                 description='Lambda/OpenAI兼容模式'
+            ))
+        
+        return models
+    
+    def _fetch_grok_models(self, api_key: str, base_url: str = "https://api.x.ai/v1") -> List[ModelInfo]:
+        """获取Grok (xAI) 模型列表
+        
+        根据 xAI API 文档，使用标准的 /v1/models 端点
+        返回格式: {"data": [{"id": "model-name", "object": "model", ...}]}
+        """
+        # 验证 API key
+        if not api_key or api_key.strip() == "" or "your-grok-api-key" in api_key.lower():
+            logger.error("Grok API key 未配置或无效")
+            return self._get_default_grok_models()
+        
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        logger.info(f"正在请求 Grok 模型列表: {base_url}/models")
+        logger.debug(f"API Key 长度: {len(api_key)} 字符")
+        
+        try:
+            response = self.session.get(f"{base_url}/models", headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            # xAI API 返回格式: {"data": [{"id": "model-name", "object": "model", ...}]}
+            for model_data in data.get('data', []):
+                model_id = model_data.get('id', '')
+                
+                # 包含所有返回的模型
+                if model_id:
+                    models.append(ModelInfo(
+                        id=model_id,
+                        name=model_id,
+                        provider='grok',
+                        created_at=str(model_data.get('created', '')),
+                        owned_by=model_data.get('owned_by', 'xai'),
+                        description=f"Grok AI模型"
+                    ))
+            
+            if models:
+                logger.info(f"成功获取 {len(models)} 个 Grok 模型")
+                return models
+            else:
+                # 如果API返回空列表，使用默认模型列表
+                logger.warning("API未返回模型，使用默认列表")
+                return self._get_default_grok_models()
+                
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                logger.error(f"Grok API 认证失败 (401): API key 可能无效或未配置")
+                logger.error(f"请检查配置文件中的 GROK_CONFIG['api_key']")
+            else:
+                logger.error(f"Grok API HTTP 错误 ({e.response.status_code}): {e}")
+            logger.warning("使用默认模型列表")
+            return self._get_default_grok_models()
+        except Exception as e:
+            logger.error(f"获取Grok模型列表失败: {type(e).__name__}: {e}")
+            logger.warning("使用默认模型列表")
+            return self._get_default_grok_models()
+    
+    def _get_default_grok_models(self) -> List[ModelInfo]:
+        """获取Grok默认模型列表（当API请求失败时使用）
+        
+        根据 xAI API 实际返回的模型列表
+        """
+        known_models = [
+            "grok-code-fast-1",             # Grok Code Fast 1 - 代码专用
+            "grok-4-fast-reasoning",        # Grok 4 Fast Reasoning - 快速推理
+            "grok-4-fast-non-reasoning",    # Grok 4 Fast Non-Reasoning - 快速非推理
+            "grok-4-0709",                  # Grok 4 (2025-07-09)
+            "grok-3-mini",                  # Grok 3 Mini
+            "grok-3",                       # Grok 3
+            "grok-2-vision-1212",           # Grok 2 Vision (2024-12-12)
+            "grok-2-image-1212"             # Grok 2 Image (2024-12-12)
+        ]
+        
+        models = []
+        for model_id in known_models:
+            models.append(ModelInfo(
+                id=model_id,
+                name=model_id,
+                provider='grok',
+                owned_by='xai',
+                description='Grok AI模型'
             ))
         
         return models

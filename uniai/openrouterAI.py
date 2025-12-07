@@ -68,9 +68,17 @@ def openrouterChatLLM(model_name="openai/gpt-4", api_key=None, system_prompt="",
         params = {
             "model": model_name,
             "messages": messages,
+            "temperature": 0.8,  # 设置温度参数为0.8
         }
         
-        # 按需求：不在API调用中包含 temperature / top_p
+        # 如果传入了temperature参数，使用传入的值覆盖默认值
+        if temperature is not None:
+            params["temperature"] = temperature
+        
+        # 如果传入了top_p参数，添加到请求中
+        if top_p is not None:
+            params["top_p"] = top_p
+        
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
         

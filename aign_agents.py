@@ -342,50 +342,181 @@ class MarkdownAgent:
             print("=" * 60)
             print("🔍 API调用完整调试信息")
             print("=" * 60)
+            
+            # 计算token数量
+            user_input_tokens = self.count_tokens(user_input)
+            total_prompt_tokens = self.count_tokens("\n".join([msg["content"] for msg in full_messages]))
+            
             print(f"📊 输入统计:")
-            print(f"   📤 用户输入长度: {len(user_input)} 字符")
-            print(f"   📋 完整提示词长度: {total_prompt_length} 字符")
+            print(f"   📤 用户输入长度: {len(user_input)} 字符 / {user_input_tokens} tokens")
+            print(f"   📋 完整提示词长度: {total_prompt_length} 字符 / {total_prompt_tokens} tokens")
             print(f"   📝 历史消息数: {len(self.history)} 条")
-            print(f"   🏷️  智能体: {getattr(self, 'name', 'Unknown')}")
+            
+            # 显示智能体名称和风格信息
+            agent_name = getattr(self, 'name', 'Unknown')
+            style_info = ""
+            if hasattr(self, 'parent_aign') and self.parent_aign:
+                style_name = getattr(self.parent_aign, 'style_name', None)
+                if style_name and style_name != "无":
+                    style_info = f" | 风格: {style_name}"
+            print(f"   🏷️  智能体: {agent_name}{style_info}")
             print("-" * 40)
             for i, msg in enumerate(full_messages):
                 role_emoji = "🤖" if msg["role"] == "assistant" else "👤" if msg["role"] == "user" else "⚙️"
-                print(f"{role_emoji} 消息 {i+1} [{msg['role']}] - {len(msg['content'])} 字符:")
-                print(f"   {msg['content'][:200]}{'...' if len(msg['content']) > 200 else ''}")
+                msg_content = msg['content']
+                msg_tokens = self.count_tokens(msg_content)
+                print(f"{role_emoji} 消息 {i+1} [{msg['role']}] - {len(msg_content)} 字符 / {msg_tokens} tokens:")
+                print(f"   {msg_content[:200]}{'...' if len(msg_content) > 200 else ''}")
                 print("-" * 40)
             print("=" * 60)
         elif debug_level == '1':  # 基础调试模式：只显示基本信息
             print("🔍 API调用基础信息：")
-            print(f"   📤 用户输入长度: {len(user_input)} 字符")
-            print(f"   📋 完整提示词长度: {total_prompt_length} 字符")
+            
+            # 计算token数量
+            user_input_tokens = self.count_tokens(user_input)
+            total_prompt_tokens = self.count_tokens("\n".join([msg["content"] for msg in full_messages]))
+            
+            print(f"   📤 用户输入长度: {len(user_input)} 字符 / {user_input_tokens} tokens")
+            print(f"   📋 完整提示词长度: {total_prompt_length} 字符 / {total_prompt_tokens} tokens")
             print(f"   📝 历史消息数: {len(self.history)} 条")
-            print(f"   🏷️  智能体: {getattr(self, 'name', 'Unknown')}")
-            # 详细分析提示词组成 - 强制显示以诊断问题
+            
+            # 显示智能体名称和风格信息
+            agent_name = getattr(self, 'name', 'Unknown')
+            style_info = ""
+            if hasattr(self, 'parent_aign') and self.parent_aign:
+                style_name = getattr(self.parent_aign, 'style_name', None)
+                if style_name and style_name != "无":
+                    style_info = f" | 风格: {style_name}"
+            print(f"   🏷️  智能体: {agent_name}{style_info}")
+            
+            # 详细分析提示词组成 - 解析用户输入中的各个部分
             print(f"   📊 提示词组成分析:")
+            
+            # 调试：显示history的实际结构（简化版）
+            print(f"   🔍 History结构: {len(self.history)} 条消息")
+            for idx, msg in enumerate(self.history):
+                role = msg.get("role", "unknown")
+                content_len = len(msg.get("content", ""))
+                print(f"      • [{idx}] {role}: {content_len} 字符")
+            
+            # 1. 系统提示词
             if len(self.history) > 0:
-                sys_prompt_len = len(self.history[0].get("content", ""))
-                print(f"   🔧 系统提示词长度: {sys_prompt_len} 字符")
-                if len(self.history) > 1:
-                    assistant_reply_len = len(self.history[1].get("content", ""))
-                    print(f"   🤖 AI回复长度: {assistant_reply_len} 字符")
-                    calculated_total = sys_prompt_len + assistant_reply_len + len(user_input)
-                    print(f"   🧮 计算总长度: {calculated_total} 字符")
-                    print(f"   ❗ 实际总长度: {total_prompt_length} 字符")
-                    if total_prompt_length != calculated_total:
-                        print(f"   ⚠️  长度不匹配! 差异: {total_prompt_length - calculated_total} 字符")
-                        # 显示所有消息的详细信息
-                        print(f"   📝 消息详情:")
-                        for i, msg in enumerate(self.history + [{"role": "user", "content": user_input}]):
-                            role = msg.get("role", "unknown")
-                            content = msg.get("content", "")
-                            content_len = len(content)
-                            preview = content[:100] + "..." if len(content) > 100 else content
-                            print(f"     消息{i+1} [{role}]: {content_len} 字符 - {preview}")
-                        print(f"   🔧 use_memory状态: {getattr(self, 'use_memory', 'unknown')}")
+                sys_prompt_content = self.history[0].get("content", "")
+                sys_prompt_len = len(sys_prompt_content)
+                sys_prompt_tokens = self.count_tokens(sys_prompt_content)
+                print(f"   🔧 系统提示词: {sys_prompt_len} 字符 / {sys_prompt_tokens} tokens")
+                
+                # 显示系统提示词的前200和后200字符，帮助诊断
+                if sys_prompt_len > 0:
+                    preview_text = sys_prompt_content[:200]
+                    print(f"      📄 前200字符:\n{preview_text}{'...' if sys_prompt_len > 200 else ''}")
+                    if sys_prompt_len > 400:
+                        print(f"      📄 后200字符:\n...{sys_prompt_content[-200:]}")
                 else:
-                    print(f"   ❌ 历史消息不完整，只有 {len(self.history)} 条消息")
+                    print(f"      ⚠️  系统提示词为空！")
+                
+                # 检查是否有重复内容
+                if sys_prompt_len > 1000:
+                    # 检查是否整个提示词被重复
+                    mid_point = sys_prompt_len // 2
+                    first_half = sys_prompt_content[:mid_point]
+                    second_half = sys_prompt_content[mid_point:]
+                    if first_half == second_half:
+                        print(f"      ⚠️  发现系统提示词被完整重复了2次!")
             else:
-                print(f"   ❌ 没有历史消息")
+                sys_prompt_len = 0
+                sys_prompt_tokens = 0
+                print(f"   🔧 系统提示词: 0 字符 / 0 tokens")
+            
+            # 2. AI回复（如果有）
+            if len(self.history) > 1:
+                assistant_reply_content = self.history[1].get("content", "")
+                assistant_reply_len = len(assistant_reply_content)
+                assistant_reply_tokens = self.count_tokens(assistant_reply_content)
+                print(f"   🤖 AI回复: {assistant_reply_len} 字符 / {assistant_reply_tokens} tokens")
+            else:
+                assistant_reply_len = 0
+                assistant_reply_tokens = 0
+            
+            # 3. 解析用户输入的各个组成部分
+            print(f"   📝 用户输入详细组成:")
+            
+            # 尝试解析用户输入中的各个字段
+            input_parts = {}
+            current_key = None
+            current_value = []
+            
+            for line in user_input.split('\n'):
+                # 检测是否是新的字段标题（多种格式）
+                # 格式1: ## 字段名: 或 ## 字段名：
+                # 格式2: **字段名**: 或 **字段名**：
+                # 格式3: 字段名: （纯文本，首行且包含冒号）
+                is_new_field = False
+                field_name = None
+                field_value_start = None
+                
+                stripped_line = line.strip()
+                
+                if stripped_line.startswith('##') and (':' in stripped_line or '：' in stripped_line):
+                    # 格式1: ## 字段名: 内容
+                    separator = ':' if ':' in stripped_line else '：'
+                    parts = stripped_line.split(separator, 1)
+                    field_name = parts[0].replace('##', '').strip()
+                    field_value_start = parts[1].strip() if len(parts) > 1 else ''
+                    is_new_field = True
+                elif stripped_line.startswith('**') and ('**:' in stripped_line or '**：' in stripped_line):
+                    # 格式2: **字段名**: 内容
+                    separator = '**:' if '**:' in stripped_line else '**：'
+                    parts = stripped_line.split(separator, 1)
+                    field_name = parts[0].replace('**', '').strip()
+                    field_value_start = parts[1].strip() if len(parts) > 1 else ''
+                    is_new_field = True
+                
+                if is_new_field:
+                    # 保存上一个字段
+                    if current_key:
+                        input_parts[current_key] = '\n'.join(current_value)
+                    # 开始新字段
+                    current_key = field_name
+                    current_value = [field_value_start] if field_value_start else []
+                else:
+                    if current_key:
+                        current_value.append(line)
+                    elif not input_parts:  # 如果还没有找到任何字段，整体作为一个字段
+                        if not current_key:
+                            current_key = "内容"
+                            current_value = []
+                        current_value.append(line)
+            
+            # 保存最后一个字段
+            if current_key:
+                input_parts[current_key] = '\n'.join(current_value)
+            
+            # 显示各个部分的长度和token数
+            total_parts_len = 0
+            total_parts_tokens = 0
+            for key, value in input_parts.items():
+                part_len = len(value)
+                part_tokens = self.count_tokens(value)
+                total_parts_len += part_len
+                total_parts_tokens += part_tokens
+                # 只显示主要字段
+                if part_len > 50 or key in ['大纲', '写作要求', '润色要求', '要润色的内容', '前文记忆', '临时设定', '计划', '人物列表', '详细大纲', '基础大纲', '前2章故事线', '后2章故事线', '前五章总结', '后五章梗概', '上一章原文', '本章故事线', '上一段原文']:
+                    print(f"      • {key}: {part_len} 字符 / {part_tokens} tokens")
+            
+            # 如果解析失败，显示原始长度
+            if not input_parts:
+                print(f"      • [无法解析字段]: {len(user_input)} 字符 / {user_input_tokens} tokens")
+            
+            # 计算总长度
+            calculated_total_chars = sys_prompt_len + assistant_reply_len + len(user_input)
+            calculated_total_tokens = sys_prompt_tokens + assistant_reply_tokens + user_input_tokens
+            print(f"   🧮 计算总长度: {calculated_total_chars} 字符 / {calculated_total_tokens} tokens")
+            print(f"   ❗ 实际总长度: {total_prompt_length} 字符 / {total_prompt_tokens} tokens")
+            
+            if total_prompt_length != calculated_total_chars:
+                print(f"   ⚠️  字符数不匹配! 差异: {total_prompt_length - calculated_total_chars} 字符")
+            
             print("-" * 50)
         
         # 检测发送提示词长度是否过长
@@ -781,6 +912,11 @@ class MarkdownAgent:
             print(f"📋 总输入长度: {total_input_length} 字符")
             print(f"📋 构建后长度: {len(input_content)} 字符（包含格式化）")
             print(f"🏷️  智能体: {getattr(self, 'name', 'Unknown')}")
+            
+            # 显示提示词来源文件（如果可用）
+            if hasattr(self, 'prompt_source_file'):
+                print(f"📄 提示词文件: {self.prompt_source_file}")
+            
             print("-" * 40)
 
         result = Retryer(self.getOutput)(input_content, output_keys)

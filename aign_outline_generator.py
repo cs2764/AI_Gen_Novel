@@ -427,13 +427,45 @@ class OutlineGenerator:
             print("⚠️ 动态剧情结构模块不可用，使用默认结构")
             structure_info = "标准三幕式结构"
         
+        # 根据模式注入附加指导
+        mode_instructions = []
+        if getattr(self.aign, 'compact_mode', False):
+            mode_instructions.append(
+                "精简模式（降低API成本、保持质量）：请提高信息密度与可执行性，用短句呈现关键要点，避免修辞和重复。"
+            )
+            mode_instructions.append(
+                "多章节精细颗粒度：为每章明确'当章目标→冲突/阻碍→关键行动→结果/代价→承接下一章'，以短句概述。"
+            )
+            mode_instructions.append(
+                "分段建议：若涉及章节分段规划，每段≤2句，动词开头，聚焦一个核心事件或信息揭示。"
+            )
+            mode_instructions.append(
+                "命名与承接：标题使用核心事件词，不加装饰；每章末尾明确承接点（悬念/新目标/时间或场景转换）。"
+            )
+        # 长章节模式下的额外优化建议
+        segment_count = getattr(self.aign, 'long_chapter_mode', 0)
+        if segment_count > 0:
+            mode_desc = {2: "2段", 3: "3段", 4: "4段"}
+            mode_instructions.append(
+                f"长章节优化（{mode_desc.get(segment_count, '')}模式）：每章聚焦1个核心事件，减少支线；主要角色出场≤3；分段建议更紧凑，避免并行展开。"
+            )
+            mode_instructions.append(
+                "长度控制：概述用300-500字；每段1-2句；避免冗余形容与空泛总结。"
+            )
+        else:
+            mode_instructions.append(
+                "标准章节优化：概述用200-350字；关键事件2-4条；保持推进与差异化变化。"
+            )
+        mode_guide_text = "\n".join(mode_instructions) if mode_instructions else ""
+        
         # 准备输入
         inputs = {
             "原始大纲": self.aign.novel_outline,
             "目标章节数": str(self.aign.target_chapter_count),
             "用户想法": self.aign.user_idea,
             "写作要求": getattr(self.aign, 'user_requirements', ''),
-            "剧情结构信息": structure_info
+            "剧情结构信息": structure_info,
+            "模式说明": mode_guide_text
         }
         
         # 如果已有人物列表，也加入输入

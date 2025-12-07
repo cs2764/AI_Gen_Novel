@@ -170,7 +170,7 @@ class FileManager:
                     "enable_chapters": getattr(self.aign, 'enable_chapters', True),
                     "enable_ending": getattr(self.aign, 'enable_ending', True),
                     "compact_mode": getattr(self.aign, 'compact_mode', True),
-                    "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', True),
+                    "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', 0),
                     "cosyvoice_mode": getattr(self.aign, 'cosyvoice_mode', False),
                     "created_time": datetime.now().isoformat(),
                     "output_file": self.aign.current_output_file
