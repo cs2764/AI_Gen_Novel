@@ -248,17 +248,31 @@ class AIGN:
         if debug_level != '0':
             print(f"🔧 调试模式: {debug_level} (0=关闭, 1=基础调试, 2=详细调试) - 可通过Web界面配置页面设置")
 
+        # 获取配置的 temperature（如果可用）
+        base_temperature = 0.7  # 默认值
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            current_config = config_manager.get_current_config()
+            if current_config and hasattr(current_config, 'temperature'):
+                base_temperature = current_config.temperature
+                if debug_level != '0':
+                    print(f"🌡️ 使用配置的 Temperature: {base_temperature}")
+        except Exception as e:
+            if debug_level != '0':
+                print(f"⚠️ 无法获取配置的 temperature，使用默认值: {e}")
+
         self.novel_outline_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=novel_outline_writer_prompt,
             name="NovelOutlineWriter",
-            temperature=0.98,
+            temperature=base_temperature,
         )
         self.novel_beginning_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=novel_beginning_writer_prompt,
             name="NovelBeginningWriter",
-            temperature=0.80,
+            temperature=base_temperature,
         )
         
         # 标准版正文生成器和润色器（应用防重复机制）
@@ -275,7 +289,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=writer_prompt,
             name="NovelWriter",
-            temperature=0.81,
+            temperature=base_temperature,
         )
         self.novel_writer.prompt_source_file = "AIGN_Prompt_Enhanced.py (novel_writer_prompt)"
         
@@ -283,7 +297,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=embellisher_prompt,
             name="NovelEmbellisher",
-            temperature=0.92,
+            temperature=base_temperature,
         )
         self.novel_embellisher.prompt_source_file = "AIGN_Prompt_Enhanced.py (novel_embellisher_prompt)"
         
@@ -302,30 +316,30 @@ class AIGN:
                 novel_embellisher_compact_segment_3_prompt, novel_embellisher_compact_segment_4_prompt,
             )
             # 标准版 writer
-            self.novel_writer_seg1 = MarkdownAgent(self.chatLLM, novel_writer_segment_1_prompt, "NovelWriterSeg1", temperature=0.81)
-            self.novel_writer_seg2 = MarkdownAgent(self.chatLLM, novel_writer_segment_2_prompt, "NovelWriterSeg2", temperature=0.81)
-            self.novel_writer_seg3 = MarkdownAgent(self.chatLLM, novel_writer_segment_3_prompt, "NovelWriterSeg3", temperature=0.81)
-            self.novel_writer_seg4 = MarkdownAgent(self.chatLLM, novel_writer_segment_4_prompt, "NovelWriterSeg4", temperature=0.81)
+            self.novel_writer_seg1 = MarkdownAgent(self.chatLLM, novel_writer_segment_1_prompt, "NovelWriterSeg1", temperature=base_temperature)
+            self.novel_writer_seg2 = MarkdownAgent(self.chatLLM, novel_writer_segment_2_prompt, "NovelWriterSeg2", temperature=base_temperature)
+            self.novel_writer_seg3 = MarkdownAgent(self.chatLLM, novel_writer_segment_3_prompt, "NovelWriterSeg3", temperature=base_temperature)
+            self.novel_writer_seg4 = MarkdownAgent(self.chatLLM, novel_writer_segment_4_prompt, "NovelWriterSeg4", temperature=base_temperature)
             # 标准版 embellisher
-            self.novel_embellisher_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_1_prompt, "NovelEmbellisherSeg1", temperature=0.92)
-            self.novel_embellisher_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_2_prompt, "NovelEmbellisherSeg2", temperature=0.92)
-            self.novel_embellisher_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_3_prompt, "NovelEmbellisherSeg3", temperature=0.92)
-            self.novel_embellisher_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_4_prompt, "NovelEmbellisherSeg4", temperature=0.92)
+            self.novel_embellisher_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_1_prompt, "NovelEmbellisherSeg1", temperature=base_temperature)
+            self.novel_embellisher_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_2_prompt, "NovelEmbellisherSeg2", temperature=base_temperature)
+            self.novel_embellisher_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_3_prompt, "NovelEmbellisherSeg3", temperature=base_temperature)
+            self.novel_embellisher_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_4_prompt, "NovelEmbellisherSeg4", temperature=base_temperature)
             # 结尾 writer（分段）
-            self.ending_writer_seg1 = MarkdownAgent(self.chatLLM, ending_writer_segment_1_prompt, "EndingWriterSeg1", temperature=0.85)
-            self.ending_writer_seg2 = MarkdownAgent(self.chatLLM, ending_writer_segment_2_prompt, "EndingWriterSeg2", temperature=0.85)
-            self.ending_writer_seg3 = MarkdownAgent(self.chatLLM, ending_writer_segment_3_prompt, "EndingWriterSeg3", temperature=0.85)
-            self.ending_writer_seg4 = MarkdownAgent(self.chatLLM, ending_writer_segment_4_prompt, "EndingWriterSeg4", temperature=0.85)
+            self.ending_writer_seg1 = MarkdownAgent(self.chatLLM, ending_writer_segment_1_prompt, "EndingWriterSeg1", temperature=base_temperature)
+            self.ending_writer_seg2 = MarkdownAgent(self.chatLLM, ending_writer_segment_2_prompt, "EndingWriterSeg2", temperature=base_temperature)
+            self.ending_writer_seg3 = MarkdownAgent(self.chatLLM, ending_writer_segment_3_prompt, "EndingWriterSeg3", temperature=base_temperature)
+            self.ending_writer_seg4 = MarkdownAgent(self.chatLLM, ending_writer_segment_4_prompt, "EndingWriterSeg4", temperature=base_temperature)
             # 精简版 writer
-            self.novel_writer_compact_seg1 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_1_prompt, "NovelWriterCompactSeg1", temperature=0.81)
-            self.novel_writer_compact_seg2 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_2_prompt, "NovelWriterCompactSeg2", temperature=0.81)
-            self.novel_writer_compact_seg3 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_3_prompt, "NovelWriterCompactSeg3", temperature=0.81)
-            self.novel_writer_compact_seg4 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_4_prompt, "NovelWriterCompactSeg4", temperature=0.81)
+            self.novel_writer_compact_seg1 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_1_prompt, "NovelWriterCompactSeg1", temperature=base_temperature)
+            self.novel_writer_compact_seg2 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_2_prompt, "NovelWriterCompactSeg2", temperature=base_temperature)
+            self.novel_writer_compact_seg3 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_3_prompt, "NovelWriterCompactSeg3", temperature=base_temperature)
+            self.novel_writer_compact_seg4 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_4_prompt, "NovelWriterCompactSeg4", temperature=base_temperature)
             # 精简版 embellisher
-            self.novel_embellisher_compact_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_1_prompt, "NovelEmbellisherCompactSeg1", temperature=0.92)
-            self.novel_embellisher_compact_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_2_prompt, "NovelEmbellisherCompactSeg2", temperature=0.92)
-            self.novel_embellisher_compact_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_3_prompt, "NovelEmbellisherCompactSeg3", temperature=0.92)
-            self.novel_embellisher_compact_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_4_prompt, "NovelEmbellisherCompactSeg4", temperature=0.92)
+            self.novel_embellisher_compact_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_1_prompt, "NovelEmbellisherCompactSeg1", temperature=base_temperature)
+            self.novel_embellisher_compact_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_2_prompt, "NovelEmbellisherCompactSeg2", temperature=base_temperature)
+            self.novel_embellisher_compact_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_3_prompt, "NovelEmbellisherCompactSeg3", temperature=base_temperature)
+            self.novel_embellisher_compact_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_4_prompt, "NovelEmbellisherCompactSeg4", temperature=base_temperature)
         except Exception as _e:
             print(f"⚠️ 分段生成提示词不可用：{_e}")
         
@@ -343,25 +357,25 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=writer_compact_prompt,
             name="NovelWriterCompact",
-            temperature=0.81,
+            temperature=base_temperature,
         )
         self.novel_embellisher_compact = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=embellisher_compact_prompt,
             name="NovelEmbellisherCompact",
-            temperature=0.92,
+            temperature=base_temperature,
         )
         self.memory_maker = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=memory_maker_prompt,
             name="MemoryMaker",
-            temperature=0.66,
+            temperature=base_temperature,
         )
         self.title_generator = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=title_generator_prompt,
             name="TitleGenerator",
-            temperature=0.8,
+            temperature=base_temperature,
         )
         
         # JSON版本的标题生成器作为备用方案
@@ -370,13 +384,13 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=title_generator_json_prompt,
             name="TitleGeneratorJSON",
-            temperature=0.8,
+            temperature=base_temperature,
         )
         self.ending_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=ending_prompt,
             name="EndingWriter",
-            temperature=0.85,
+            temperature=base_temperature,
         )
         
         # 结尾润色器
@@ -384,13 +398,13 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=ending_embellisher_prompt,
             name="EndingEmbellisher",
-            temperature=0.92,
+            temperature=base_temperature,
         )
         self.storyline_generator = JSONMarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=storyline_generator_prompt,
             name="StorylineGenerator",
-            temperature=0.8,
+            temperature=base_temperature,
         )
         
         # 初始化故事线管理器
@@ -402,7 +416,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=character_generator_prompt,
             name="CharacterGenerator",
-            temperature=0.8,
+            temperature=base_temperature,
         )
         
         # 章节总结生成器
@@ -410,7 +424,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=chapter_summary_prompt,
             name="ChapterSummaryGenerator",
-            temperature=0.6,
+            temperature=base_temperature,
         )
         
         # 详细大纲生成器
@@ -418,7 +432,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=detailed_outline_generator_prompt,
             name="DetailedOutlineGenerator",
-            temperature=0.8,
+            temperature=base_temperature,
         )
 
         # 为所有Agent设置parent_aign引用，用于流式输出跟踪
@@ -1614,7 +1628,7 @@ class AIGN:
                 # 使用增强生成器生成故事线
                 batch_storyline, generation_status = enhanced_generator.generate_storyline_batch(
                     messages=messages,
-                    temperature=0.8
+                    temperature=base_temperature
                 )
                 
                 # 更新状态信息，显示使用的方法

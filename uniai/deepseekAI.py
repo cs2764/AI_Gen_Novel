@@ -39,14 +39,23 @@ def deepseekChatLLM(model_name="deepseek-chat", api_key=None, system_prompt=""):
                 # 在消息列表开头添加 system 消息
                 messages = [{"role": "system", "content": system_prompt}] + messages
         
+        # 构建API参数
+        params = {
+            "model": model_name,
+            "messages": messages,
+        }
+        
+        if temperature is not None:
+            params["temperature"] = temperature
+        if top_p is not None:
+            params["top_p"] = top_p
+        if max_tokens is not None:
+            # 同时支持 max_tokens 和 max_completion_tokens (zenmux API)
+            params["max_tokens"] = max_tokens
+            params["max_completion_tokens"] = max_tokens
+        
         if not stream:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_tokens,
-            )
+            response = client.chat.completions.create(**params)
             return {
                 "content": response.choices[0].message.content,
                 "total_tokens": response.usage.total_tokens,

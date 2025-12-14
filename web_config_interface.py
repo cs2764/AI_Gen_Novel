@@ -45,7 +45,7 @@ class WebConfigInterface:
     def on_provider_change(self, provider_name):
         """当提供商改变时的回调"""
         if not provider_name:
-            return gr.update(choices=[], value=""), gr.update(visible=False, value=""), "", "", "", ""
+            return gr.update(choices=[], value=""), gr.update(visible=False, value=""), "", "", "", 0.7, ""
         
         # 获取显示名称
         display_name = self.config_manager.get_provider_display_name(provider_name)
@@ -57,19 +57,21 @@ class WebConfigInterface:
         current_model = current_config.model_name if current_config else ""
         current_base_url = current_config.base_url if current_config else ""
         current_system_prompt = current_config.system_prompt if current_config else ""
+        current_temperature = current_config.temperature if current_config else 0.7
         
         # Fireworks特殊处理：显示自定义模型输入框
         if provider_name == "fireworks":
             print(f"🔥 Fireworks提供商：启用自定义模型输入")
             models = self.get_model_choices(provider_name, refresh=False)
             
-            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, status)
+            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, status)
             return (
                 gr.update(choices=models, value=current_model),  # 更新模型下拉菜单
                 gr.update(visible=True, value=current_model),  # 显示并填充自定义模型输入框
                 current_api_key,  # 更新API key
                 current_base_url or "",  # 更新API地址
                 current_system_prompt,  # 更新系统提示词
+                current_temperature,  # 更新temperature
                 f"已切换到 {display_name}，可选择预设模型或输入自定义模型名称"  # 状态信息
             )
         else:
@@ -89,17 +91,18 @@ class WebConfigInterface:
             
             print(f"✅ {display_name} 模型列表已更新，共 {len(models)} 个模型")
             
-            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, status)
+            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, status)
             return (
                 gr.update(choices=models, value=current_model),  # 更新模型下拉菜单
                 gr.update(visible=False, value=""),  # 隐藏自定义模型输入框
                 current_api_key,  # 更新API key
                 current_base_url or "",  # 更新API地址
                 current_system_prompt,  # 更新系统提示词
+                current_temperature,  # 更新temperature
                 f"已切换到 {display_name}，模型列表已加载（{len(models)}个模型）"  # 状态信息
             )
     
-    def save_config(self, provider_name, api_key, model_name, base_url, system_prompt, custom_model_name=""):
+    def save_config(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, custom_model_name=""):
         """保存配置"""
         try:
             if not provider_name:
@@ -119,7 +122,7 @@ class WebConfigInterface:
             
             # 更新配置
             success = self.config_manager.update_provider_config(
-                provider_name, api_key, final_model_name, system_prompt, base_url
+                provider_name, api_key, final_model_name, system_prompt, base_url, temperature
             )
             
             if not success:
@@ -135,15 +138,16 @@ class WebConfigInterface:
             display_name = self.config_manager.get_provider_display_name(provider_name)
             prompt_info = f" (系统提示词: {len(system_prompt)}字符)" if system_prompt else ""
             url_info = f" (API地址: {base_url})" if base_url else ""
-            return f"✅ 配置已保存: {display_name} - {final_model_name}{url_info}{prompt_info}"
+            temp_info = f" (Temperature: {temperature})"
+            return f"✅ 配置已保存: {display_name} - {final_model_name}{url_info}{prompt_info}{temp_info}"
             
         except Exception as e:
             return f"❌ 保存配置失败: {str(e)}"
     
-    def save_config_and_refresh(self, provider_name, api_key, model_name, base_url, system_prompt, custom_model_name=""):
+    def save_config_and_refresh(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, custom_model_name=""):
         """保存配置并刷新当前配置信息显示"""
         # 先保存配置
-        save_result = self.save_config(provider_name, api_key, model_name, base_url, system_prompt, custom_model_name)
+        save_result = self.save_config(provider_name, api_key, model_name, base_url, system_prompt, temperature, custom_model_name)
         
         # 如果保存成功，尝试刷新ChatLLM实例和AIGN实例
         if save_result.startswith("✅"):
@@ -324,7 +328,8 @@ class WebConfigInterface:
             info = f"""📊 当前配置信息:
 🔧 提供商: {current_provider.upper()}
 🤖 模型: {current_config.model_name}
-🔑 API密钥: {api_key_display}"""
+🔑 API密钥: {api_key_display}
+🌡️ Temperature: {current_config.temperature}"""
             
             if current_config.base_url:
                 info += f"\n🌐 API地址: {current_config.base_url}"
@@ -766,6 +771,17 @@ class WebConfigInterface:
                         interactive=True
                     )
                     
+                    # Temperature 滑块
+                    temperature_slider = gr.Slider(
+                        label="Temperature (温度)",
+                        minimum=0,
+                        maximum=2,
+                        step=0.1,
+                        value=self.config_manager.get_current_config().temperature if self.config_manager.get_current_config() else 0.7,
+                        interactive=True,
+                        info="控制生成的随机性，0=确定性，2=最大随机性"
+                    )
+                    
                     # 操作按钮
                     with gr.Row():
                         test_btn = gr.Button("🔍 测试连接", variant="secondary")
@@ -1009,7 +1025,7 @@ class WebConfigInterface:
             provider_dropdown.change(
                 fn=self.on_provider_change,
                 inputs=[provider_dropdown],
-                outputs=[model_dropdown, custom_model_input, api_key_input, base_url_input, system_prompt_input, status_output]
+                outputs=[model_dropdown, custom_model_input, api_key_input, base_url_input, system_prompt_input, temperature_slider, status_output]
             )
             
             test_btn.click(
@@ -1020,7 +1036,7 @@ class WebConfigInterface:
             
             save_btn.click(
                 fn=self.save_config_and_refresh,
-                inputs=[provider_dropdown, api_key_input, model_dropdown, base_url_input, system_prompt_input, custom_model_input],
+                inputs=[provider_dropdown, api_key_input, model_dropdown, base_url_input, system_prompt_input, temperature_slider, custom_model_input],
                 outputs=[status_output, current_info]
             )
             
@@ -1119,6 +1135,7 @@ class WebConfigInterface:
                 'api_key_input': api_key_input,
                 'base_url_input': base_url_input,
                 'system_prompt_input': system_prompt_input,
+                'temperature_slider': temperature_slider,
                 'test_btn': test_btn,
                 'save_btn': save_btn,
                 'refresh_btn': refresh_btn,

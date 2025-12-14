@@ -12,6 +12,11 @@ import time
 import tiktoken
 
 
+class TokenLimitError(Exception):
+    """Token超限错误，用于标识响应超过token限制的情况"""
+    pass
+
+
 def Retryer(func, max_retries=10):
     """自动重试装饰器，用于处理API调用失败和流式输出问题
     
@@ -49,6 +54,11 @@ def Retryer(func, max_retries=10):
                 
                 return result
                 
+            except TokenLimitError as e:
+                # Token超限错误，不重试，直接抛出
+                error_msg = str(e)
+                print("-" * 30 + f"\n🛑 Token超限错误，停止重试：\n{error_msg}\n" + "-" * 30)
+                raise
             except Exception as e:
                 error_msg = str(e)
                 print("-" * 30 + f"\n第{attempt + 1}次尝试失败：\n{error_msg}\n" + "-" * 30)
@@ -78,12 +88,14 @@ class MarkdownAgent:
         name: str,
         temperature=0.8,
         top_p=0.8,
+        max_tokens=25000,  # 默认20000 tokens，确保章节内容不被截断
         use_memory=False,
         first_replay="明白了。",
         is_speak=True,
     ) -> None:
 
         self.chatLLM = chatLLM
+        self.max_tokens = max_tokens  # 保存max_tokens参数
         
         # 防止sys_prompt被意外传入过大内容
         if len(sys_prompt) > 100000:
@@ -222,16 +234,16 @@ class MarkdownAgent:
         # 检查智能体名称（不区分大小写）
         agent_name = self.name.lower()
         
-        # 10,000 token 限制的智能体
+        # 15,000 token 限制的智能体（较小的辅助任务）
         limited_agents = ['memorymaker', 'chaptersummarygenerator', 
                           'charactergenerator', 'titlegenerator']
         
         for limited in limited_agents:
             if limited in agent_name:
-                return 10000
+                return 20000
         
-        # 其他智能体 15,000 token 限制
-        return 15000
+        # 其他智能体 20,000 token 限制（主要生成任务）
+        return 25000
 
     def query(self, user_input: str) -> dict:
         """查询AI代理
@@ -277,8 +289,13 @@ class MarkdownAgent:
                         # 记录到父AIGN实例日志
                         if hasattr(self, 'parent_aign') and self.parent_aign:
                             self.parent_aign.log_message(error_msg)
+                            # 设置停止生成标志
+                            if hasattr(self.parent_aign, 'stop_generation'):
+                                self.parent_aign.stop_generation = True
+                                print("🛑 已设置停止生成标志，将停止自动生成")
                         
-                        raise ValueError(error_msg)
+                        # 抛出特殊的 TokenLimitError 异常，用于区分 token 超限错误
+                        raise TokenLimitError(error_msg)
                     
                     # 短暂延迟后重试
                     time.sleep(1.5)
@@ -311,8 +328,34 @@ class MarkdownAgent:
         Returns:
             dict: 包含content和total_tokens的响应字典
         """
+        # 获取提供商层面的系统提示词（叠加模式）
+        # 每次调用动态获取，不存储在history中，避免重复累积
+        provider_system_prompt = ""
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            current_config = config_manager.get_current_config()
+            if current_config and current_config.system_prompt:
+                provider_system_prompt = current_config.system_prompt.strip()
+        except Exception as e:
+            # 获取失败时静默处理，不影响正常流程
+            pass
+        
         # 构建完整的消息列表
-        full_messages = self.history + [{"role": "user", "content": user_input}]
+        full_messages = []
+        
+        # 1. 首先添加提供商层面的系统提示词（如果有）
+        #    作为独立的 system 消息，只在本次调用中包含，不存储到 history
+        if provider_system_prompt:
+            full_messages.append({"role": "system", "content": provider_system_prompt})
+            # 仅在首次调用时记录日志（通过检查是否已经显示过来判断）
+            if not hasattr(self, '_provider_prompt_logged') or not self._provider_prompt_logged:
+                print(f"🔧 提供商系统提示词已添加 ({len(provider_system_prompt)} 字符)")
+                self._provider_prompt_logged = True
+        
+        # 2. 然后添加Agent的history（包含agent的sys_prompt）和用户输入
+        full_messages.extend(self.history)
+        full_messages.append({"role": "user", "content": user_input})
         
         # 计算完整提示词长度
         total_prompt_length = sum(len(msg["content"]) for msg in full_messages)
@@ -552,6 +595,7 @@ class MarkdownAgent:
             messages=full_messages,
             temperature=self.temperature,
             top_p=self.top_p,
+            max_tokens=self.max_tokens,  # 传递max_tokens参数，防止输出被截断
         )
         
         # 处理流式和非流式响应

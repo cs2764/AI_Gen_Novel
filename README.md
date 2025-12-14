@@ -1,10 +1,29 @@
-﻿# 🤖 AI Novel Generator v3.6.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.6.2 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.6.0 (2025-12-07)
+## 🎉 What's New in v3.6.2 (2025-12-14)
+
+**Feature Update!** System prompt overlay mode and prompt optimizations.
+
+### ✨ New Features | 新功能
+
+#### 🔄 System Prompt Overlay Mode (Core Feature)
+- **Provider-level integration**: System prompts configured in provider settings now automatically combine with agent prompts
+- **Seamless merging**: Provider system prompts prepend to agent-specific prompts for consistent behavior
+- **No duplication**: Smart mechanism ensures system prompts are included only once per API call
+- **Universal application**: Works across all generation stages (outline, writing, embellishing, memory)
+
+#### 🎨 Prompt Enhancements
+- **150+ prompt files optimized**: Improvements across compact, long_chapter, and standard modes
+- **Better consistency**: Enhanced prompt quality for more reliable outputs
+- **AI provider updates**: Refined integration for Claude, DeepSeek, Fireworks, Grok, Lambda, LM Studio
+
+---
+
+### 📚 Previous Version: v3.6.0 (2025-12-07)
 
 **Major Release!** Multi-style prompt system with 40+ writing styles and token monitoring.
 
@@ -583,7 +602,26 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.6.0 版本更新 (2025-12-07)
+### 🎉 v3.6.2 版本更新 (2025-12-14)
+
+**功能更新！** 系统提示词叠加模式与提示词优化。
+
+#### ✨ 新功能
+
+##### 🔄 系统提示词叠加模式（核心功能）
+- **提供商级集成**：在提供商设置中配置的系统提示词现在自动与智能体提示词合并
+- **无缝合并**：提供商系统提示词添加到智能体特定提示词之前，确保行为一致
+- **无重复**：智能机制确保系统提示词在每次API调用中仅包含一次
+- **通用应用**：适用于所有生成阶段（大纲、写作、润色、记忆）
+
+##### 🎨 提示词增强
+- **150+提示词文件优化**：精简、长章节和标准模式的改进
+- **更好的一致性**：增强提示词质量以获得更可靠的输出
+- **AI提供商更新**：优化Claude、DeepSeek、Fireworks、Grok、Lambda、LM Studio集成
+
+---
+
+### 📚 上一版本：v3.6.0 (2025-12-07)
 
 **重大发布！** 多风格提示词系统，支持40+写作风格和Token监控。
 

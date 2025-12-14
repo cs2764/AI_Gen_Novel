@@ -27,6 +27,7 @@ class ProviderConfig:
     models: List[str] = None
     system_prompt: str = ""
     provider_routing: Optional[Dict[str, Any]] = None  # OpenRouter provider routing配置
+    temperature: float = 0.7  # 默认温度值
     
     def __post_init__(self):
         if self.models is None:
@@ -166,18 +167,18 @@ class DynamicConfigManager:
                 model_name="llama-4-maverick-17b-128e-instruct-fp8",
                 base_url="https://api.lambda.ai/v1",
                 models=[
-                    "llama-4-maverick-17b-128e-instruct-fp8",
-                    "llama-4-scout-17b-16e-instruct",
                     "deepseek-r1-0528",
                     "deepseek-v3-0324",
-                    "llama3.1-8b-instruct",
-                    "llama3.1-70b-instruct-fp8",
-                    "llama3.1-405b-instruct-fp8",
-                    "llama3.3-70b-instruct-fp8",
-                    "qwen3-32b-fp8",
-                    "hermes3-8b",
+                    "hermes3-405b",
                     "hermes3-70b",
-                    "hermes3-405b"
+                    "hermes3-8b",
+                    "llama-4-maverick-17b-128e-instruct-fp8",
+                    "llama-4-scout-17b-16e-instruct",
+                    "llama3.1-405b-instruct-fp8",
+                    "llama3.1-70b-instruct-fp8",
+                    "llama3.1-8b-instruct",
+                    "llama3.3-70b-instruct-fp8",
+                    "qwen3-32b-fp8"
                 ]
             )
         }
@@ -246,12 +247,12 @@ class DynamicConfigManager:
                         print(f"📥 ModelFetcher返回 {len(fresh_models)} 个模型")
                         
                         if fresh_models:
-                            # 提取模型ID列表
-                            model_ids = [model.id for model in fresh_models]
+                            # 提取模型ID列表并按字母顺序排序
+                            model_ids = sorted([model.id for model in fresh_models])
                             # 只在更新配置时使用锁
                             with self._config_lock:
                                 self._providers[provider_name].models = model_ids
-                                print(f"💾 更新 {provider_name} 配置中的模型列表")
+                                print(f"💾 更新 {provider_name} 配置中的模型列表（已排序）")
                             # 保存更新后的配置
                             self.save_config_to_file()
                             result = model_ids.copy()
@@ -295,7 +296,7 @@ class DynamicConfigManager:
         with self._config_lock:
             return self._providers.get(self._current_provider)
     
-    def update_provider_config(self, provider_name: str, api_key: str, model_name: str, system_prompt: str = "", base_url: str = None) -> bool:
+    def update_provider_config(self, provider_name: str, api_key: str, model_name: str, system_prompt: str = "", base_url: str = None, temperature: float = None) -> bool:
         """更新提供商配置"""
         with self._config_lock:
             if provider_name not in self._providers:
@@ -307,6 +308,8 @@ class DynamicConfigManager:
             config.system_prompt = system_prompt
             if base_url is not None:
                 config.base_url = base_url
+            if temperature is not None:
+                config.temperature = temperature
             return True
     
     def set_current_provider(self, provider_name: str) -> bool:
@@ -380,6 +383,9 @@ class DynamicConfigManager:
                             config.base_url = provider_data["base_url"]
                         if "models" in provider_data:
                             config.models = provider_data["models"]
+                        # 加载temperature设置
+                        if "temperature" in provider_data:
+                            config.temperature = provider_data["temperature"]
             
             print(f"配置已从 {config_path} 加载")
             return True

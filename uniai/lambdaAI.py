@@ -45,6 +45,11 @@ def lambdaChatLLM(model_name="llama-4-maverick-17b-128e-instruct-fp8", api_key=N
         max_tokens=None,
         stream=False,
     ) -> dict:
+
+        
+        # Lambda AI默认max_tokens设置为20000（确保章节内容不被截断）
+        if max_tokens is None:
+            max_tokens = 20000
         
         # 如果设置了系统提示词，合并到第一个用户消息的开头
         if system_prompt and messages:
@@ -70,7 +75,8 @@ def lambdaChatLLM(model_name="llama-4-maverick-17b-128e-instruct-fp8", api_key=N
         if top_p is not None:
             params["top_p"] = top_p
         if max_tokens is not None:
-            params["max_tokens"] = max_tokens
+            params["max_tokens"] = max_tokens  # 保留原始参数
+            params["max_completion_tokens"] = max_tokens  # 添加zenmux API参数，限制模型生成内容长度（包括推理过程）
         
         try:
             if not stream:

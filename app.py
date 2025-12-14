@@ -1028,7 +1028,8 @@ def create_gradio5_original_app():
                     max_lines=50,
                     interactive=False,
                     value=loaded_data["status_message"],
-                    elem_id="status_output"
+                    elem_id="status_output",
+                    autoscroll=True
                 )
             
             # 右侧列 (scale=2, 对应原版row3)

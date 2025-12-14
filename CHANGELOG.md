@@ -1,5 +1,47 @@
 # 更新日志 | Changelog
 
+## [3.6.2] - 2025-12-14 🔄 功能更新 | Feature Update
+
+### ✨ 新功能 | New Features
+
+#### 🔄 系统提示词叠加模式 | System Prompt Overlay Mode
+- **提供商级系统提示词集成**: 在Web UI提供商设置中配置的系统提示词现在自动与每个智能体的提示词合并
+- **Provider-level System Prompt Integration**: System prompts configured in Web UI provider settings now automatically merge with each agent's prompts
+- **智能合并机制**: 提供商系统提示词添加到智能体特定提示词之前，确保行为一致
+- **Smart Merging**: Provider system prompts prepend to agent-specific prompts for consistent behavior
+- **防重复设计**: 确保系统提示词在每次API调用中仅包含一次，避免重复
+- **No Duplication**: Ensures system prompts are included only once per API call
+- **全流程应用**: 适用于所有生成阶段（大纲、标题、详细大纲、故事线、写作、润色、记忆）
+- **Universal Application**: Works across all generation stages (outline, title, detailed outline, storyline, writing, embellishing, memory)
+
+### 🔧 功能改进 | Improvements
+
+#### 🎨 提示词优化 | Prompt Enhancements
+- **150+提示词文件优化**: 精简模式、长章节模式和标准模式的提示词改进
+- **150+ Prompt Files Optimized**: Improvements across compact, long_chapter, and standard modes
+- **更好的一致性**: 增强提示词质量以获得更可靠的输出
+- **Better Consistency**: Enhanced prompt quality for more reliable outputs
+
+#### 🤖 AI提供商集成改进 | AI Provider Integration Improvements
+- **Claude AI优化**: 改进Claude API集成和系统提示词处理
+- **Claude AI Optimization**: Improved Claude API integration and system prompt handling
+- **DeepSeek增强**: 优化DeepSeek API调用逻辑
+- **DeepSeek Enhancement**: Optimized DeepSeek API call logic
+- **多提供商更新**: Fireworks、Grok、Lambda、LM Studio集成改进
+- **Multi-provider Updates**: Improvements to Fireworks, Grok, Lambda, LM Studio integrations
+
+### 📊 技术改进 | Technical Improvements
+
+#### 核心引擎优化 | Core Engine Optimization
+- **AIGN.py更新**: 支持系统提示词叠加模式的核心逻辑
+- **AIGN.py Updates**: Core logic for system prompt overlay mode support
+- **aign_agents.py重构**: MarkdownAgent类增强，支持provider_sys_prompt参数
+- **aign_agents.py Refactoring**: Enhanced MarkdownAgent class with provider_sys_prompt parameter support
+- **app.py改进**: Web UI集成系统提示词配置传递
+- **app.py Improvements**: Web UI integration for system prompt configuration passing
+
+---
+
 ## [3.6.0] - 2025-12-07 🚀 重大发布 | Major Release
 
 ### ✨ 新功能 | New Features

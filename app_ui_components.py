@@ -575,7 +575,8 @@ def create_main_layout(
                 max_lines=50,
                 interactive=False,
                 value=loaded_data.get("status_message", ""),
-                elem_id="status_output"
+                elem_id="status_output",
+                autoscroll=True
             )
         
         # 右侧列

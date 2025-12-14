@@ -50,7 +50,7 @@ def claudeChatLLM(model_name="claude-3-sonnet-20240229", api_key=None, system_pr
         params = {
             "model": model_name,
             "messages": claude_messages,
-            "max_tokens": max_tokens or 4096,  # Claude需要明确指定max_tokens
+            "max_tokens": max_tokens or 20000,  # Claude需要明确指定max_tokens，默认20000确保章节内容不被截断
         }
         
         if system_message:
