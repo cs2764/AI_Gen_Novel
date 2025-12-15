@@ -1,5 +1,17 @@
 # 更新日志 | Changelog
 
+## [3.6.3] - 2025-12-14 🔄 界面优化 | UI Improvements
+
+### 🔧 功能改进 | Improvements
+
+#### 💻 界面体验 | UI Experience
+- **故事线显示优化**: 修复Web UI中故事线内容在生成过程中可能被截断的问题
+- **Storyline Display Fix**: Fixed an issue where storyline content could be truncated in Web UI during generation
+- **文本框滚动增强**: 优化了长文本内容的自动滚动和显示逻辑
+- **Textbox Auto-scroll**: Enhanced auto-scroll and display logic for long text content
+
+---
+
 ## [3.6.2] - 2025-12-14 🔄 功能更新 | Feature Update
 
 ### ✨ 新功能 | New Features

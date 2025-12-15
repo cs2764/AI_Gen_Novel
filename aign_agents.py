@@ -17,12 +17,12 @@ class TokenLimitError(Exception):
     pass
 
 
-def Retryer(func, max_retries=10):
+def Retryer(func, max_retries=3):
     """自动重试装饰器，用于处理API调用失败和流式输出问题
     
     Args:
         func: 要装饰的函数
-        max_retries: 最大重试次数，默认10次
+        max_retries: 最大重试次数，默认3次（连续失败3次后停止并报错）
         
     Returns:
         装饰后的函数

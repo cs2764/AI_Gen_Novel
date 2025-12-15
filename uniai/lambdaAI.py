@@ -70,8 +70,21 @@ def lambdaChatLLM(model_name="llama-4-maverick-17b-128e-instruct-fp8", api_key=N
             "messages": messages,
         }
         
+        # ZenMux API支持temperature参数,但需要确保在有效范围内
+        # 根据文档,通常范围是0-2,但某些模型(如Claude)范围是0-1
         if temperature is not None:
-            params["temperature"] = temperature
+            try:
+                # 确保temperature是数字类型
+                temp_value = float(temperature)
+                # 确保在合理范围内,避免API错误
+                validated_temp = max(0.0, min(2.0, temp_value))
+                if validated_temp != temp_value:
+                    print(f"⚠️ Temperature {temp_value} 超出范围,已调整为 {validated_temp}")
+                params["temperature"] = validated_temp
+                print(f"🔧 Lambda API: 设置 temperature = {validated_temp} (原始值: {temperature}, 类型: {type(temperature)})")
+            except (TypeError, ValueError) as e:
+                print(f"❌ Temperature 参数无效: {temperature} (类型: {type(temperature)}), 错误: {e}")
+                print(f"⚠️ 跳过 temperature 参数,使用API默认值")
         if top_p is not None:
             params["top_p"] = top_p
         if max_tokens is not None:

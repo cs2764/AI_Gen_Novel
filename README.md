@@ -1,12 +1,12 @@
-﻿# 🤖 AI Novel Generator v3.6.2 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.6.3 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.6.2 (2025-12-14)
+## 🎉 What's New in v3.6.3 (2025-12-14)
 
-**Feature Update!** System prompt overlay mode and prompt optimizations.
+**Feature Update!** UI Improvements and System Prompt Overlay.
 
 ### ✨ New Features | 新功能
 
@@ -15,6 +15,12 @@
 - **Seamless merging**: Provider system prompts prepend to agent-specific prompts for consistent behavior
 - **No duplication**: Smart mechanism ensures system prompts are included only once per API call
 - **Universal application**: Works across all generation stages (outline, writing, embellishing, memory)
+
+### 🔧 Improvements | 功能改进
+
+#### 💻 UI Experience
+- **Storyline Display Fix**: Fixed an issue where storyline content could be truncated in Web UI during generation
+- **Textbox Auto-scroll**: Enhanced auto-scroll and display logic for long text content
 
 #### 🎨 Prompt Enhancements
 - **150+ prompt files optimized**: Improvements across compact, long_chapter, and standard modes

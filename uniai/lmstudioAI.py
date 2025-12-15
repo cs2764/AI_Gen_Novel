@@ -207,7 +207,7 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
         print(f"🔧 LM Studio 最终构建的提示词长度: {len(final_prompt)} 字符")
         
         # 如果最终提示词异常长，进行额外分析
-        if len(final_prompt) > 20000:
+        if len(final_prompt) > 30000:
             print(f"⚠️  最终提示词异常长 ({len(final_prompt)} 字符)，进行分析:")
             parts_analysis = []
             for i, part in enumerate(parts):

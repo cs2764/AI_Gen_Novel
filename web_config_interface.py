@@ -26,6 +26,19 @@ class WebConfigInterface:
         # TTS配置更新回调列表
         self._tts_update_callbacks = []
     
+    def _get_safe_temperature(self):
+        """安全获取温度值，处理空字符串或无效值"""
+        try:
+            current_config = self.config_manager.get_current_config()
+            if not current_config:
+                return 0.7
+            temp_val = current_config.temperature
+            if temp_val == "" or temp_val is None:
+                return 0.7
+            return float(temp_val)
+        except (ValueError, TypeError):
+            return 0.7
+    
     def get_provider_choices(self):
         """获取提供商选择列表（返回内部名称，不显示名称）"""
         return self.config_manager.get_provider_list()
@@ -57,7 +70,13 @@ class WebConfigInterface:
         current_model = current_config.model_name if current_config else ""
         current_base_url = current_config.base_url if current_config else ""
         current_system_prompt = current_config.system_prompt if current_config else ""
-        current_temperature = current_config.temperature if current_config else 0.7
+        # 获取temperature，处理空字符串或无效值
+        try:
+            temp_val = current_config.temperature if current_config else 0.7
+            current_temperature = float(temp_val) if temp_val != "" and temp_val is not None else 0.7
+        except (ValueError, TypeError):
+            current_temperature = 0.7
+            print(f"⚠️  Temperature值无效，使用默认值0.7")
         
         # Fireworks特殊处理：显示自定义模型输入框
         if provider_name == "fireworks":
@@ -777,7 +796,7 @@ class WebConfigInterface:
                         minimum=0,
                         maximum=2,
                         step=0.1,
-                        value=self.config_manager.get_current_config().temperature if self.config_manager.get_current_config() else 0.7,
+                        value=self._get_safe_temperature(),
                         interactive=True,
                         info="控制生成的随机性，0=确定性，2=最大随机性"
                     )

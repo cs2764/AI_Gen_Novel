@@ -383,9 +383,21 @@ class DynamicConfigManager:
                             config.base_url = provider_data["base_url"]
                         if "models" in provider_data:
                             config.models = provider_data["models"]
-                        # 加载temperature设置
+                        # 加载temperature设置，处理空字符串和None值
                         if "temperature" in provider_data:
-                            config.temperature = provider_data["temperature"]
+                            temp_value = provider_data["temperature"]
+                            # 如果是空字符串或None，使用默认值0.7
+                            if temp_value == "" or temp_value is None:
+                                config.temperature = 0.7
+                            else:
+                                try:
+                                    config.temperature = float(temp_value)
+                                except (ValueError, TypeError):
+                                    print(f"⚠️  {name} 的 temperature 值无效: {temp_value}，使用默认值 0.7")
+                                    config.temperature = 0.7
+                        else:
+                            # 如果配置文件中没有temperature字段，使用默认值
+                            config.temperature = 0.7
             
             print(f"配置已从 {config_path} 加载")
             return True

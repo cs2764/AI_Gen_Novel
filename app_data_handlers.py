@@ -308,8 +308,8 @@ def format_storyline_display_detailed(storyline_dict, is_generating=False, show_
             plot_summary = chapter.get('plot_summary', '暂无梗概')
 
             # 限制每章显示长度，避免界面过长
-            if len(plot_summary) > 200:
-                plot_summary = plot_summary[:200] + "..."
+            if len(plot_summary) > 600:
+                plot_summary = plot_summary[:600] + "..."
 
             formatted_text += f"【第{ch_num}章】{title}\n"
             formatted_text += f"{plot_summary}\n\n"

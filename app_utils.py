@@ -243,14 +243,14 @@ def format_storyline_display(storyline, is_generating=False, show_recent_only=Fa
             )
             
             # 限制内容长度
-            if len(content) > 300:
-                content = content[:300] + "..."
+            if len(content) > 600:
+                content = content[:600] + "..."
             
             formatted_lines.append(f"【第{chapter_num}章】{title}\n{content}")
         else:
             # 如果是字符串格式
-            if len(str(chapter)) > 300:
-                chapter_text = str(chapter)[:300] + "..."
+            if len(str(chapter)) > 600:
+                chapter_text = str(chapter)[:600] + "..."
             else:
                 chapter_text = str(chapter)
             formatted_lines.append(f"第{i}章: {chapter_text}")

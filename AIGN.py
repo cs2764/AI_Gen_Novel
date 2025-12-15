@@ -148,7 +148,7 @@ class AIGN:
             "结尾": 0,
             "其他": 0
         }
-        self.overlength_threshold = 20000  # 超长阈值：20000字符
+        self.overlength_threshold = 30000  # 超长阈值：30000字符
         
         # 确保metadata/overlength目录存在
         import os
