@@ -197,123 +197,239 @@ def gen_ouline_button_clicked(aign, user_idea, user_requirements, embellishment_
         # 添加开始状态（使用新格式）
         status_history.append(["系统", "🚀 开始生成大纲、标题和人物列表...", start_timestamp, generation_start_time])
 
-        # 创建生成线程
-        def generate_outline():
+        # ========== 第一阶段：生成大纲 ==========
+        def generate_outline_only():
             try:
-                # 使用正确的方法名
                 aign.genNovelOutline(user_idea)
             except Exception as e:
                 print(f"❌ 大纲生成失败: {e}")
 
-        gen_ouline_thread = threading.Thread(target=generate_outline)
-        gen_ouline_thread.start()
+        gen_outline_thread = threading.Thread(target=generate_outline_only)
+        gen_outline_thread.start()
 
-        # 实时更新状态
+        # 实时更新状态 - 大纲生成阶段
         update_counter = 0
-        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
+        max_wait_time = 1800  # 最大等待时间30分钟（与API超时设置一致）
 
-        while gen_ouline_thread.is_alive():
-            # 检查是否超时
+        while gen_outline_thread.is_alive():
             if time.time() - start_time > max_wait_time:
                 timeout_timestamp = datetime.now().strftime("%H:%M:%S")
                 status_history.append(["系统", "⚠️ 生成超时，请检查网络连接或API配置", timeout_timestamp, generation_start_time])
                 break
 
-            # 更频繁地更新UI以显示实时进度
-            if update_counter % 2 == 0:  # 每1秒更新一次UI
-                # 分阶段显示生成状态
-                outline_chars = len(aign.novel_outline) if aign.novel_outline else 0
-                title_chars = len(aign.novel_title) if aign.novel_title else 0
-                character_chars = len(aign.character_list) if aign.character_list else 0
-
-                # 根据生成进度为每个阶段创建独立的状态条目
+            if update_counter % 2 == 0:
                 elapsed_time = int(time.time() - start_time)
                 current_timestamp = datetime.now().strftime("%H:%M:%S")
-
-                # 检查当前生成阶段并创建对应的状态条目
-                if outline_chars == 0:
-                    # 大纲生成阶段
-                    stage_key = "大纲生成进度"
-                    status_text = f"📖 正在生成大纲...\n   • 状态: 正在处理用户想法和要求\n   • 进度: 分析用户需求中\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
-                elif outline_chars > 0 and (not aign.novel_title or title_chars == 0):
-                    # 标题生成阶段
-                    stage_key = "标题生成进度"
-                    status_text = f"📚 正在生成标题...\n   • 大纲: {outline_chars} 字符 ✅\n   • 状态: 基于大纲生成标题\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
-                elif title_chars > 0 and (not aign.character_list or character_chars == 0):
-                    # 人物列表生成阶段
-                    stage_key = "人物生成进度"
-                    status_text = f"👥 正在生成人物列表...\n   • 大纲: {outline_chars} 字符 ✅\n   • 标题: '{aign.novel_title[:30] if aign.novel_title else '无'}...' ✅\n   • 状态: 分析角色设定\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
-                else:
-                    # 所有阶段完成
-                    stage_key = "生成完成"
-                    status_text = f"✅ 所有内容生成完成\n   • 大纲: {outline_chars} 字符 ✅\n   • 标题: '{aign.novel_title}' ✅\n   • 人物: {character_chars} 字符 ✅\n   • 总耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
-
-                # 为每个阶段创建独立的状态条目，而不是更新现有的
+                outline_chars = len(aign.novel_outline) if aign.novel_outline else 0
+                
+                stage_key = "大纲生成进度"
+                status_text = f"📖 正在生成大纲...\n   • 状态: 正在处理用户想法和要求\n   • 已生成: {outline_chars} 字符\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                
+                # 更新或创建状态条目
                 stage_found = False
                 for i, item in enumerate(status_history):
                     if len(item) >= 2 and item[0] == stage_key:
-                        # 更新当前阶段的状态
                         status_history[i] = [stage_key, status_text, current_timestamp, generation_start_time]
                         stage_found = True
                         break
-
                 if not stage_found:
-                    # 创建新的阶段状态条目
                     status_history.append([stage_key, status_text, current_timestamp, generation_start_time])
 
                 yield [
                     aign,
                     format_status_output(status_history),
-                    "生成中...",  # 大纲显示区域
-                    "生成中...",  # 标题显示区域
-                    "生成中...",  # 人物显示区域
-                    getattr(aign, 'current_output_file', '') or '',  # 输出文件路径
-                    gr.Button(visible=False),  # 按钮禁用
+                    "生成中...",
+                    "等待大纲完成...",
+                    "等待大纲完成...",
+                    getattr(aign, 'current_output_file', '') or '',
+                    gr.Button(visible=False),
                 ]
 
             update_counter += 1
             time.sleep(0.5)
 
-        # 等待线程完全结束
-        gen_ouline_thread.join(timeout=30)
-        final_timestamp = datetime.now().strftime("%H:%M:%S")
-
-        # 检查生成结果并生成总结
+        gen_outline_thread.join(timeout=30)
+        
+        # 大纲生成完成，立即显示
         if aign.novel_outline:
-            # 生成详细总结
-            summary_text = f"✅ 大纲生成完成\n"
-            summary_text += f"📊 生成统计：\n"
-            summary_text += f"   • 大纲字数: {len(aign.novel_outline)} 字\n"
-            summary_text += f"   • 标题: {aign.novel_title}\n"
-            character_count = len(aign.character_list.split('\n')) if aign.character_list else 0
-            summary_text += f"   • 人物数量: {character_count} 个\n"
-            summary_text += f"   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}\n"
-            summary_text += f"\n✅ 全部内容生成成功！"
-
-            # 更新最终总结（使用新格式）
-            status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
-
-            # 显示实际内容
-            outline_display = aign.novel_outline
-            title_display = aign.novel_title
-            character_display = aign.character_list
+            outline_timestamp = datetime.now().strftime("%H:%M:%S")
+            outline_elapsed = int(time.time() - start_time)
+            status_history.append(["大纲生成", f"✅ 大纲生成完成\n   • 字数: {len(aign.novel_outline)} 字\n   • 耗时: {format_time_duration(outline_elapsed, include_seconds=True)}", outline_timestamp, generation_start_time])
+            
+            # 立即显示大纲内容
+            yield [
+                aign,
+                format_status_output(status_history),
+                aign.novel_outline,  # 显示大纲
+                "准备生成标题...",
+                "等待标题完成...",
+                getattr(aign, 'current_output_file', '') or '',
+                gr.Button(visible=False),
+            ]
         else:
-            summary_text = "❌ 大纲生成失败"
-            status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
+            error_timestamp = datetime.now().strftime("%H:%M:%S")
+            status_history.append(["系统", "❌ 大纲生成失败", error_timestamp, generation_start_time])
+            yield [
+                aign,
+                format_status_output(status_history),
+                "❌ 大纲生成失败",
+                "生成失败",
+                "生成失败",
+                "",
+                gr.Button(visible=True),
+            ]
+            return
 
-            outline_display = summary_text
-            title_display = "生成失败"
-            character_display = "生成失败"
+        # ========== 第二阶段：生成标题 ==========
+        title_start_time = time.time()
+        
+        def generate_title_only():
+            try:
+                aign.genNovelTitle()
+            except Exception as e:
+                print(f"⚠️ 标题生成失败: {e}")
+                aign.novel_title = "未命名小说"
 
-        # 最终更新
+        gen_title_thread = threading.Thread(target=generate_title_only)
+        gen_title_thread.start()
+
+        update_counter = 0
+        while gen_title_thread.is_alive():
+            if time.time() - title_start_time > 300:  # 标题生成最多5分钟
+                break
+
+            if update_counter % 2 == 0:
+                elapsed_time = int(time.time() - start_time)
+                current_timestamp = datetime.now().strftime("%H:%M:%S")
+                
+                stage_key = "标题生成进度"
+                status_text = f"📚 正在生成标题...\n   • 大纲: {len(aign.novel_outline)} 字符 ✅\n   • 状态: 基于大纲生成标题\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                
+                stage_found = False
+                for i, item in enumerate(status_history):
+                    if len(item) >= 2 and item[0] == stage_key:
+                        status_history[i] = [stage_key, status_text, current_timestamp, generation_start_time]
+                        stage_found = True
+                        break
+                if not stage_found:
+                    status_history.append([stage_key, status_text, current_timestamp, generation_start_time])
+
+                yield [
+                    aign,
+                    format_status_output(status_history),
+                    aign.novel_outline,  # 保持显示大纲
+                    "生成中...",
+                    "等待标题完成...",
+                    getattr(aign, 'current_output_file', '') or '',
+                    gr.Button(visible=False),
+                ]
+
+            update_counter += 1
+            time.sleep(0.5)
+
+        gen_title_thread.join(timeout=30)
+        
+        # 标题生成完成，立即显示
+        title_timestamp = datetime.now().strftime("%H:%M:%S")
+        title_elapsed = int(time.time() - title_start_time)
+        if aign.novel_title and aign.novel_title != "未命名小说":
+            status_history.append(["标题生成", f"✅ 标题生成完成\n   • 标题: 《{aign.novel_title}》\n   • 耗时: {format_time_duration(title_elapsed, include_seconds=True)}", title_timestamp, generation_start_time])
+        else:
+            aign.novel_title = "未命名小说"
+            status_history.append(["标题生成", f"⚠️ 标题生成失败，使用默认标题", title_timestamp, generation_start_time])
+        
+        # 立即显示标题
         yield [
             aign,
             format_status_output(status_history),
-            outline_display,
-            title_display,
-            character_display,
+            aign.novel_outline,  # 保持显示大纲
+            aign.novel_title,    # 显示标题
+            "准备生成人物列表...",
             getattr(aign, 'current_output_file', '') or '',
-            gr.Button(visible=True),  # 重新启用按钮
+            gr.Button(visible=False),
+        ]
+
+        # ========== 第三阶段：生成人物列表 ==========
+        character_start_time = time.time()
+        
+        def generate_character_only():
+            try:
+                aign.genCharacterList()
+            except Exception as e:
+                print(f"⚠️ 人物列表生成失败: {e}")
+                aign.character_list = "暂未生成人物列表"
+
+        gen_character_thread = threading.Thread(target=generate_character_only)
+        gen_character_thread.start()
+
+        update_counter = 0
+        while gen_character_thread.is_alive():
+            if time.time() - character_start_time > 300:  # 人物列表生成最多5分钟
+                break
+
+            if update_counter % 2 == 0:
+                elapsed_time = int(time.time() - start_time)
+                current_timestamp = datetime.now().strftime("%H:%M:%S")
+                character_chars = len(aign.character_list) if aign.character_list else 0
+                
+                stage_key = "人物生成进度"
+                status_text = f"👥 正在生成人物列表...\n   • 大纲: {len(aign.novel_outline)} 字符 ✅\n   • 标题: 《{aign.novel_title}》 ✅\n   • 已生成: {character_chars} 字符\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                
+                stage_found = False
+                for i, item in enumerate(status_history):
+                    if len(item) >= 2 and item[0] == stage_key:
+                        status_history[i] = [stage_key, status_text, current_timestamp, generation_start_time]
+                        stage_found = True
+                        break
+                if not stage_found:
+                    status_history.append([stage_key, status_text, current_timestamp, generation_start_time])
+
+                yield [
+                    aign,
+                    format_status_output(status_history),
+                    aign.novel_outline,  # 保持显示大纲
+                    aign.novel_title,    # 保持显示标题
+                    "生成中...",
+                    getattr(aign, 'current_output_file', '') or '',
+                    gr.Button(visible=False),
+                ]
+
+            update_counter += 1
+            time.sleep(0.5)
+
+        gen_character_thread.join(timeout=30)
+        
+        # 人物列表生成完成
+        final_timestamp = datetime.now().strftime("%H:%M:%S")
+        character_elapsed = int(time.time() - character_start_time)
+        total_elapsed = int(time.time() - start_time)
+        
+        if aign.character_list and aign.character_list != "暂未生成人物列表":
+            character_count = len(aign.character_list.split('\n')) if aign.character_list else 0
+            status_history.append(["人物生成", f"✅ 人物列表生成完成\n   • 人物数量: 约{character_count}个\n   • 耗时: {format_time_duration(character_elapsed, include_seconds=True)}", final_timestamp, generation_start_time])
+        else:
+            aign.character_list = "暂未生成人物列表"
+            status_history.append(["人物生成", f"⚠️ 人物列表生成失败，使用默认内容", final_timestamp, generation_start_time])
+        
+        # 添加最终总结
+        summary_text = f"🎉 全部生成完成！\n"
+        summary_text += f"📊 生成统计：\n"
+        summary_text += f"   • 大纲: {len(aign.novel_outline)} 字\n"
+        summary_text += f"   • 标题: 《{aign.novel_title}》\n"
+        character_count = len(aign.character_list.split('\n')) if aign.character_list else 0
+        summary_text += f"   • 人物: 约{character_count}个\n"
+        summary_text += f"   • 总耗时: {format_time_duration(total_elapsed, include_seconds=True)}"
+        status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
+
+        # 最终更新 - 显示所有内容
+        yield [
+            aign,
+            format_status_output(status_history),
+            aign.novel_outline,
+            aign.novel_title,
+            aign.character_list,
+            getattr(aign, 'current_output_file', '') or '',
+            gr.Button(visible=True),
         ]
 
     except Exception as e:
@@ -716,6 +832,28 @@ def create_gradio5_original_app():
                             lines=8,
                             interactive=True,
                         )
+                        
+                        # 风格选择下拉菜单
+                        try:
+                            from style_config import get_style_choices
+                            style_choices = get_style_choices()
+                            style_dropdown = gr.Dropdown(
+                                choices=style_choices,
+                                value="无",
+                                label="📚 小说风格",
+                                interactive=True,
+                                info="选择小说风格后，将使用对应风格的正文和润色提示词。选择'无'则使用默认提示词。"
+                            )
+                        except Exception as e:
+                            print(f"⚠️ 风格选择组件创建失败: {e}")
+                            style_dropdown = gr.Dropdown(
+                                choices=["无"],
+                                value="无",
+                                label="📚 小说风格",
+                                interactive=False,
+                                info="风格选择功能暂不可用"
+                            )
+                        
                         user_requirements_text = gr.Textbox(
                             loaded_data["user_requirements"],
                             label="写作要求",
@@ -1357,7 +1495,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
+                        max_wait_time = 1800  # 最大等待时间30分钟（与API超时设置一致）
 
                         while gen_thread.is_alive():
                             if time.time() - start_time > max_wait_time:
@@ -1467,7 +1605,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
+                        max_wait_time = 1800  # 最大等待时间30分钟（与API超时设置一致）
 
                         while gen_thread.is_alive():
                             if time.time() - start_time > max_wait_time:
@@ -1598,7 +1736,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
+                        max_wait_time = 1800  # 最大等待时间30分钟（与API超时设置一致）
 
                         while gen_thread.is_alive():
                             if time.time() - start_time > max_wait_time:
@@ -1729,7 +1867,7 @@ def create_gradio5_original_app():
 
                         # 实时更新状态
                         update_counter = 0
-                        max_wait_time = 1200  # 最大等待时间20分钟（与API超时设置一致）
+                        max_wait_time = 1800  # 最大等待时间30分钟（与API超时设置一致）
 
                         timeout_notified = False
                         while gen_thread.is_alive():
@@ -2294,6 +2432,13 @@ def create_gradio5_original_app():
                                 if token_stats:
                                     token_display = f"\n\n{token_stats}"
                             
+                            # 获取API时间和费用统计信息
+                            time_display = ""
+                            if hasattr(aign_instance, 'get_api_time_display'):
+                                time_stats = aign_instance.get_api_time_display()
+                                if time_stats:
+                                    time_display = f"{time_stats}"
+                            
                             # 计算预计总字数（基于实际平均值）
                             target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
                             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
@@ -2321,7 +2466,7 @@ def create_gradio5_original_app():
 • 人物: {format_size(content_stats.get('character_list_chars', 0))}
 • 详细大纲: {format_size(content_stats.get('detailed_outline_chars', 0))}
 • 正文内容: {format_size(content_stats.get('total_chars', 0))}
-• 预计总字数: {format_size(estimated_total_chars)}{token_display}
+• 预计总字数: {format_size(estimated_total_chars)}{token_display}{time_display}
 
 📖 故事线统计:
 • 章节数: {storyline_stats.get('chapters_count', 0)} 章
@@ -2448,6 +2593,7 @@ def create_gradio5_original_app():
                         
                         if not ORIGINAL_MODULES_LOADED or not aign_instance:
                             return [
+                                aign_state,  # 返回原始的aign_state以保持State一致
                                 "❌ 系统未初始化，无法导入数据",
                                 "❌ 系统未初始化，无法导入数据",  # import_result_text 重复显示
                                 "", "", "", "", "", "", "", 20, "暂无故事线内容"  # 返回空值和默认章节数，不更新界面
@@ -2464,6 +2610,7 @@ def create_gradio5_original_app():
                             result_message = result_message.strip()
                             
                             return [
+                                aign_instance,  # 返回更新后的AIGN实例以同步State
                                 result_message,
                                 result_message,  # import_result_text 重复显示
                                 getattr(aign_instance, 'user_idea', '') or '',
@@ -2478,6 +2625,7 @@ def create_gradio5_original_app():
                             ]
                         else:
                             return [
+                                aign_instance,  # 返回AIGN实例以保持State一致
                                 "⚠️ 未找到可导入的自动保存数据",
                                 "⚠️ 未找到可导入的自动保存数据",  # import_result_text 重复显示
                                 "", "", "", "", "", "", "", 20, "暂无故事线内容"  # 返回空值和默认章节数，包含故事线
@@ -2485,6 +2633,7 @@ def create_gradio5_original_app():
                             
                     except Exception as e:
                         return [
+                            aign_state,  # 返回原始的aign_state以保持State一致
                             f"❌ 导入失败: {str(e)}",
                             f"❌ 导入失败: {str(e)}",  # import_result_text 重复显示
                             "", "", "", "", "", "", "", 20, "暂无故事线内容"  # 返回空值和默认章节数，包含故事线
@@ -2574,32 +2723,32 @@ def create_gradio5_original_app():
                 import_auto_saved_button.click(
                     import_auto_saved_data_handler,
                     [aign],
-                    [import_result_text, import_result_text, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, novel_title_text, character_list_text, detailed_outline_text, target_chapters_slider, storyline_text]
+                    [aign, import_result_text, import_result_text, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, novel_title_text, character_list_text, detailed_outline_text, target_chapters_slider, storyline_text]
                 )
                 
                 # 绑定写作要求扩展按钮
                 expand_writing_compact_btn.click(
-                    lambda user_idea, user_requirements, embellishment_idea: expand_writing_requirements(user_idea, user_requirements, embellishment_idea, "compact"),
-                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    lambda user_idea, user_requirements, embellishment_idea, selected_style: expand_writing_requirements(user_idea, user_requirements, embellishment_idea, "compact", selected_style or "无"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text, style_dropdown],
                     [user_requirements_text, status_output]
                 )
                 
                 expand_writing_full_btn.click(
-                    lambda user_idea, user_requirements, embellishment_idea: expand_writing_requirements(user_idea, user_requirements, embellishment_idea, "full"),
-                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    lambda user_idea, user_requirements, embellishment_idea, selected_style: expand_writing_requirements(user_idea, user_requirements, embellishment_idea, "full", selected_style or "无"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text, style_dropdown],
                     [user_requirements_text, status_output]
                 )
                 
                 # 绑定润色要求扩展按钮
                 expand_embellishment_compact_btn.click(
-                    lambda user_idea, user_requirements, embellishment_idea: expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, "compact"),
-                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    lambda user_idea, user_requirements, embellishment_idea, selected_style: expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, "compact", selected_style or "无"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text, style_dropdown],
                     [embellishment_idea_text, status_output]
                 )
                 
                 expand_embellishment_full_btn.click(
-                    lambda user_idea, user_requirements, embellishment_idea: expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, "full"),
-                    [user_idea_text, user_requirements_text, embellishment_idea_text],
+                    lambda user_idea, user_requirements, embellishment_idea, selected_style: expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, "full", selected_style or "无"),
+                    [user_idea_text, user_requirements_text, embellishment_idea_text, style_dropdown],
                     [embellishment_idea_text, status_output]
                 )
                 
@@ -3074,19 +3223,24 @@ def create_gradio5_original_app():
                             except Exception as e:
                                 return ("❌ 保存失败", "", f"### 当前配置: 错误 - {e}")
 
-                        # 如果配置界面有保存按钮，重新绑定以包含自动刷新
-                        if 'save_btn' in config_components:
-                            # 重新绑定保存按钮，添加提供商信息更新
-                            config_components['save_btn'].click(
-                                fn=save_config_and_refresh_provider,
-                                inputs=[config_components['provider_dropdown'], config_components['api_key_input'],
-                                        config_components['model_dropdown'], config_components['base_url_input'],
-                                        config_components['system_prompt_input'], config_components['custom_model_input']],
-                                outputs=[config_components['status_output'], config_components['current_info'], provider_info_display]
-                            )
-                            print("✅ 配置界面自动刷新功能已启用")
-                        else:
-                            print("💡 配置保存按钮未找到，跳过自动刷新绑定")
+                        # 注意：save_btn 已经在 web_config_interface.py 中绑定了正确的处理函数
+                        # 不要在这里重复绑定，否则会导致两次保存，第二次覆盖第一次的正确配置
+                        # 如果需要更新 provider_info_display，应该通过其他方式（如页面加载事件）实现
+                        # if 'save_btn' in config_components:
+                        #     # 重新绑定保存按钮，添加提供商信息更新
+                        #     # 注意：必须包含 temperature_slider，否则保存时 temperature 为空
+                        #     config_components['save_btn'].click(
+                        #         fn=save_config_and_refresh_provider,
+                        #         inputs=[config_components['provider_dropdown'], config_components['api_key_input'],
+                        #                 config_components['model_dropdown'], config_components['base_url_input'],
+                        #                 config_components['system_prompt_input'], config_components['temperature_slider'],
+                        #                 config_components['custom_model_input']],
+                        #         outputs=[config_components['status_output'], config_components['current_info'], provider_info_display]
+                        #     )
+                        #     print("✅ 配置界面自动刷新功能已启用")
+                        # else:
+                        #     print("💡 配置保存按钮未找到，跳过自动刷新绑定")
+                        print("💡 save_btn 绑定由 web_config_interface.py 处理，避免重复绑定")
                     else:
                         print("💡 配置界面组件未找到，跳过自动刷新绑定")
 

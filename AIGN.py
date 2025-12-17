@@ -206,6 +206,24 @@ class AIGN:
             "NovelEmbellisherCompactSeg": "润色要求",
         }
         
+        # API时间统计系统（用于追踪API调用时间、费用估算和完成时间）
+        self.api_time_stats = {
+            "enabled": False,  # 统计开关，仅在autoGenerate期间启用
+            "generation_start_time": 0,  # 生成开始时间戳
+            "total_api_calls": 0,  # 总API调用次数
+            "total_api_time_ms": 0,  # 总API调用时间(毫秒)
+            "api_times": [],  # 最近API调用时间列表(毫秒)，用于计算移动平均
+            "max_tracked_calls": 50,  # 最多追踪的最近调用数量
+            "chapter_api_calls": 0,  # 当前章节的API调用次数
+            "chapter_total_time_ms": 0,  # 当前章节的总API时间
+            # 费用统计
+            "total_input_tokens": 0,  # 总输入Token数
+            "total_output_tokens": 0,  # 总输出Token数
+            "total_direct_cost": 0.0,  # API直接返回的费用累计
+            "input_price_per_million": 0.50,  # 输入Token价格(美元/百万Token)，默认$0.50/M
+            "output_price_per_million": 2.00,  # 输出Token价格(美元/百万Token)，默认$2.00/M
+        }
+        
         # 故事线和人物列表相关属性
         self.character_list = ""
         self.storyline = {}
@@ -255,18 +273,37 @@ class AIGN:
             config_manager = get_config_manager()
             current_config = config_manager.get_current_config()
             if current_config and hasattr(current_config, 'temperature'):
-                base_temperature = current_config.temperature
-                if debug_level != '0':
-                    print(f"🌡️ 使用配置的 Temperature: {base_temperature}")
+                temp_val = current_config.temperature
+                # 处理空字符串、None 和无效值
+                if temp_val == "" or temp_val is None:
+                    base_temperature = 0.7
+                    if debug_level != '0':
+                        print(f"🌡️ Temperature 为空，使用默认值: {base_temperature}")
+                else:
+                    try:
+                        base_temperature = float(temp_val)
+                        if debug_level != '0':
+                            print(f"🌡️ 使用配置的 Temperature: {base_temperature}")
+                    except (ValueError, TypeError):
+                        base_temperature = 0.7
+                        if debug_level != '0':
+                            print(f"⚠️ Temperature 值无效 ({temp_val})，使用默认值: {base_temperature}")
         except Exception as e:
             if debug_level != '0':
                 print(f"⚠️ 无法获取配置的 temperature，使用默认值: {e}")
 
+        # provider_temperature 用于大纲、正文、润色 Agent（跟随提供商设置）
+        # base_temperature 用于其他辅助 Agent（记忆、标题、故事线等）
+        provider_temperature = base_temperature
+        if debug_level != '0':
+            print(f"🌡️ 大纲/正文/润色 Agent 使用 provider_temperature: {provider_temperature}")
+
+        # 大纲生成器使用固定temperature 0.95，不跟随提供商设置
         self.novel_outline_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=novel_outline_writer_prompt,
             name="NovelOutlineWriter",
-            temperature=base_temperature,
+            temperature=0.95,
         )
         self.novel_beginning_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
@@ -289,7 +326,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=writer_prompt,
             name="NovelWriter",
-            temperature=base_temperature,
+            temperature=provider_temperature,
         )
         self.novel_writer.prompt_source_file = "AIGN_Prompt_Enhanced.py (novel_writer_prompt)"
         
@@ -297,7 +334,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=embellisher_prompt,
             name="NovelEmbellisher",
-            temperature=base_temperature,
+            temperature=provider_temperature,
         )
         self.novel_embellisher.prompt_source_file = "AIGN_Prompt_Enhanced.py (novel_embellisher_prompt)"
         
@@ -316,30 +353,30 @@ class AIGN:
                 novel_embellisher_compact_segment_3_prompt, novel_embellisher_compact_segment_4_prompt,
             )
             # 标准版 writer
-            self.novel_writer_seg1 = MarkdownAgent(self.chatLLM, novel_writer_segment_1_prompt, "NovelWriterSeg1", temperature=base_temperature)
-            self.novel_writer_seg2 = MarkdownAgent(self.chatLLM, novel_writer_segment_2_prompt, "NovelWriterSeg2", temperature=base_temperature)
-            self.novel_writer_seg3 = MarkdownAgent(self.chatLLM, novel_writer_segment_3_prompt, "NovelWriterSeg3", temperature=base_temperature)
-            self.novel_writer_seg4 = MarkdownAgent(self.chatLLM, novel_writer_segment_4_prompt, "NovelWriterSeg4", temperature=base_temperature)
+            self.novel_writer_seg1 = MarkdownAgent(self.chatLLM, novel_writer_segment_1_prompt, "NovelWriterSeg1", temperature=provider_temperature)
+            self.novel_writer_seg2 = MarkdownAgent(self.chatLLM, novel_writer_segment_2_prompt, "NovelWriterSeg2", temperature=provider_temperature)
+            self.novel_writer_seg3 = MarkdownAgent(self.chatLLM, novel_writer_segment_3_prompt, "NovelWriterSeg3", temperature=provider_temperature)
+            self.novel_writer_seg4 = MarkdownAgent(self.chatLLM, novel_writer_segment_4_prompt, "NovelWriterSeg4", temperature=provider_temperature)
             # 标准版 embellisher
-            self.novel_embellisher_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_1_prompt, "NovelEmbellisherSeg1", temperature=base_temperature)
-            self.novel_embellisher_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_2_prompt, "NovelEmbellisherSeg2", temperature=base_temperature)
-            self.novel_embellisher_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_3_prompt, "NovelEmbellisherSeg3", temperature=base_temperature)
-            self.novel_embellisher_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_4_prompt, "NovelEmbellisherSeg4", temperature=base_temperature)
+            self.novel_embellisher_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_1_prompt, "NovelEmbellisherSeg1", temperature=provider_temperature)
+            self.novel_embellisher_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_2_prompt, "NovelEmbellisherSeg2", temperature=provider_temperature)
+            self.novel_embellisher_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_3_prompt, "NovelEmbellisherSeg3", temperature=provider_temperature)
+            self.novel_embellisher_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_segment_4_prompt, "NovelEmbellisherSeg4", temperature=provider_temperature)
             # 结尾 writer（分段）
             self.ending_writer_seg1 = MarkdownAgent(self.chatLLM, ending_writer_segment_1_prompt, "EndingWriterSeg1", temperature=base_temperature)
             self.ending_writer_seg2 = MarkdownAgent(self.chatLLM, ending_writer_segment_2_prompt, "EndingWriterSeg2", temperature=base_temperature)
             self.ending_writer_seg3 = MarkdownAgent(self.chatLLM, ending_writer_segment_3_prompt, "EndingWriterSeg3", temperature=base_temperature)
             self.ending_writer_seg4 = MarkdownAgent(self.chatLLM, ending_writer_segment_4_prompt, "EndingWriterSeg4", temperature=base_temperature)
             # 精简版 writer
-            self.novel_writer_compact_seg1 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_1_prompt, "NovelWriterCompactSeg1", temperature=base_temperature)
-            self.novel_writer_compact_seg2 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_2_prompt, "NovelWriterCompactSeg2", temperature=base_temperature)
-            self.novel_writer_compact_seg3 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_3_prompt, "NovelWriterCompactSeg3", temperature=base_temperature)
-            self.novel_writer_compact_seg4 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_4_prompt, "NovelWriterCompactSeg4", temperature=base_temperature)
+            self.novel_writer_compact_seg1 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_1_prompt, "NovelWriterCompactSeg1", temperature=provider_temperature)
+            self.novel_writer_compact_seg2 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_2_prompt, "NovelWriterCompactSeg2", temperature=provider_temperature)
+            self.novel_writer_compact_seg3 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_3_prompt, "NovelWriterCompactSeg3", temperature=provider_temperature)
+            self.novel_writer_compact_seg4 = MarkdownAgent(self.chatLLM, novel_writer_compact_segment_4_prompt, "NovelWriterCompactSeg4", temperature=provider_temperature)
             # 精简版 embellisher
-            self.novel_embellisher_compact_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_1_prompt, "NovelEmbellisherCompactSeg1", temperature=base_temperature)
-            self.novel_embellisher_compact_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_2_prompt, "NovelEmbellisherCompactSeg2", temperature=base_temperature)
-            self.novel_embellisher_compact_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_3_prompt, "NovelEmbellisherCompactSeg3", temperature=base_temperature)
-            self.novel_embellisher_compact_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_4_prompt, "NovelEmbellisherCompactSeg4", temperature=base_temperature)
+            self.novel_embellisher_compact_seg1 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_1_prompt, "NovelEmbellisherCompactSeg1", temperature=provider_temperature)
+            self.novel_embellisher_compact_seg2 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_2_prompt, "NovelEmbellisherCompactSeg2", temperature=provider_temperature)
+            self.novel_embellisher_compact_seg3 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_3_prompt, "NovelEmbellisherCompactSeg3", temperature=provider_temperature)
+            self.novel_embellisher_compact_seg4 = MarkdownAgent(self.chatLLM, novel_embellisher_compact_segment_4_prompt, "NovelEmbellisherCompactSeg4", temperature=provider_temperature)
         except Exception as _e:
             print(f"⚠️ 分段生成提示词不可用：{_e}")
         
@@ -357,13 +394,13 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=writer_compact_prompt,
             name="NovelWriterCompact",
-            temperature=base_temperature,
+            temperature=provider_temperature,
         )
         self.novel_embellisher_compact = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=embellisher_compact_prompt,
             name="NovelEmbellisherCompact",
-            temperature=base_temperature,
+            temperature=provider_temperature,
         )
         self.memory_maker = MarkdownAgent(
             chatLLM=self.chatLLM,
@@ -375,7 +412,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=title_generator_prompt,
             name="TitleGenerator",
-            temperature=base_temperature,
+            temperature=provider_temperature,
         )
         
         # JSON版本的标题生成器作为备用方案
@@ -384,7 +421,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=title_generator_json_prompt,
             name="TitleGeneratorJSON",
-            temperature=base_temperature,
+            temperature=provider_temperature,
         )
         self.ending_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
@@ -400,11 +437,12 @@ class AIGN:
             name="EndingEmbellisher",
             temperature=base_temperature,
         )
+        # 故事线生成器使用固定temperature 0.95，不跟随提供商设置
         self.storyline_generator = JSONMarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=storyline_generator_prompt,
             name="StorylineGenerator",
-            temperature=base_temperature,
+            temperature=0.95,
         )
         
         # 初始化故事线管理器
@@ -412,11 +450,12 @@ class AIGN:
         self.storyline_manager = StorylineManager(self)
         print("📋 故事线管理器已初始化")
         
+        # 人物列表生成器使用固定temperature 0.95，不跟随提供商设置
         self.character_generator = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=character_generator_prompt,
             name="CharacterGenerator",
-            temperature=base_temperature,
+            temperature=0.95,
         )
         
         # 章节总结生成器
@@ -432,7 +471,7 @@ class AIGN:
             chatLLM=self.chatLLM,
             sys_prompt=detailed_outline_generator_prompt,
             name="DetailedOutlineGenerator",
-            temperature=base_temperature,
+            temperature=provider_temperature,
         )
 
         # 为所有Agent设置parent_aign引用，用于流式输出跟踪
@@ -1181,29 +1220,8 @@ class AIGN:
         
         self.log_message(f"✅ 大纲生成完成，长度：{len(self.novel_outline)}字符")
         
-        # 自动生成标题（失败时不影响流程）
-        if not self.stop_generation:
-            try:
-                print("📚 开始生成小说标题...")
-                self.genNovelTitle()
-                print("✅ 标题生成流程完成")
-            except Exception as e:
-                print(f"⚠️ 标题生成过程中出现异常：{e}")
-                print("📋 使用默认标题并继续流程")
-                self.novel_title = "未命名小说"
-                self.log_message(f"⚠️ 标题生成异常，使用默认标题：{self.novel_title}")
-        
-        # 自动生成人物列表（失败时不影响流程）
-        if not self.stop_generation:
-            try:
-                print("👥 开始生成人物列表...")
-                self.genCharacterList()
-                print("✅ 人物列表生成流程完成")
-            except Exception as e:
-                print(f"⚠️ 人物列表生成过程中出现异常：{e}")
-                print("📋 使用默认人物列表并继续流程")
-                self.character_list = "暂未生成人物列表"
-                self.log_message(f"⚠️ 人物列表生成异常，使用默认内容：{self.character_list}")
+        # 注意：标题和人物列表的生成已移至app.py的gen_ouline_button_clicked函数中
+        # 这样可以实现分步显示：大纲完成后立即显示，然后再生成标题，最后生成人物列表
         
         # 自动保存大纲到本地文件
         if not self.stop_generation:
@@ -4369,6 +4387,24 @@ class AIGN:
                 }
             }
             
+            # 添加API时间和费用统计（如果有）
+            api_stats = self.api_time_stats
+            if api_stats.get("total_api_calls", 0) > 0:
+                import time as time_module
+                generation_start = api_stats.get("generation_start_time", 0)
+                total_elapsed = time_module.time() - generation_start if generation_start > 0 else 0
+                direct_cost = api_stats.get("total_direct_cost", 0.0)
+                
+                metadata["api_statistics"] = {
+                    "total_api_calls": api_stats.get("total_api_calls", 0),
+                    "total_api_time_seconds": round(api_stats.get("total_api_time_ms", 0) / 1000, 2),
+                    "total_elapsed_seconds": round(total_elapsed, 2),
+                    "total_input_tokens": api_stats.get("total_input_tokens", 0),
+                    "total_output_tokens": api_stats.get("total_output_tokens", 0),
+                    "total_cost_usd": round(direct_cost, 6) if direct_cost > 0 else None,
+                    "average_api_time_seconds": round(api_stats.get("total_api_time_ms", 0) / api_stats.get("total_api_calls", 1) / 1000, 2)
+                }
+            
             # 保存到JSON文件
             with open(metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
@@ -4711,6 +4747,11 @@ class AIGN:
                 self.token_accumulation_stats["enabled"] = True
                 print("✅ Token统计已启用")
                 
+                # 启用API时间和费用统计系统
+                print("⏱️ 启用API时间和费用统计...")
+                self.start_api_time_tracking()
+                print("✅ 时间统计已启用")
+                
                 # 在自动生成开始时，更新ChatLLM实例以使用当前配置的提供商
                 self._refresh_chatllm_for_auto_generation()
                 
@@ -4855,6 +4896,13 @@ class AIGN:
                         if token_summary:
                             print(token_summary)
                             self._sync_to_webui("📊 Token消耗统计已生成，请查看终端输出")
+                    
+                    # 显示API时间和费用统计最终报告
+                    if self.api_time_stats.get("enabled", False):
+                        time_summary = self.get_api_time_final_summary()
+                        if time_summary:
+                            print(time_summary)
+                            self._sync_to_webui("⏱️ 时间和费用统计已生成，请查看终端输出")
                 else:
                     stop_msg = f"⏹️  自动生成已停止，当前进度: {self.chapter_count}/{self.target_chapter_count}"
                     print(stop_msg)
@@ -4866,6 +4914,12 @@ class AIGN:
                         if token_summary:
                             print(token_summary)
                     
+                    # 也显示当前时间统计
+                    if self.api_time_stats.get("enabled", False):
+                        time_summary = self.get_api_time_final_summary()
+                        if time_summary:
+                            print(time_summary)
+                    
             except Exception as e:
                 error_msg = f"❌ 自动生成过程中发生错误: {e}"
                 print(error_msg)
@@ -4876,11 +4930,21 @@ class AIGN:
                     token_summary = self.get_token_accumulation_final_summary()
                     if token_summary:
                         print(token_summary)
+                
+                # 即使出错也显示当前时间统计
+                if self.api_time_stats.get("enabled", False):
+                    time_summary = self.get_api_time_final_summary()
+                    if time_summary:
+                        print(time_summary)
             finally:
                 # 关闭Token统计系统
                 if self.token_accumulation_stats.get("enabled", False):
                     self.token_accumulation_stats["enabled"] = False
                     print("🔒 Token统计已关闭")
+                
+                # 关闭API时间统计系统
+                if self.api_time_stats.get("enabled", False):
+                    self.stop_api_time_tracking()
                 
                 self.auto_generation_running = False
         
@@ -5467,6 +5531,279 @@ class AIGN:
             avg_tokens_per_call = total_tokens / total_calls
             lines.append(f"📊 平均每次调用: {avg_tokens_per_call:.0f} tokens")
         
+        lines.append("━" * 60)
+        lines.append("")
+        
+        return "\n".join(lines)
+    
+    # ========== API时间统计方法 ==========
+    
+    def reset_api_time_stats(self):
+        """重置API时间统计数据
+        
+        在autoGenerate开始时调用，清零所有时间和费用统计
+        """
+        self.api_time_stats["enabled"] = False
+        self.api_time_stats["generation_start_time"] = 0
+        self.api_time_stats["total_api_calls"] = 0
+        self.api_time_stats["total_api_time_ms"] = 0
+        self.api_time_stats["api_times"] = []
+        self.api_time_stats["chapter_api_calls"] = 0
+        self.api_time_stats["chapter_total_time_ms"] = 0
+        # 重置费用统计
+        self.api_time_stats["total_input_tokens"] = 0
+        self.api_time_stats["total_output_tokens"] = 0
+        self.api_time_stats["total_direct_cost"] = 0.0
+        
+        print("🔄 API时间和费用统计已重置")
+    
+    def start_api_time_tracking(self):
+        """开始API时间追踪
+        
+        在autoGenerate开始时调用
+        """
+        import time
+        self.reset_api_time_stats()
+        self.api_time_stats["enabled"] = True
+        self.api_time_stats["generation_start_time"] = time.time()
+        print("⏱️ API时间统计已启用")
+    
+    def stop_api_time_tracking(self):
+        """停止API时间追踪"""
+        self.api_time_stats["enabled"] = False
+        print("🔒 API时间统计已关闭")
+    
+    def record_api_time(self, api_time_ms: float, agent_name: str = "", 
+                        input_tokens: int = 0, output_tokens: int = 0,
+                        api_cost: float = 0.0):
+        """记录单次API调用时间、Token消耗和费用
+        
+        Args:
+            api_time_ms: API调用耗时（毫秒）
+            agent_name: 智能体名称（用于日志）
+            input_tokens: 输入Token数量
+            output_tokens: 输出Token数量
+            api_cost: API直接返回的费用（美元，如果有的话）
+        """
+        if not self.api_time_stats.get("enabled", False):
+            return
+        
+        # 更新时间统计
+        self.api_time_stats["total_api_calls"] += 1
+        self.api_time_stats["total_api_time_ms"] += api_time_ms
+        self.api_time_stats["chapter_api_calls"] += 1
+        self.api_time_stats["chapter_total_time_ms"] += api_time_ms
+        
+        # 更新Token统计（用于费用计算）
+        self.api_time_stats["total_input_tokens"] += input_tokens
+        self.api_time_stats["total_output_tokens"] += output_tokens
+        
+        # 记录API直接返回的费用（如果有）
+        if api_cost > 0:
+            self.api_time_stats["total_direct_cost"] += api_cost
+        
+        # 添加到最近调用列表
+        self.api_time_stats["api_times"].append(api_time_ms)
+        
+        # 限制追踪数量
+        max_tracked = self.api_time_stats.get("max_tracked_calls", 50)
+        if len(self.api_time_stats["api_times"]) > max_tracked:
+            self.api_time_stats["api_times"] = self.api_time_stats["api_times"][-max_tracked:]
+        
+        # 日志记录
+        time_sec = api_time_ms / 1000
+        cost_info = f", 费用 ${api_cost:.4f}" if api_cost > 0 else ""
+        if agent_name:
+            print(f"⏱️ API调用完成: {agent_name} 耗时 {time_sec:.1f}秒{cost_info}")
+    
+    def reset_chapter_api_stats(self):
+        """重置章节API统计（每章开始时调用）"""
+        self.api_time_stats["chapter_api_calls"] = 0
+        self.api_time_stats["chapter_total_time_ms"] = 0
+    
+    def get_api_time_display(self):
+        """生成格式化的API时间统计显示文本（实时更新）
+        
+        返回用于WebUI显示的时间统计信息
+        
+        Returns:
+            str: 格式化的时间统计信息字符串
+        """
+        import time
+        
+        if not self.api_time_stats.get("enabled", False):
+            return ""
+        
+        stats = self.api_time_stats
+        
+        # 计算已用时间
+        generation_start = stats.get("generation_start_time", 0)
+        if generation_start <= 0:
+            return ""
+        
+        elapsed_seconds = time.time() - generation_start
+        elapsed_minutes = int(elapsed_seconds // 60)
+        elapsed_secs = int(elapsed_seconds % 60)
+        
+        total_calls = stats.get("total_api_calls", 0)
+        total_time_ms = stats.get("total_api_time_ms", 0)
+        
+        # 计算平均API时间
+        avg_api_time_sec = 0
+        if total_calls > 0:
+            avg_api_time_sec = (total_time_ms / total_calls) / 1000
+        
+        # 计算费用：优先使用API直接返回的费用，否则基于Token估算
+        total_input_tokens = stats.get("total_input_tokens", 0)
+        total_output_tokens = stats.get("total_output_tokens", 0)
+        direct_cost = stats.get("total_direct_cost", 0.0)
+        
+        if direct_cost > 0:
+            # 使用API直接返回的费用
+            total_cost = direct_cost
+            cost_source = "实际"
+        else:
+            # 基于Token估算费用
+            input_price = stats.get("input_price_per_million", 0.50)
+            output_price = stats.get("output_price_per_million", 2.00)
+            input_cost = (total_input_tokens / 1_000_000) * input_price
+            output_cost = (total_output_tokens / 1_000_000) * output_price
+            total_cost = input_cost + output_cost
+            cost_source = "估算"
+        
+        # 构建显示文本
+        lines = []
+        lines.append("")
+        lines.append("⏱️ API时间统计")
+        lines.append(f"  • 已用时间: {elapsed_minutes}分{elapsed_secs}秒")
+        lines.append(f"  • API调用: {total_calls}次")
+        
+        if total_calls > 0:
+            lines.append(f"  • 平均API时间: {avg_api_time_sec:.1f}秒")
+            
+            # 显示费用统计（仅当有费用数据时）
+            if total_cost > 0:
+                lines.append(f"  • {cost_source}费用: ${total_cost:.4f}")
+            
+            # 估算完成时间（基于章节进度）
+            current_chapter = getattr(self, 'chapter_count', 0)
+            target_chapters = getattr(self, 'target_chapter_count', 0)
+            
+            if current_chapter > 0 and target_chapters > current_chapter:
+                # 基于已完成章节的平均时间估算
+                avg_time_per_chapter = elapsed_seconds / current_chapter
+                remaining_chapters = target_chapters - current_chapter
+                estimated_remaining_sec = avg_time_per_chapter * remaining_chapters
+                
+                est_remaining_min = int(estimated_remaining_sec // 60)
+                est_remaining_sec = int(estimated_remaining_sec % 60)
+                
+                lines.append(f"  • 预计剩余: {est_remaining_min}分{est_remaining_sec}秒")
+                
+                # 估算最终费用
+                if total_cost > 0:
+                    avg_cost_per_chapter = total_cost / current_chapter
+                    estimated_total_cost = avg_cost_per_chapter * target_chapters
+                    lines.append(f"  • 预计总费用: ${estimated_total_cost:.4f}")
+        
+        lines.append("")
+        
+        return "\n".join(lines)
+    
+    def get_api_time_final_summary(self):
+        """生成最终API时间统计报告
+        
+        在autoGenerate完成时调用，显示详细的时间统计报告
+        
+        Returns:
+            str: 格式化的最终时间统计报告
+        """
+        import time
+        
+        stats = self.api_time_stats
+        
+        generation_start = stats.get("generation_start_time", 0)
+        if generation_start <= 0:
+            return ""
+        
+        # 计算总耗时
+        total_elapsed = time.time() - generation_start
+        total_minutes = int(total_elapsed // 60)
+        total_seconds = int(total_elapsed % 60)
+        total_hours = int(total_minutes // 60)
+        remaining_minutes = total_minutes % 60
+        
+        total_calls = stats.get("total_api_calls", 0)
+        total_api_time_ms = stats.get("total_api_time_ms", 0)
+        
+        if total_calls == 0:
+            return ""
+        
+        # 计算统计数据
+        avg_api_time_sec = (total_api_time_ms / total_calls) / 1000
+        total_api_time_sec = total_api_time_ms / 1000
+        
+        # 计算API时间在总时间中的占比
+        api_percentage = (total_api_time_sec / total_elapsed * 100) if total_elapsed > 0 else 0
+        
+        # 获取章节信息
+        chapters_generated = getattr(self, 'chapter_count', 0)
+        
+        # 构建报告
+        lines = []
+        lines.append("")
+        lines.append("⏱️ 生成时间统计报告")
+        lines.append("━" * 60)
+        lines.append("")
+        
+        # 总耗时
+        if total_hours > 0:
+            lines.append(f"🕐 总耗时: {total_hours}小时{remaining_minutes}分{total_seconds}秒")
+        else:
+            lines.append(f"🕐 总耗时: {total_minutes}分{total_seconds}秒")
+        
+        lines.append(f"📞 API调用总数: {total_calls}次")
+        lines.append(f"⚡ 平均API时间: {avg_api_time_sec:.1f}秒/次")
+        lines.append(f"📊 API总耗时: {int(total_api_time_sec // 60)}分{int(total_api_time_sec % 60)}秒 ({api_percentage:.1f}%)")
+        
+        # 费用统计：优先使用API直接返回的费用
+        total_input_tokens = stats.get("total_input_tokens", 0)
+        total_output_tokens = stats.get("total_output_tokens", 0)
+        direct_cost = stats.get("total_direct_cost", 0.0)
+        
+        if direct_cost > 0:
+            # 使用API直接返回的费用
+            total_cost = direct_cost
+            cost_source = "实际"
+        else:
+            # 基于Token估算费用
+            input_price = stats.get("input_price_per_million", 0.50)
+            output_price = stats.get("output_price_per_million", 2.00)
+            input_cost = (total_input_tokens / 1_000_000) * input_price
+            output_cost = (total_output_tokens / 1_000_000) * output_price
+            total_cost = input_cost + output_cost
+            cost_source = "估算"
+        
+        # 显示费用统计（仅当有费用数据时）
+        if total_cost > 0:
+            lines.append("")
+            lines.append(f"💰 {cost_source}费用统计:")
+            lines.append(f"  • 输入Token: {total_input_tokens:,}")
+            lines.append(f"  • 输出Token: {total_output_tokens:,}")
+            lines.append(f"  • 总费用: ${total_cost:.4f}")
+        
+        if chapters_generated > 0:
+            lines.append("")
+            avg_chapter_time = total_elapsed / chapters_generated
+            avg_chapter_min = int(avg_chapter_time // 60)
+            avg_chapter_sec = int(avg_chapter_time % 60)
+            lines.append(f"📖 生成章节: {chapters_generated}章")
+            lines.append(f"📈 平均每章: {avg_chapter_min}分{avg_chapter_sec}秒")
+            if total_cost > 0:
+                avg_cost_per_chapter = total_cost / chapters_generated
+                lines.append(f"💵 平均每章费用: ${avg_cost_per_chapter:.4f}")
+        
+        lines.append("")
         lines.append("━" * 60)
         lines.append("")
         

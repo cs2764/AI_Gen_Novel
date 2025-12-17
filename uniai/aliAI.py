@@ -43,7 +43,7 @@ def aliChatLLM(model_name, api_key=None, system_prompt=""):
                 temperature=temperature,
                 top_p=top_p,
                 result_format="message",
-                timeout=1200,  # 20分钟超时
+                timeout=1800,  # 30分钟超时
             )
             if response.status_code == HTTPStatus.OK:
                 return {
@@ -73,7 +73,7 @@ def aliChatLLM(model_name, api_key=None, system_prompt=""):
                 result_format="message",
                 stream=True,
                 output_in_full=True,  # get streaming output incrementally
-                timeout=1200,  # 20分钟超时
+                timeout=1800,  # 30分钟超时
             )
 
             def respGenerator():

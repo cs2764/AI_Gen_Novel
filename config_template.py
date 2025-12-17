@@ -48,6 +48,11 @@ GROK_BASE_URL = "https://api.x.ai/v1"
 LAMBDA_API_KEY = "your_lambda_api_key_here"
 LAMBDA_BASE_URL = "https://api.lambda.ai/v1"
 
+# SiliconFlow配置
+# 国内GPU云服务商，支持多种开源模型
+SILICONFLOW_API_KEY = "your_siliconflow_api_key_here"
+SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
+
 # ===========================================
 # 🎛️ 默认设置
 # ===========================================
@@ -66,7 +71,8 @@ DEFAULT_MODELS = {
     "alibaba": "qwen-turbo",
     "fireworks": "accounts/fireworks/models/llama-v3p1-405b-instruct",
     "grok": "grok-beta",
-    "lambda": "hermes-3-llama-3.1-405b-fp8"
+    "lambda": "hermes-3-llama-3.1-405b-fp8",
+    "siliconflow": "deepseek-ai/DeepSeek-V3"
 }
 
 # 生成参数默认值
@@ -126,6 +132,7 @@ FILE_CONFIG = {
 • Fireworks: https://fireworks.ai/
 • Grok: https://console.x.ai/
 • Lambda (OpenAI兼容模式): https://lambda.ai/
+• SiliconFlow: https://siliconflow.cn/
 
 🛡️ 安全提醒：
 

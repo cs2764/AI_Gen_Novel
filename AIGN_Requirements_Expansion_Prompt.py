@@ -139,6 +139,7 @@ writing_requirements_compact_expansion_prompt = """你是文学风格专家。�
 **文章想法：**{user_idea}
 **现有要求：**{user_requirements}
 **润色参考：**{embellishment_idea}
+{style_section}
 
 ## ✍️ 文字风格扩展
 
@@ -195,6 +196,7 @@ writing_requirements_full_expansion_prompt = """你是顶级文学风格大师�
 **文章想法：**{user_idea}
 **现有要求：**{user_requirements}
 **润色参考：**{embellishment_idea}
+{style_section}
 
 ## 📚 文字表达体系
 
@@ -325,6 +327,7 @@ embellishment_requirements_compact_expansion_prompt = """你是语言美学专�
 **文章想法：**{user_idea}
 **写作参考：**{user_requirements}
 **现有润色：**{embellishment_idea}
+{style_section}
 
 ## 🎨 润色策略扩展
 
@@ -376,6 +379,7 @@ embellishment_requirements_full_expansion_prompt = """你是顶级语言美学�
 **文章想法：**{user_idea}
 **写作参考：**{user_requirements}
 **现有润色：**{embellishment_idea}
+{style_section}
 
 ## 🎨 润色美学体系
 

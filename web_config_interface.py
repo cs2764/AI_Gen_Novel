@@ -22,7 +22,7 @@ class WebConfigInterface:
         self.default_ideas_manager = get_default_ideas_manager()
         self._test_lock = threading.Lock()
         # 添加模型刷新的超时控制
-        self._refresh_timeout = 1200  # 1200秒超时(20分钟)
+        self._refresh_timeout = 1800  # 1800秒超时(30分钟)
         # TTS配置更新回调列表
         self._tts_update_callbacks = []
     
@@ -138,6 +138,28 @@ class WebConfigInterface:
             
             if not final_model_name:
                 return "❌ 请选择模型或输入自定义模型名称"
+            
+            # 调试日志：打印 temperature 的值和类型
+            print(f"🌡️ 保存配置 - temperature 值: {temperature}, 类型: {type(temperature)}")
+            
+            # 确保 temperature 是浮点数
+            # 如果是空字符串或无效值，保持当前配置的 temperature 不变
+            if temperature is not None and temperature != "":
+                try:
+                    temperature = float(temperature)
+                    print(f"🌡️ 保存配置 - temperature 转换后: {temperature}")
+                except (ValueError, TypeError) as e:
+                    print(f"⚠️ temperature 转换失败: {e}, 保持当前配置值")
+                    # 获取当前配置的 temperature
+                    current_config = self.config_manager.get_provider_config(provider_name)
+                    temperature = current_config.temperature if current_config and current_config.temperature else 0.7
+                    print(f"🌡️ 使用当前配置的 temperature: {temperature}")
+            else:
+                # 空字符串或 None，保持当前配置的 temperature
+                print(f"⚠️ temperature 为空，保持当前配置值")
+                current_config = self.config_manager.get_provider_config(provider_name)
+                temperature = current_config.temperature if current_config and current_config.temperature else 0.7
+                print(f"🌡️ 使用当前配置的 temperature: {temperature}")
             
             # 更新配置
             success = self.config_manager.update_provider_config(

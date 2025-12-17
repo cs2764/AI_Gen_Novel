@@ -164,7 +164,8 @@ NETWORK_SETTINGS = {
             'OPENROUTER_CONFIG',
             'CLAUDE_CONFIG',
             'GROK_CONFIG',
-            'LAMBDA_CONFIG'
+            'LAMBDA_CONFIG',
+            'SILICONFLOW_CONFIG'
         ]
         
         for config_name in required_configs:
@@ -180,7 +181,7 @@ NETWORK_SETTINGS = {
         # 验证当前提供商设置
         # lambda: OpenAI兼容模式
         provider = config_module.CURRENT_PROVIDER
-        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda"]
+        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda", "siliconflow"]
         
         if provider not in valid_providers:
             if allow_incomplete:
@@ -202,7 +203,8 @@ NETWORK_SETTINGS = {
             "openrouter": config_module.OPENROUTER_CONFIG,
             "claude": config_module.CLAUDE_CONFIG,
             "grok": config_module.GROK_CONFIG,
-            "lambda": config_module.LAMBDA_CONFIG
+            "lambda": config_module.LAMBDA_CONFIG,
+            "siliconflow": config_module.SILICONFLOW_CONFIG
         }
         
         current_config = provider_configs[provider]
@@ -444,6 +446,14 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
                 base_url=provider_config.get('base_url'),
                 system_prompt=provider_config.get('system_prompt', '')
             )
+        elif provider == "siliconflow":
+            from uniai.siliconflowAI import siliconflowChatLLM
+            return siliconflowChatLLM(
+                model_name=provider_config['model_name'],
+                api_key=provider_config['api_key'],
+                base_url=provider_config.get('base_url'),
+                system_prompt=provider_config.get('system_prompt', '')
+            )
         else:
             raise ValueError(f"不支持的AI提供商: {provider}")
             
@@ -477,14 +487,56 @@ def update_aign_settings(aign_instance, allow_incomplete: bool = True):
         aign_instance.enable_ending = novel_settings.get('enable_ending', True)
     
     # 应用温度设置
+    # 首先尝试从动态配置获取提供商的 temperature
+    provider_temperature = None
+    try:
+        from dynamic_config_manager import get_config_manager
+        config_manager = get_config_manager()
+        current_config = config_manager.get_current_config()
+        if current_config and hasattr(current_config, 'temperature'):
+            temp_val = current_config.temperature
+            if temp_val != "" and temp_val is not None:
+                provider_temperature = float(temp_val)
+                print(f"🌡️ update_aign_settings: 使用提供商 temperature = {provider_temperature}")
+    except Exception as e:
+        print(f"⚠️ update_aign_settings: 获取提供商 temperature 失败: {e}")
+    
     temp_settings = config.get('temperature_settings', {})
     if temp_settings:
-        aign_instance.novel_outline_writer.temperature = temp_settings.get('outline_writer', 0.98)
+        # 核心创作 Agent 使用提供商 temperature（如果可用）
+        if provider_temperature is not None:
+            # 注意：大纲(novel_outline_writer)、人物列表(character_generator)、故事线(storyline_generator)
+            # 使用固定temperature 0.95，不在此处覆盖
+            # 正文、润色、标题 使用提供商 temperature
+            aign_instance.novel_writer.temperature = provider_temperature
+            aign_instance.novel_embellisher.temperature = provider_temperature
+            aign_instance.title_generator.temperature = provider_temperature
+            # 如果有这些 Agent，也使用提供商 temperature
+            if hasattr(aign_instance, 'detailed_outline_generator'):
+                aign_instance.detailed_outline_generator.temperature = provider_temperature
+            # character_generator 使用固定 0.95，不覆盖
+            if hasattr(aign_instance, 'novel_writer_compact'):
+                aign_instance.novel_writer_compact.temperature = provider_temperature
+            if hasattr(aign_instance, 'novel_embellisher_compact'):
+                aign_instance.novel_embellisher_compact.temperature = provider_temperature
+            if hasattr(aign_instance, 'title_generator_json'):
+                aign_instance.title_generator_json.temperature = provider_temperature
+            # 分段 Agent
+            for seg in [1, 2, 3, 4]:
+                for agent_name in [f'novel_writer_seg{seg}', f'novel_embellisher_seg{seg}',
+                                   f'novel_writer_compact_seg{seg}', f'novel_embellisher_compact_seg{seg}']:
+                    if hasattr(aign_instance, agent_name):
+                        getattr(aign_instance, agent_name).temperature = provider_temperature
+        else:
+            # 回退到静态配置
+            # 注意：大纲、人物列表、故事线使用固定temperature 0.95
+            aign_instance.novel_writer.temperature = temp_settings.get('novel_writer', 0.81)
+            aign_instance.novel_embellisher.temperature = temp_settings.get('embellisher', 0.92)
+            aign_instance.title_generator.temperature = temp_settings.get('title_generator', 0.8)
+        
+        # 其他辅助 Agent 使用静态配置
         aign_instance.novel_beginning_writer.temperature = temp_settings.get('beginning_writer', 0.80)
-        aign_instance.novel_writer.temperature = temp_settings.get('novel_writer', 0.81)
-        aign_instance.novel_embellisher.temperature = temp_settings.get('embellisher', 0.92)
         aign_instance.memory_maker.temperature = temp_settings.get('memory_maker', 0.66)
-        aign_instance.title_generator.temperature = temp_settings.get('title_generator', 0.8)
         aign_instance.ending_writer.temperature = temp_settings.get('ending_writer', 0.85)
 
 

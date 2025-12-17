@@ -591,11 +591,15 @@ class MarkdownAgent:
                 full_prompt_content, content_type, self.name, direction="sent"
             )
         
+        # ⏱️ 开始API调用计时
+        api_start_time = time.time()
+        
         resp = self.chatLLM(
             messages=full_messages,
             temperature=self.temperature,
             top_p=self.top_p,
             max_tokens=self.max_tokens,  # 传递max_tokens参数，防止输出被截断
+            stream=False,  # 明确禁用流式输出，使用非流式模式
         )
         
         # 处理流式和非流式响应
@@ -822,6 +826,38 @@ class MarkdownAgent:
                 current_stats = self.parent_aign.get_token_accumulation_display(show_details=False)
                 if current_stats:
                     print(current_stats)
+        
+        # ⏱️ 记录API调用时间和费用统计（如果API返回了这些信息）
+        if hasattr(self, 'parent_aign') and self.parent_aign:
+            if self.parent_aign.api_time_stats.get("enabled", False):
+                # 优先使用API返回的生成时间，否则使用本地测量的时间
+                api_time_ms = resp.get('generation_time_ms', 0) or resp.get('latency_ms', 0)
+                if api_time_ms == 0:
+                    # 如果API没有返回时间，使用本地测量
+                    api_time_ms = (time.time() - api_start_time) * 1000
+                
+                # 获取token数（用于费用计算，如果API没有直接返回费用）
+                input_tokens = resp.get('prompt_tokens', sent_tokens)
+                output_tokens = resp.get('completion_tokens', 0)
+                if output_tokens == 0:
+                    output_tokens = self.count_tokens(resp.get("content", ""))
+                
+                # 获取API返回的直接费用（如果有）
+                api_cost = resp.get('api_cost', 0)
+                
+                # 记录到统计系统
+                self.parent_aign.record_api_time(
+                    api_time_ms, 
+                    self.name, 
+                    input_tokens, 
+                    output_tokens,
+                    api_cost
+                )
+                
+                # 显示时间统计
+                time_stats = self.parent_aign.get_api_time_display()
+                if time_stats:
+                    print(time_stats)
         
         # 注意：use_memory逻辑已经移动到 query() 方法中
         return resp

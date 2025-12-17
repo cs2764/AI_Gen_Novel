@@ -18,7 +18,7 @@ from AIGN_Requirements_Expansion_Prompt import (
 )
 
 
-def expand_writing_requirements(user_idea, user_requirements, embellishment_idea, expansion_type="compact"):
+def expand_writing_requirements(user_idea, user_requirements, embellishment_idea, expansion_type="compact", selected_style="无"):
     """扩展写作要求功能
     
     通过AI分析用户想法和现有写作要求，生成更详细、更具体的写作指导。
@@ -28,6 +28,7 @@ def expand_writing_requirements(user_idea, user_requirements, embellishment_idea
         user_requirements (str): 现有的写作要求
         embellishment_idea (str): 润色要求（用于风格参考）
         expansion_type (str): 扩展类型，"compact"（精简1000字）或"full"（全面2000字）
+        selected_style (str): 用户选择的小说风格，默认为"无"
         
     Returns:
         tuple: (扩展后的内容, 状态消息)
@@ -62,27 +63,47 @@ def expand_writing_requirements(user_idea, user_requirements, embellishment_idea
         # 确定扩展长度和类型
         expansion_desc = "精简扩展" if expansion_type == "compact" else "全面扩展"
         
+        # 获取配置的 temperature
+        config_temperature = 0.7  # 默认值
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            current_config = config_manager.get_current_config()
+            if current_config and hasattr(current_config, 'temperature'):
+                temp_val = current_config.temperature
+                if temp_val != "" and temp_val is not None:
+                    config_temperature = float(temp_val)
+        except Exception:
+            pass
+        
         # 第一步：分析想法中的文章风格
         style_analysis_prompt = get_style_analysis_prompt().format(user_idea=user_idea)
         style_analysis_response = chatllm(
             messages=[{"role": "user", "content": style_analysis_prompt}],
-            temperature=0.7
+            temperature=config_temperature
         )
         style_analysis = style_analysis_response.get("content", "") if isinstance(style_analysis_response, dict) else str(style_analysis_response)
         
         # 第二步：获取对应的扩展提示词并格式化
         expansion_prompt_template = get_writing_requirements_expansion_prompt(expansion_type)
+        
+        # 构建风格信息部分（如果选择了特定风格）
+        style_section = ""
+        if selected_style and selected_style != "无":
+            style_section = f"\n**选择的小说风格：**{selected_style}\n**请特别注意：** 扩展的写作要求需要符合「{selected_style}」风格的特点和常见表达方式。"
+        
         expansion_prompt = expansion_prompt_template.format(
             user_idea=user_idea,
             user_requirements=user_requirements,
             embellishment_idea=embellishment_idea,
-            style_analysis=style_analysis
+            style_analysis=style_analysis,
+            style_section=style_section
         )
         
         # 第三步：获取扩展结果
         expansion_response = chatllm(
             messages=[{"role": "user", "content": expansion_prompt}],
-            temperature=0.7
+            temperature=config_temperature
         )
         response = expansion_response.get("content", "") if isinstance(expansion_response, dict) else str(expansion_response)
         
@@ -100,7 +121,7 @@ def expand_writing_requirements(user_idea, user_requirements, embellishment_idea
         return error_msg, f"操作失败：{str(e)}"
 
 
-def expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, expansion_type="compact"):
+def expand_embellishment_requirements(user_idea, user_requirements, embellishment_idea, expansion_type="compact", selected_style="无"):
     """扩展润色要求功能
     
     通过AI分析用户想法和现有润色要求，生成更详细的润色指导和示例。
@@ -110,6 +131,7 @@ def expand_embellishment_requirements(user_idea, user_requirements, embellishmen
         user_requirements (str): 写作要求（用于风格参考）
         embellishment_idea (str): 现有的润色要求
         expansion_type (str): 扩展类型，"compact"（精简1000字）或"full"（全面2000字）
+        selected_style (str): 用户选择的小说风格，默认为"无"
         
     Returns:
         tuple: (扩展后的内容, 状态消息)
@@ -144,27 +166,47 @@ def expand_embellishment_requirements(user_idea, user_requirements, embellishmen
         # 确定扩展长度和类型
         expansion_desc = "精简扩展" if expansion_type == "compact" else "全面扩展"
         
+        # 获取配置的 temperature
+        config_temperature = 0.7  # 默认值
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            current_config = config_manager.get_current_config()
+            if current_config and hasattr(current_config, 'temperature'):
+                temp_val = current_config.temperature
+                if temp_val != "" and temp_val is not None:
+                    config_temperature = float(temp_val)
+        except Exception:
+            pass
+        
         # 第一步：分析想法中的文章风格（复用前面的分析结果或重新分析）
         style_analysis_prompt = get_style_analysis_prompt().format(user_idea=user_idea)
         style_analysis_response = chatllm(
             messages=[{"role": "user", "content": style_analysis_prompt}],
-            temperature=0.7
+            temperature=config_temperature
         )
         style_analysis = style_analysis_response.get("content", "") if isinstance(style_analysis_response, dict) else str(style_analysis_response)
         
         # 第二步：获取对应的扩展提示词并格式化
         expansion_prompt_template = get_embellishment_requirements_expansion_prompt(expansion_type)
+        
+        # 构建风格信息部分（如果选择了特定风格）
+        style_section = ""
+        if selected_style and selected_style != "无":
+            style_section = f"\n**选择的小说风格：**{selected_style}\n**请特别注意：** 扩展的润色要求需要符合「{selected_style}」风格的特点和润色技巧。"
+        
         expansion_prompt = expansion_prompt_template.format(
             user_idea=user_idea,
             user_requirements=user_requirements,
             embellishment_idea=embellishment_idea,
-            style_analysis=style_analysis
+            style_analysis=style_analysis,
+            style_section=style_section
         )
         
         # 第三步：获取扩展结果
         expansion_response = chatllm(
             messages=[{"role": "user", "content": expansion_prompt}],
-            temperature=0.7
+            temperature=config_temperature
         )
         response = expansion_response.get("content", "") if isinstance(expansion_response, dict) else str(expansion_response)
         

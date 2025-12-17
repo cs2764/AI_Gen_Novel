@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "3.6.3"
+__version__ = "3.7.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2025-12-14)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2025-12-17)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -22,7 +22,7 @@ VERSION_INFO = {
         "用户确认机制防止误操作",
         "本地数据自动保存和加载",
         "统一的配置管理系统",
-        "10个主流AI提供商支持",
+        "11个主流AI提供商支持",
         "智能错误处理和恢复",
         "分阶段生成状态显示",
         "故事线智能格式化",
@@ -53,7 +53,8 @@ VERSION_INFO = {
         "阿里云通义千问",
         "Fireworks AI",
         "Grok (xAI)",
-        "Lambda Labs"
+        "Lambda Labs",
+        "SiliconFlow"
     ]
 }
 

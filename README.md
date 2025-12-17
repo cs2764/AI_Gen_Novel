@@ -1,31 +1,48 @@
-﻿# 🤖 AI Novel Generator v3.6.3 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.7.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.6.3 (2025-12-14)
+## 🎉 What's New in v3.7.0 (2025-12-17)
 
-**Feature Update!** UI Improvements and System Prompt Overlay.
+**Major Feature Update!** New AI Provider and Enhanced Story Structure.
 
 ### ✨ New Features | 新功能
 
-#### 🔄 System Prompt Overlay Mode (Core Feature)
-- **Provider-level integration**: System prompts configured in provider settings now automatically combine with agent prompts
-- **Seamless merging**: Provider system prompts prepend to agent-specific prompts for consistent behavior
-- **No duplication**: Smart mechanism ensures system prompts are included only once per API call
-- **Universal application**: Works across all generation stages (outline, writing, embellishing, memory)
+#### 🌐 SiliconFlow AI Provider (Core Feature)
+- **11th AI provider added**: Supports DeepSeek-V3, DeepSeek-R1, Qwen2.5, Llama-3.3 models
+- **Domestic GPU service**: Fast inference speed for Chinese users
+- **30-minute timeout**: Extended API timeout for long-form generation
+- **Full integration**: Works with all generation stages
+
+#### 🏔️ Enhanced Epic Story Structure
+- **Dynamic climax calculation**: Minimum 5 climaxes for 60+ chapter novels
+- **Better pacing**: One climax every 12 chapters for consistent excitement
+- **5 development stages**: Detailed stage-by-stage progression
 
 ### 🔧 Improvements | 功能改进
 
-#### 💻 UI Experience
-- **Storyline Display Fix**: Fixed an issue where storyline content could be truncated in Web UI during generation
-- **Textbox Auto-scroll**: Enhanced auto-scroll and display logic for long text content
+#### 🌡️ Provider Temperature Enhancement
+- **Applied to writer/embellisher**: Provider temperature now controls writing and embellishing agents
+- **Outline remains stable**: Outline generation keeps fixed 0.95 temperature for consistency
 
-#### 🎨 Prompt Enhancements
-- **150+ prompt files optimized**: Improvements across compact, long_chapter, and standard modes
-- **Better consistency**: Enhanced prompt quality for more reliable outputs
-- **AI provider updates**: Refined integration for Claude, DeepSeek, Fireworks, Grok, Lambda, LM Studio
+#### ⏱️ API Timeout Unified
+- **30 minutes for all providers**: Extended from 20 to 30 minutes across all AI providers
+
+#### 💻 Outline Generation UX
+- **Sequential display**: Outline, title, and characters now display as each completes
+- **Better progress tracking**: Real-time status updates for each generation stage
+
+---
+
+### 📚 Previous Version: v3.6.3 (2025-12-14)
+
+**Feature Update!** UI Improvements and System Prompt Overlay.
+
+- **System Prompt Overlay Mode**: Provider system prompts now combine with agent prompts
+- **Storyline Display Fix**: Fixed truncation issue in Web UI
+- **150+ prompt files optimized**: Improvements across all modes
 
 ---
 
@@ -182,7 +199,7 @@ python github_upload_ready.py
 
 #### 🤖 Multi-AI Provider Support
 
-Support for 10 mainstream AI providers to meet different needs:
+Support for 11 mainstream AI providers to meet different needs:
 
 | Provider | Features | Recommended Use |
 |----------|----------|-----------------|
@@ -196,6 +213,7 @@ Support for 10 mainstream AI providers to meet different needs:
 | **🔥 Fireworks** | High-performance inference, fast speed | Quick creation |
 | **🤖 Grok** | xAI, innovative thinking | Creative writing |
 | **⚡ Lambda** | Low cost, multi-model selection | Budget creation |
+| **🌊 SiliconFlow** | Domestic GPU, fast inference | Cost-effective creation |
 
 #### 💾 Intelligent Data Management
 - **Local Storage**: Data securely saved in local files
@@ -608,22 +626,45 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.6.2 版本更新 (2025-12-14)
+### 🎉 v3.7.0 版本更新 (2025-12-17)
 
-**功能更新！** 系统提示词叠加模式与提示词优化。
+**重大功能更新！** 新增AI提供商与增强故事结构。
 
 #### ✨ 新功能
 
-##### 🔄 系统提示词叠加模式（核心功能）
-- **提供商级集成**：在提供商设置中配置的系统提示词现在自动与智能体提示词合并
-- **无缝合并**：提供商系统提示词添加到智能体特定提示词之前，确保行为一致
-- **无重复**：智能机制确保系统提示词在每次API调用中仅包含一次
-- **通用应用**：适用于所有生成阶段（大纲、写作、润色、记忆）
+##### 🌐 SiliconFlow AI 提供商（核心功能）
+- **第11个AI提供商**：支持DeepSeek-V3、DeepSeek-R1、Qwen2.5、Llama-3.3模型
+- **国内GPU服务**：为中国用户提供快速推理速度
+- **30分钟超时**：扩展API超时以支持长篇生成
+- **完整集成**：适用于所有生成阶段
 
-##### 🎨 提示词增强
-- **150+提示词文件优化**：精简、长章节和标准模式的改进
-- **更好的一致性**：增强提示词质量以获得更可靠的输出
-- **AI提供商更新**：优化Claude、DeepSeek、Fireworks、Grok、Lambda、LM Studio集成
+##### �️ 史诗故事结构增强
+- **动态高潮计算**：60章以上小说最少5个高潮点
+- **更好的节奏**：每12章一个高潮，保持剧情紧凑
+- **5个发展阶段**：详细的阶段式剧情推进
+
+#### 🔧 功能改进
+
+##### 🌡️ 提供商温度增强
+- **应用于写手/润色**：提供商温度现在控制写作和润色智能体
+- **大纲保持稳定**：大纲生成保持固定0.95温度以确保一致性
+
+##### ⏱️ API超时统一
+- **所有提供商30分钟**：从20分钟扩展到30分钟
+
+##### 💻 大纲生成体验优化
+- **顺序显示**：大纲、标题、人物完成后立即显示
+- **更好的进度追踪**：每个生成阶段的实时状态更新
+
+---
+
+### 📚 上一版本：v3.6.3 (2025-12-14)
+
+**功能更新！** 系统提示词叠加模式与UI优化。
+
+- **系统提示词叠加**：提供商系统提示词与智能体提示词自动合并
+- **故事线显示修复**：修复Web UI中截断问题
+- **150+提示词优化**：所有模式的改进
 
 ---
 

@@ -325,7 +325,7 @@ def bind_main_events(
         
         # 绑定大纲生成按钮（使用生成器包装函数支持实时状态更新）
         def _wrap_gen_outline(aign_state, user_idea, user_requirements, embellishment_idea):
-            """生成大纲（生成器版本，支持实时状态更新）"""
+            """生成大纲（生成器版本，支持分步实时状态更新：大纲→标题→人物列表）"""
             import threading
             import time
             from datetime import datetime
@@ -352,105 +352,217 @@ def bind_main_events(
                 # 添加开始状态
                 status_history.append(["系统", "🚀 开始生成大纲、标题和人物列表...", start_timestamp, generation_start_time])
                 
-                # 创建生成线程
-                def generate_outline():
+                # ========== 第一阶段：生成大纲 ==========
+                def generate_outline_only():
                     try:
                         a.genNovelOutline(user_idea)
                     except Exception as e:
                         print(f"❌ 大纲生成失败: {e}")
                 
-                gen_thread = threading.Thread(target=generate_outline)
-                gen_thread.start()
+                gen_outline_thread = threading.Thread(target=generate_outline_only)
+                gen_outline_thread.start()
                 
-                # 实时更新状态
                 update_counter = 0
-                max_wait_time = 1200  # 最大等待时间20分钟
+                max_wait_time = 1800  # 30分钟超时（与API设置一致）
                 
-                while gen_thread.is_alive():
+                while gen_outline_thread.is_alive():
                     if time.time() - start_time > max_wait_time:
                         timeout_timestamp = datetime.now().strftime("%H:%M:%S")
                         status_history.append(["系统", "⚠️ 生成超时，请检查网络连接或API配置", timeout_timestamp, generation_start_time])
                         break
                     
-                    # 每1秒更新一次UI
                     if update_counter % 2 == 0:
-                        outline_chars = len(a.novel_outline) if a.novel_outline else 0
-                        title_chars = len(a.novel_title) if a.novel_title else 0
-                        character_chars = len(a.character_list) if a.character_list else 0
-                        
                         elapsed_time = int(time.time() - start_time)
                         current_timestamp = datetime.now().strftime("%H:%M:%S")
+                        outline_chars = len(a.novel_outline) if a.novel_outline else 0
                         
-                        # 根据生成进度显示不同阶段
-                        if outline_chars == 0:
-                            stage_key = "大纲生成进度"
-                            status_text = f"📖 正在生成大纲...\n   • 状态: 正在处理用户想法和要求\n   • 进度: 分析用户需求中\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
-                        elif outline_chars > 0 and (not a.novel_title or title_chars == 0):
-                            stage_key = "标题生成进度"
-                            status_text = f"📚 正在生成标题...\n   • 大纲: {outline_chars} 字符 ✅\n   • 状态: 基于大纲生成标题\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
-                        elif title_chars > 0 and (not a.character_list or character_chars == 0):
-                            stage_key = "人物生成进度"
-                            status_text = f"👥 正在生成人物列表...\n   • 大纲: {outline_chars} 字符 ✅\n   • 标题: '{a.novel_title[:30] if a.novel_title else '无'}...' ✅\n   • 状态: 分析角色设定\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
-                        else:
-                            stage_key = "生成完成"
-                            status_text = f"✅ 所有内容生成完成\n   • 大纲: {outline_chars} 字符 ✅\n   • 标题: '{a.novel_title}' ✅\n   • 人物: {character_chars} 字符 ✅\n   • 总耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                        stage_key = "大纲生成进度"
+                        status_text = f"📖 正在生成大纲...\n   • 状态: 正在处理用户想法和要求\n   • 已生成: {outline_chars} 字符\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
                         
-                        # 更新或添加状态
                         stage_found = False
                         for i, item in enumerate(status_history):
                             if len(item) >= 2 and item[0] == stage_key:
                                 status_history[i] = [stage_key, status_text, current_timestamp, generation_start_time]
                                 stage_found = True
                                 break
-                        
                         if not stage_found:
                             status_history.append([stage_key, status_text, current_timestamp, generation_start_time])
                         
                         yield (
                             format_status_output(status_history),
                             "生成中...",
-                            "生成中...",
-                            "生成中...",
-                            "生成中..."
+                            "等待大纲完成...",
+                            "等待大纲完成...",
+                            ""
                         )
                     
                     update_counter += 1
                     time.sleep(0.5)
                 
-                # 等待线程结束
-                gen_thread.join(timeout=30)
-                final_timestamp = datetime.now().strftime("%H:%M:%S")
+                gen_outline_thread.join(timeout=30)
                 
-                # 生成最终总结
+                # 大纲生成完成，立即显示
                 if a.novel_outline:
-                    summary_text = f"✅ 大纲生成完成\n"
-                    summary_text += f"📊 生成统计：\n"
-                    summary_text += f"   • 大纲字数: {len(a.novel_outline)} 字\n"
-                    summary_text += f"   • 标题: {a.novel_title}\n"
-                    character_count = len(a.character_list.split('\n')) if a.character_list else 0
-                    summary_text += f"   • 人物数量: {character_count} 个\n"
-                    summary_text += f"   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}\n"
-                    summary_text += f"\n✅ 全部内容生成成功！"
+                    outline_timestamp = datetime.now().strftime("%H:%M:%S")
+                    outline_elapsed = int(time.time() - start_time)
+                    status_history.append(["大纲生成", f"✅ 大纲生成完成\n   • 字数: {len(a.novel_outline)} 字\n   • 耗时: {format_time_duration(outline_elapsed, include_seconds=True)}", outline_timestamp, generation_start_time])
                     
-                    status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
-                    
+                    # 立即显示大纲内容
                     yield (
                         format_status_output(status_history),
-                        getattr(a, 'novel_outline', '') or '',
-                        getattr(a, 'novel_title', '') or '',
-                        getattr(a, 'character_list', '') or '',
-                        getattr(a, 'detailed_outline', '') or ''
+                        a.novel_outline,
+                        "准备生成标题...",
+                        "等待标题完成...",
+                        ""
                     )
                 else:
                     err = "❌ 大纲生成失败"
-                    status_history.append(["系统", err, final_timestamp, generation_start_time])
-                    yield (
-                        format_status_output(status_history),
-                        err,
-                        "生成失败",
-                        "生成失败",
-                        ""
-                    )
+                    error_timestamp = datetime.now().strftime("%H:%M:%S")
+                    status_history.append(["系统", err, error_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), err, "生成失败", "生成失败", "")
+                    return
+                
+                # ========== 第二阶段：生成标题 ==========
+                title_start_time = time.time()
+                
+                def generate_title_only():
+                    try:
+                        a.genNovelTitle()
+                    except Exception as e:
+                        print(f"⚠️ 标题生成失败: {e}")
+                        a.novel_title = "未命名小说"
+                
+                gen_title_thread = threading.Thread(target=generate_title_only)
+                gen_title_thread.start()
+                
+                update_counter = 0
+                while gen_title_thread.is_alive():
+                    if time.time() - title_start_time > 300:
+                        break
+                    
+                    if update_counter % 2 == 0:
+                        elapsed_time = int(time.time() - start_time)
+                        current_timestamp = datetime.now().strftime("%H:%M:%S")
+                        
+                        stage_key = "标题生成进度"
+                        status_text = f"📚 正在生成标题...\n   • 大纲: {len(a.novel_outline)} 字符 ✅\n   • 状态: 基于大纲生成标题\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                        
+                        stage_found = False
+                        for i, item in enumerate(status_history):
+                            if len(item) >= 2 and item[0] == stage_key:
+                                status_history[i] = [stage_key, status_text, current_timestamp, generation_start_time]
+                                stage_found = True
+                                break
+                        if not stage_found:
+                            status_history.append([stage_key, status_text, current_timestamp, generation_start_time])
+                        
+                        yield (
+                            format_status_output(status_history),
+                            a.novel_outline,
+                            "生成中...",
+                            "等待标题完成...",
+                            ""
+                        )
+                    
+                    update_counter += 1
+                    time.sleep(0.5)
+                
+                gen_title_thread.join(timeout=30)
+                
+                # 标题生成完成，立即显示
+                title_timestamp = datetime.now().strftime("%H:%M:%S")
+                title_elapsed = int(time.time() - title_start_time)
+                if a.novel_title and a.novel_title != "未命名小说":
+                    status_history.append(["标题生成", f"✅ 标题生成完成\n   • 标题: 《{a.novel_title}》\n   • 耗时: {format_time_duration(title_elapsed, include_seconds=True)}", title_timestamp, generation_start_time])
+                else:
+                    a.novel_title = "未命名小说"
+                    status_history.append(["标题生成", "⚠️ 标题生成失败，使用默认标题", title_timestamp, generation_start_time])
+                
+                yield (
+                    format_status_output(status_history),
+                    a.novel_outline,
+                    a.novel_title,
+                    "准备生成人物列表...",
+                    ""
+                )
+                
+                # ========== 第三阶段：生成人物列表 ==========
+                character_start_time = time.time()
+                
+                def generate_character_only():
+                    try:
+                        a.genCharacterList()
+                    except Exception as e:
+                        print(f"⚠️ 人物列表生成失败: {e}")
+                        a.character_list = "暂未生成人物列表"
+                
+                gen_character_thread = threading.Thread(target=generate_character_only)
+                gen_character_thread.start()
+                
+                update_counter = 0
+                while gen_character_thread.is_alive():
+                    if time.time() - character_start_time > 300:
+                        break
+                    
+                    if update_counter % 2 == 0:
+                        elapsed_time = int(time.time() - start_time)
+                        current_timestamp = datetime.now().strftime("%H:%M:%S")
+                        character_chars = len(a.character_list) if a.character_list else 0
+                        
+                        stage_key = "人物生成进度"
+                        status_text = f"👥 正在生成人物列表...\n   • 大纲: {len(a.novel_outline)} 字符 ✅\n   • 标题: 《{a.novel_title}》 ✅\n   • 已生成: {character_chars} 字符\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                        
+                        stage_found = False
+                        for i, item in enumerate(status_history):
+                            if len(item) >= 2 and item[0] == stage_key:
+                                status_history[i] = [stage_key, status_text, current_timestamp, generation_start_time]
+                                stage_found = True
+                                break
+                        if not stage_found:
+                            status_history.append([stage_key, status_text, current_timestamp, generation_start_time])
+                        
+                        yield (
+                            format_status_output(status_history),
+                            a.novel_outline,
+                            a.novel_title,
+                            "生成中...",
+                            ""
+                        )
+                    
+                    update_counter += 1
+                    time.sleep(0.5)
+                
+                gen_character_thread.join(timeout=30)
+                
+                # 人物列表生成完成
+                final_timestamp = datetime.now().strftime("%H:%M:%S")
+                character_elapsed = int(time.time() - character_start_time)
+                total_elapsed = int(time.time() - start_time)
+                
+                if a.character_list and a.character_list != "暂未生成人物列表":
+                    character_count = len(a.character_list.split('\n')) if a.character_list else 0
+                    status_history.append(["人物生成", f"✅ 人物列表生成完成\n   • 人物数量: 约{character_count}个\n   • 耗时: {format_time_duration(character_elapsed, include_seconds=True)}", final_timestamp, generation_start_time])
+                else:
+                    a.character_list = "暂未生成人物列表"
+                    status_history.append(["人物生成", "⚠️ 人物列表生成失败，使用默认内容", final_timestamp, generation_start_time])
+                
+                # 添加最终总结
+                summary_text = f"🎉 全部生成完成！\n"
+                summary_text += f"📊 生成统计：\n"
+                summary_text += f"   • 大纲: {len(a.novel_outline)} 字\n"
+                summary_text += f"   • 标题: 《{a.novel_title}》\n"
+                character_count = len(a.character_list.split('\n')) if a.character_list else 0
+                summary_text += f"   • 人物: 约{character_count}个\n"
+                summary_text += f"   • 总耗时: {format_time_duration(total_elapsed, include_seconds=True)}"
+                status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
+                
+                yield (
+                    format_status_output(status_history),
+                    a.novel_outline,
+                    a.novel_title,
+                    a.character_list,
+                    getattr(a, 'detailed_outline', '') or ''
+                )
             
             except Exception as e:
                 err = f"❌ 大纲生成失败: {e}"
@@ -466,42 +578,52 @@ def bind_main_events(
         # 绑定写作/润色要求扩展按钮
         try:
             from app_ai_expansion import expand_writing_requirements, expand_embellishment_requirements
+            
+            # 获取风格下拉菜单组件
+            style_dropdown = components.get('style_dropdown')
 
-            def _wrap_expand_writing_compact(user_idea, user_requirements, embellishment_idea):
+            def _wrap_expand_writing_compact(user_idea, user_requirements, embellishment_idea, selected_style=None):
                 content, status = expand_writing_requirements(
-                    user_idea or '', user_requirements or '', embellishment_idea or '', 'compact'
+                    user_idea or '', user_requirements or '', embellishment_idea or '', 'compact', selected_style or '无'
                 )
                 return content, status
 
-            def _wrap_expand_writing_full(user_idea, user_requirements, embellishment_idea):
+            def _wrap_expand_writing_full(user_idea, user_requirements, embellishment_idea, selected_style=None):
                 content, status = expand_writing_requirements(
-                    user_idea or '', user_requirements or '', embellishment_idea or '', 'full'
+                    user_idea or '', user_requirements or '', embellishment_idea or '', 'full', selected_style or '无'
                 )
                 return content, status
 
-            def _wrap_expand_embellishment_compact(user_idea, user_requirements, embellishment_idea):
+            def _wrap_expand_embellishment_compact(user_idea, user_requirements, embellishment_idea, selected_style=None):
                 content, status = expand_embellishment_requirements(
-                    user_idea or '', user_requirements or '', embellishment_idea or '', 'compact'
+                    user_idea or '', user_requirements or '', embellishment_idea or '', 'compact', selected_style or '无'
                 )
                 return content, status
 
-            def _wrap_expand_embellishment_full(user_idea, user_requirements, embellishment_idea):
+            def _wrap_expand_embellishment_full(user_idea, user_requirements, embellishment_idea, selected_style=None):
                 content, status = expand_embellishment_requirements(
-                    user_idea or '', user_requirements or '', embellishment_idea or '', 'full'
+                    user_idea or '', user_requirements or '', embellishment_idea or '', 'full', selected_style or '无'
                 )
                 return content, status
+
+            # 构建输入列表（包含风格下拉菜单如果存在）
+            base_inputs = [user_idea_text, user_requirements_text, embellishment_idea_text]
+            if style_dropdown:
+                expansion_inputs = base_inputs + [style_dropdown]
+            else:
+                expansion_inputs = base_inputs
 
             # 写作要求扩展按钮绑定（输出到写作要求文本框 + 进度文本）
             if components.get('expand_writing_compact_btn'):
                 components['expand_writing_compact_btn'].click(
                     fn=_wrap_expand_writing_compact,
-                    inputs=[user_idea_text, user_requirements_text, embellishment_idea_text],
+                    inputs=expansion_inputs,
                     outputs=[user_requirements_text, progress_text]
                 )
             if components.get('expand_writing_full_btn'):
                 components['expand_writing_full_btn'].click(
                     fn=_wrap_expand_writing_full,
-                    inputs=[user_idea_text, user_requirements_text, embellishment_idea_text],
+                    inputs=expansion_inputs,
                     outputs=[user_requirements_text, progress_text]
                 )
 
@@ -509,13 +631,13 @@ def bind_main_events(
             if components.get('expand_embellishment_compact_btn'):
                 components['expand_embellishment_compact_btn'].click(
                     fn=_wrap_expand_embellishment_compact,
-                    inputs=[user_idea_text, user_requirements_text, embellishment_idea_text],
+                    inputs=expansion_inputs,
                     outputs=[embellishment_idea_text, progress_text]
                 )
             if components.get('expand_embellishment_full_btn'):
                 components['expand_embellishment_full_btn'].click(
                     fn=_wrap_expand_embellishment_full,
-                    inputs=[user_idea_text, user_requirements_text, embellishment_idea_text],
+                    inputs=expansion_inputs,
                     outputs=[embellishment_idea_text, progress_text]
                 )
             print('✅ 写作/润色扩展按钮绑定成功')
@@ -566,7 +688,7 @@ def bind_main_events(
                 gen_thread.start()
                 
                 update_counter = 0
-                max_wait_time = 1200
+                max_wait_time = 1800  # 30分钟超时（与API设置一致）
                 last_chapter_count = 0
                 is_timeout = False  # 标记是否因超时退出循环
                 
@@ -714,7 +836,7 @@ def bind_main_events(
                 gen_thread.start()
                 
                 update_counter = 0
-                max_wait_time = 1200
+                max_wait_time = 1800  # 30分钟超时（与API设置一致）
                 last_chapter_count = 0
                 is_timeout = False  # 标记是否因超时退出循环
                 
@@ -895,7 +1017,7 @@ def bind_main_events(
                 gen_thread.start()
                 
                 update_counter = 0
-                max_wait_time = 1200
+                max_wait_time = 1800  # 30分钟超时（与API设置一致）
                 
                 while gen_thread.is_alive():
                     if time.time() - start_time > max_wait_time:
@@ -1013,7 +1135,7 @@ def bind_main_events(
                 gen_thread.start()
                 
                 update_counter = 0
-                max_wait_time = 1200
+                max_wait_time = 1800  # 30分钟超时（与API设置一致）
                 
                 while gen_thread.is_alive():
                     if time.time() - start_time > max_wait_time:
@@ -1129,7 +1251,7 @@ def bind_main_events(
                 gen_thread.start()
                 
                 update_counter = 0
-                max_wait_time = 1200
+                max_wait_time = 1800  # 30分钟超时（与API设置一致）
                 
                 while gen_thread.is_alive():
                     if time.time() - start_time > max_wait_time:

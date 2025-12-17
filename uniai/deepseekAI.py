@@ -18,7 +18,7 @@ def deepseekChatLLM(model_name="deepseek-chat", api_key=None, system_prompt=""):
     - 1.5: 创意类写作/诗歌创作
     """
     api_key = os.environ.get("DEEPSEEK_AI_API_KEY", api_key)
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=1200.0)  # 20分钟超时
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=1800.0)  # 30分钟超时
 
     def chatLLM(
         messages: list,

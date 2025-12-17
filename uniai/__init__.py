@@ -16,3 +16,4 @@ except ImportError:
     claudeChatLLM = None
 from .grokAI import grokChatLLM
 from .lambdaAI import lambdaChatLLM
+from .siliconflowAI import siliconflowChatLLM

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 模型获取器 - 从各个AI提供商API获取实时模型列表
-支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Grok
+支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Grok, SiliconFlow
 """
 
 import requests
@@ -41,7 +41,7 @@ class ModelInfo:
 class ModelFetcher:
     """模型获取器主类"""
     
-    def __init__(self, timeout: int = 1200):
+    def __init__(self, timeout: int = 1800):
         self.timeout = timeout
         self.session = requests.Session()
         self.session.timeout = timeout
@@ -51,7 +51,7 @@ class ModelFetcher:
         从指定提供商获取模型列表
         
         Args:
-            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, grok)
+            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, grok, siliconflow)
             api_key: API密钥
             **kwargs: 其他参数
             
@@ -83,6 +83,8 @@ class ModelFetcher:
                 return self._fetch_lambda_models(api_key, **kwargs)
             elif provider == 'grok':
                 return self._fetch_grok_models(api_key, **kwargs)
+            elif provider == 'siliconflow':
+                return self._fetch_siliconflow_models(api_key, **kwargs)
             else:
                 logger.warning(f"不支持的提供商: {provider}")
                 return []
@@ -518,6 +520,64 @@ class ModelFetcher:
                 provider='grok',
                 owned_by='xai',
                 description='Grok AI模型'
+            ))
+        
+        return models
+    
+    def _fetch_siliconflow_models(self, api_key: str, base_url: str = "https://api.siliconflow.cn/v1") -> List[ModelInfo]:
+        """获取SiliconFlow模型列表"""
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            response = self.session.get(f"{base_url}/models", headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            for model_data in data.get('data', []):
+                models.append(ModelInfo(
+                    id=model_data.get('id', ''),
+                    name=model_data.get('id', ''),
+                    provider='siliconflow',
+                    created_at=str(model_data.get('created', '')),
+                    owned_by=model_data.get('owned_by', 'siliconflow'),
+                    description='SiliconFlow模型'
+                ))
+            
+            if models:
+                return models
+            else:
+                # 如果API返回空列表，使用默认模型列表
+                return self._get_default_siliconflow_models()
+                
+        except Exception as e:
+            logger.warning(f"获取SiliconFlow模型列表失败: {e}，使用默认列表")
+            return self._get_default_siliconflow_models()
+    
+    def _get_default_siliconflow_models(self) -> List[ModelInfo]:
+        """获取SiliconFlow默认模型列表（当API请求失败时使用）"""
+        known_models = [
+            "deepseek-ai/DeepSeek-V3",
+            "deepseek-ai/DeepSeek-R1",
+            "Qwen/Qwen2.5-72B-Instruct",
+            "Qwen/Qwen2.5-32B-Instruct",
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "Pro/deepseek-ai/DeepSeek-V3",
+            "Pro/deepseek-ai/DeepSeek-R1"
+        ]
+        
+        models = []
+        for model_id in known_models:
+            models.append(ModelInfo(
+                id=model_id,
+                name=model_id,
+                provider='siliconflow',
+                owned_by='siliconflow',
+                description='SiliconFlow模型'
             ))
         
         return models

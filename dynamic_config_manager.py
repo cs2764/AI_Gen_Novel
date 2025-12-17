@@ -45,7 +45,8 @@ PROVIDER_DISPLAY_NAMES = {
     "claude": "Claude",
     "grok": "Grok",
     "fireworks": "Fireworks",
-    "lambda": "OpenAI兼容模式"  # Lambda 显示为 OpenAI兼容模式
+    "lambda": "OpenAI兼容模式",  # Lambda 显示为 OpenAI兼容模式
+    "siliconflow": "SiliconFlow"
 }
 
 class DynamicConfigManager:
@@ -179,6 +180,22 @@ class DynamicConfigManager:
                     "llama3.1-8b-instruct",
                     "llama3.3-70b-instruct-fp8",
                     "qwen3-32b-fp8"
+                ]
+            ),
+            # SiliconFlow - 国内GPU云服务商，支持多种开源模型
+            "siliconflow": ProviderConfig(
+                name="siliconflow",
+                api_key="your-siliconflow-api-key-here",
+                model_name="deepseek-ai/DeepSeek-V3",
+                base_url="https://api.siliconflow.cn/v1",
+                models=[
+                    "deepseek-ai/DeepSeek-V3",
+                    "deepseek-ai/DeepSeek-R1",
+                    "Qwen/Qwen2.5-72B-Instruct",
+                    "Qwen/Qwen2.5-32B-Instruct",
+                    "meta-llama/Llama-3.3-70B-Instruct",
+                    "Pro/deepseek-ai/DeepSeek-V3",
+                    "Pro/deepseek-ai/DeepSeek-R1"
                 ]
             )
         }
@@ -383,15 +400,20 @@ class DynamicConfigManager:
                             config.base_url = provider_data["base_url"]
                         if "models" in provider_data:
                             config.models = provider_data["models"]
+                        # 加载provider_routing设置（特别是OpenRouter）
+                        if "provider_routing" in provider_data:
+                            config.provider_routing = provider_data["provider_routing"]
                         # 加载temperature设置，处理空字符串和None值
                         if "temperature" in provider_data:
                             temp_value = provider_data["temperature"]
                             # 如果是空字符串或None，使用默认值0.7
                             if temp_value == "" or temp_value is None:
                                 config.temperature = 0.7
+                                print(f"🌡️ {name} temperature 为空，使用默认值 0.7")
                             else:
                                 try:
                                     config.temperature = float(temp_value)
+                                    print(f"🌡️ {name} temperature 已加载: {config.temperature}")
                                 except (ValueError, TypeError):
                                     print(f"⚠️  {name} 的 temperature 值无效: {temp_value}，使用默认值 0.7")
                                     config.temperature = 0.7
@@ -500,6 +522,22 @@ class DynamicConfigManager:
             return fireworksChatLLM(
                 model_name=current_config.model_name,
                 api_key=current_config.api_key,
+                system_prompt=current_config.system_prompt
+            )
+        elif provider_name == "lambda":
+            from uniai.lambdaAI import lambdaChatLLM
+            return lambdaChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                base_url=current_config.base_url,
+                system_prompt=current_config.system_prompt
+            )
+        elif provider_name == "siliconflow":
+            from uniai.siliconflowAI import siliconflowChatLLM
+            return siliconflowChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                base_url=current_config.base_url,
                 system_prompt=current_config.system_prompt
             )
         else:

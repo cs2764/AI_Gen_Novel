@@ -16,7 +16,7 @@ def fireworksChatLLM(model_name="accounts/fireworks/models/deepseek-v3-0324", ap
     client = OpenAI(
         api_key=api_key, 
         base_url="https://api.fireworks.ai/inference/v1",
-        timeout=1200.0  # 20分钟超时
+        timeout=1800.0  # 30分钟超时
     )
 
     def chatLLM(

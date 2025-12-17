@@ -72,6 +72,12 @@ class OutlineGenerator:
             )
             self.aign.novel_outline = resp["大纲"]
             
+            # 重要：重置详细大纲相关状态，确保后续生成人物列表时使用新大纲
+            # 而不是旧的详细大纲
+            self.aign.use_detailed_outline = False
+            self.aign.detailed_outline = ""
+            print("🔄 已重置详细大纲状态，确保使用新生成的大纲")
+            
             # 检查是否需要停止
             if getattr(self.aign, 'stop_generation', False):
                 print("⚠️ 检测到停止信号，中断后续生成")

@@ -1,5 +1,57 @@
 # 更新日志 | Changelog
 
+## [3.7.0] - 2025-12-17 🚀 重大功能更新 | Major Feature Update
+
+### ✨ 新功能 | New Features
+
+#### 🌐 SiliconFlow AI 提供商 | SiliconFlow AI Provider
+- **第11个AI提供商**：支持DeepSeek-V3、DeepSeek-R1、Qwen2.5、Llama-3.3等模型
+- **11th AI provider**: Supports DeepSeek-V3, DeepSeek-R1, Qwen2.5, Llama-3.3 models
+- **国内GPU服务**：为中国用户提供快速推理速度
+- **Domestic GPU service**: Fast inference for Chinese users
+- **OpenAI兼容API**：使用标准OpenAI SDK，易于集成
+- **OpenAI-compatible API**: Uses standard OpenAI SDK for easy integration
+
+#### 🏔️ 史诗故事结构增强 | Enhanced Epic Story Structure
+- **动态高潮计算**：60章以上小说动态计算高潮数量（最少5个高潮点）
+- **Dynamic climax calculation**: Minimum 5 climaxes for 60+ chapter novels
+- **更好的节奏控制**：每12章一个高潮，保持剧情紧凑度
+- **Better pacing**: One climax every 12 chapters for consistent excitement
+- **5个发展阶段**：详细的阶段式剧情推进，每个阶段有独特目标
+- **5 development stages**: Detailed stage-by-stage progression with unique goals
+
+### 🔧 功能改进 | Improvements
+
+#### 🌡️ 提供商温度增强 | Provider Temperature Enhancement
+- **应用于写手/润色**：提供商配置的温度参数现在应用于写作和润色智能体
+- **Applied to writer/embellisher**: Provider temperature now controls writing and embellishing agents
+- **大纲保持稳定**：大纲生成保持固定0.95温度以确保内容一致性
+- **Outline remains stable**: Outline generation keeps fixed 0.95 temperature for consistency
+
+#### ⏱️ API超时统一 | API Timeout Unified
+- **所有提供商30分钟**：从20分钟扩展至30分钟，防止长篇生成超时
+- **30 minutes for all providers**: Extended from 20 to 30 minutes to prevent timeouts
+
+#### 💻 大纲生成体验优化 | Outline Generation UX
+- **顺序显示**：大纲、标题、人物列表完成后立即显示，无需等待全部完成
+- **Sequential display**: Outline, title, characters display as each completes
+- **更好的进度追踪**：每个生成阶段的实时状态更新
+- **Better progress tracking**: Real-time status updates for each generation stage
+
+### 📊 技术改进 | Technical Improvements
+
+#### 新增文件 | New Files
+- `uniai/siliconflowAI.py`: SiliconFlow AI提供商实现
+- `config_template.py`: 新增SiliconFlow配置项
+
+#### 修改文件 | Modified Files
+- `AIGN.py`: 支持provider_temperature应用于写作/润色智能体
+- `dynamic_plot_structure.py`: 史诗结构动态高潮计算
+- `app.py`: 大纲/标题/人物分阶段顺序生成
+- 所有AI提供商文件: 统一30分钟超时
+
+---
+
 ## [3.6.3] - 2025-12-14 🔄 界面优化 | UI Improvements
 
 ### 🔧 功能改进 | Improvements

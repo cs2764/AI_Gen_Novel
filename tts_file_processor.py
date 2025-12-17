@@ -210,10 +210,21 @@ class TTSFileProcessor:
 
 请为上述文本添加CosyVoice2标记，整理格式，删除多余空格和空行，但不要修改原文内容。"""
             
+            # 获取配置的 temperature
+            config_temperature = 0.7  # 默认值
+            try:
+                current_config = self.config_manager.get_current_config()
+                if current_config and hasattr(current_config, 'temperature'):
+                    temp_val = current_config.temperature
+                    if temp_val != "" and temp_val is not None:
+                        config_temperature = float(temp_val)
+            except Exception:
+                pass
+            
             # 调用AI模型处理
             llm_response = chatllm(
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7
+                temperature=config_temperature
             )
             response = llm_response.get("content", "") if isinstance(llm_response, dict) else str(llm_response)
             

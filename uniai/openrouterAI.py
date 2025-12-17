@@ -33,7 +33,7 @@ def openrouterChatLLM(model_name="openai/gpt-4", api_key=None, system_prompt="",
     client = OpenAI(
         api_key=api_key,
         base_url=actual_base_url,
-        timeout=1200.0,  # 20分钟超时
+        timeout=1800.0,  # 30分钟超时
         default_headers={
             "HTTP-Referer": "https://github.com/cjyyx/AI_Gen_Novel",  # 可选，用于跟踪
             "X-Title": "AI Novel Generator",  # 可选，应用名称
@@ -45,7 +45,7 @@ def openrouterChatLLM(model_name="openai/gpt-4", api_key=None, system_prompt="",
         temperature=None,
         top_p=None,
         max_tokens=None,
-        stream=True,
+        stream=False,
         response_format=None,
         tools=None,
         tool_choice=None,
@@ -102,8 +102,17 @@ def openrouterChatLLM(model_name="openai/gpt-4", api_key=None, system_prompt="",
                 params["extra_body"] = {}
             params["extra_body"]["provider"] = provider_routing
         
+        # 启用OpenRouter推理功能 (默认medium级别)
+        if "extra_body" not in params:
+            params["extra_body"] = {}
+        params["extra_body"]["reasoning"] = {"enabled": True}
+        # print("🧠 OpenRouter启用推理功能 (medium级别)")
+        
         try:
             if not stream:
+                # 明确设置stream=False，防止API默认行为不一致
+                params["stream"] = False
+                # print(f"🔧 OpenRouter调用模式: 非流式 (Stream=False)")
                 response = client.chat.completions.create(**params)
                 
                 # 处理tool calling响应

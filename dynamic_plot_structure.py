@@ -170,84 +170,107 @@ def _generate_long_structure(total_chapters):
     return structure
 
 def _generate_epic_structure(total_chapters):
-    """史诗级小说结构（60章以上）"""
-    # 基础配置
-    opening_chapters = max(4, total_chapters // 12)
-    ending_chapters = max(3, total_chapters // 15)
+    """史诗级小说结构（60章以上）
     
-    # 计算高潮点数量（每20-25章一个高潮）
-    num_climaxes = max(2, (total_chapters - opening_chapters - ending_chapters) // 22)
-    climax_chapters_each = max(2, total_chapters // (num_climaxes * 8))
+    动态计算高潮数量，确保每10-15章有一个高潮，保持密集的剧情节奏。
+    结构：史诗开篇 → [发展阶段 → 高潮] × N → 史诗收官
+    """
+    # 基础配置
+    opening_chapters = max(5, round(total_chapters * 0.07))
+    ending_chapters = max(5, round(total_chapters * 0.07))
+    
+    # 动态计算高潮点数量（每12-15章一个高潮，确保60章以上至少有5个高潮）
+    available_chapters = total_chapters - opening_chapters - ending_chapters
+    num_climaxes = max(5, available_chapters // 12)  # 每12章一个高潮周期
+    
+    # 每个高潮3-4章
+    climax_chapters_each = max(3, round(total_chapters * 0.03))
     total_climax_chapters = num_climaxes * climax_chapters_each
     
-    # 计算发展阶段数量和章节分配
-    num_developments = num_climaxes + 1  # 比高潮多一个发展阶段
+    # 剩余章节分配给发展阶段
     total_development_chapters = total_chapters - opening_chapters - total_climax_chapters - ending_chapters
-    development_chapters_each = total_development_chapters // num_developments
+    development_chapters_each = max(5, total_development_chapters // num_climaxes)
     
     structure = {
-        "type": "多高潮史诗结构",
-        "description": f"适用于超长篇小说的复杂结构，包含{num_climaxes}个主要高潮点",
+        "type": f"多高潮史诗结构（{num_climaxes}个发展阶段 + {num_climaxes}个高潮）",
+        "description": f"适用于超长篇小说的复杂结构，包含{num_climaxes}个发展阶段和{num_climaxes}个高潮点",
         "stages": []
     }
     
     # 添加开篇
+    current_chapter = 1
     structure["stages"].append({
         "name": "史诗开篇",
         "chapters": opening_chapters,
-        "range": f"第1-{opening_chapters}章",
+        "range": f"第{current_chapter}-{current_chapter + opening_chapters - 1}章",
         "percentage": round(opening_chapters / total_chapters * 100),
-        "purpose": "宏大世界观建立、众多角色登场、复杂背景设定、多线剧情铺垫"
+        "purpose": "建立世界观、引入主角、触发核心冲突、完成能力/身份初步觉醒"
     })
+    current_chapter += opening_chapters
     
-    current_chapter = opening_chapters + 1
+    # 动态生成发展和高潮的交替结构
+    # 为每个阶段分配不同的目的描述
+    dev_purposes = [
+        "第一轮挑战与成长、初步展开报复/征服/探索",
+        "进入更大舞台、面对更强对手、深化核心关系",
+        "最复杂的权力/情感博弈、多线并进、酝酿决战",
+        "新挑战出现、最终对手显现、为终极决战铺垫",
+        "终极准备、所有伏笔汇聚、最后的成长与蜕变",
+        "深度探索与突破、揭示隐藏真相",
+        "全面布局、决战前的最后准备",
+        "终极蜕变、超越极限"
+    ]
     
-    # 添加发展和高潮的交替结构
+    climax_purposes = [
+        "阶段性大决战、完成第一个重要目标、展示能力提升成果",
+        "重大突破或重大危机、关键转折点、地位/实力跃升",
+        "中期终极对决、确立新的权力格局、重大转变完成",
+        "终极对决前奏、清除最后障碍、直面最终对手",
+        "终极大决战、彻底胜利、目标完全达成",
+        "关键突破、新能力觉醒",
+        "决战序幕、全面爆发",
+        "最终胜利、圆满达成"
+    ]
+    
     for i in range(num_climaxes):
-        # 发展阶段
-        dev_chapters = development_chapters_each
-        if i == num_climaxes - 1:  # 最后一个发展阶段，分配剩余章节
-            remaining_dev_chapters = total_development_chapters - (development_chapters_each * (num_climaxes - 1))
-            dev_chapters = remaining_dev_chapters
+        # 计算当前发展阶段的章节数
+        if i == num_climaxes - 1:
+            # 最后一个发展阶段分配剩余章节
+            remaining = total_chapters - current_chapter - climax_chapters_each - ending_chapters + 1
+            dev_chapters = max(3, remaining)
+        else:
+            dev_chapters = development_chapters_each
         
+        # 发展阶段
+        dev_purpose = dev_purposes[i] if i < len(dev_purposes) else f"第{i+1}阶段剧情发展、角色成长、冲突升级"
         structure["stages"].append({
             "name": f"发展阶段{i+1}",
             "chapters": dev_chapters,
             "range": f"第{current_chapter}-{current_chapter + dev_chapters - 1}章",
             "percentage": round(dev_chapters / total_chapters * 100),
-            "purpose": f"第{i+1}阶段剧情发展、角色成长、新冲突引入、为第{i+1}高潮做准备"
+            "purpose": dev_purpose
         })
         current_chapter += dev_chapters
         
         # 高潮阶段
+        climax_purpose = climax_purposes[i] if i < len(climax_purposes) else f"第{i+1}个重大冲突、关键转折、阶段性危机解决"
         structure["stages"].append({
             "name": f"第{i+1}高潮",
             "chapters": climax_chapters_each,
             "range": f"第{current_chapter}-{current_chapter + climax_chapters_each - 1}章",
             "percentage": round(climax_chapters_each / total_chapters * 100),
-            "purpose": f"第{i+1}个重大冲突、重要转折点、阶段性危机解决"
+            "purpose": climax_purpose
         })
         current_chapter += climax_chapters_each
     
-    # 添加最后的发展阶段（如果有剩余）
-    if current_chapter <= total_chapters - ending_chapters:
-        final_dev_chapters = total_chapters - ending_chapters - current_chapter + 1
-        structure["stages"].append({
-            "name": "最终发展",
-            "chapters": final_dev_chapters,
-            "range": f"第{current_chapter}-{current_chapter + final_dev_chapters - 1}章",
-            "percentage": round(final_dev_chapters / total_chapters * 100),
-            "purpose": "为终极高潮做最后准备、所有线索汇聚、终极对决前奏"
-        })
-        current_chapter += final_dev_chapters
-    
-    # 添加结尾
+    # 史诗收官
+    actual_ending = total_chapters - current_chapter + 1
     structure["stages"].append({
         "name": "史诗收官",
-        "chapters": ending_chapters,
+        "chapters": actual_ending,
         "range": f"第{current_chapter}-{total_chapters}章",
-        "percentage": round(ending_chapters / total_chapters * 100),
-        "purpose": "宏大结局、所有线索收束、角色命运交代、史诗主题升华"
+        "percentage": round(actual_ending / total_chapters * 100),
+        "purpose": "完美结局、所有线索收束、展示最终成就、皆大欢喜的结局"
     })
     
     return structure
