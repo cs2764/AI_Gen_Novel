@@ -4,7 +4,32 @@
 
 ---
 
-## 🎉 What's New in v3.7.0 (2025-12-17)
+## 🎉 What's New in v3.8.0 (2025-12-19)
+
+**Feature Update!** Plot Compactness Control and Token Limit Optimization.
+
+### ✨ New Features | 新功能
+
+#### 📉 Plot Compactness Control
+- **Custom Pacing**: New sliders for "Chapters per Plot" and "Number of Climaxes"
+- **Direct Control**: Users can now fine-tune the story pacing to be faster or slower
+- **Flexible Structure**: Supports generating tighter 3-5 chapter plots or looser 6-10 chapter plots
+
+#### 🚀 Token Capability Upgrade
+- **40K Token Limit**: Default max tokens increased from 25K to 40K
+- **Longer Content**: Better support for generating extended chapter content without truncation
+- **DeepSeek/Sonnet-3.5 Ready**: Optimized for modern models with larger context windows
+
+### 🔧 Improvements | 功能改进
+
+#### 🛠️ System Enhancements
+- **Storyline Repair**: Enhanced progress tracking with generator-based updates
+- **Lambda AI**: Improved timeout handling and error recovery
+- **Debug Output**: Simplified terminal logging for better readability
+
+---
+
+## 📚 Previous Version: v3.7.0 (2025-12-17)
 
 **Major Feature Update!** New AI Provider and Enhanced Story Structure.
 
@@ -626,7 +651,33 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.7.0 版本更新 (2025-12-17)
+
+### 🎉 v3.8.0 版本更新 (2025-12-19)
+
+**功能更新！** 剧情紧凑度控制与Token限制优化。
+
+#### ✨ 新功能
+
+##### 📉 剧情紧凑度控制
+- **自定义节奏**：新增"剧情节奏"和"高潮数量"调节滑块
+- **直接控制**：用户可以微调故事节奏，使其更快或更慢
+- **灵活结构**：支持生成紧凑的3-5章剧情或宽松的6-10章剧情
+
+##### 🚀 Token能力升级
+- **40K Token限制**：默认最大Token数从2.5万提升至4万
+- **更长内容**：更好地支持生成超长章节内容而不被截断
+- **模型适配**：针对DeepSeek V3、Claude 3.5 Sonnet等大窗口模型优化
+
+#### 🔧 功能改进
+
+##### 🛠️ 系统增强
+- **故事线修复**：增强的进度追踪，支持实时状态更新
+- **Lambda AI**：改进超时处理和错误恢复机制
+- **调试输出**：简化终端日志输出，提高可读性
+
+---
+
+### 📚 上一版本：v3.7.0 (2025-12-17)
 
 **重大功能更新！** 新增AI提供商与增强故事结构。
 

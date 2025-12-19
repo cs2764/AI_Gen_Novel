@@ -224,11 +224,16 @@ def create_page_load_handler(aign_instance, original_modules_loaded: bool = True
             long_chapter_mode_value = mode_desc.get(segment_count, "关闭")
             print(f"📊 页面加载：长章节模式 = {long_chapter_mode_value}")
             
-            # 返回合并的结果，包含按钮状态和长章节模式
-            return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, long_chapter_mode_value]
+            # 获取剧情紧凑度设置
+            chapters_per_plot = getattr(aign_inst, 'chapters_per_plot', 5)
+            num_climaxes = getattr(aign_inst, 'num_climaxes', 5)
+            print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
+            
+            # 返回合并的结果，包含按钮状态、长章节模式和剧情紧凑度设置
+            return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, long_chapter_mode_value, chapters_per_plot, num_climaxes]
         except Exception as e:
             print(f"⚠️ 合并页面加载失败: {e}")
-            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), "关闭"]
+            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), "关闭", 5, 5]
     
     return combined_page_load
 
@@ -977,7 +982,246 @@ def bind_main_events(
                     outputs=[components.get('status_output'), storyline_text, progress_text]
                 )
         
-        # 生成开头包装（生成器版本）
+        # 绑定修复故事线按钮
+        if 'repair_storyline_button' in components:
+            def _wrap_repair_storyline(aign_state, target_chapters, long_chapter_feature):
+                """修复故事线（生成器版本，支持实时状态更新）"""
+                import threading
+                import time
+                from datetime import datetime
+                from app_utils import format_status_output, format_storyline_display, format_time_duration
+                
+                try:
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    print(f"🔧 开始修复故事线...")
+                    
+                    # 同步长章节模式设置
+                    sync_long_chapter_mode_from_ui(a, long_chapter_feature, "修复故事线")
+                    
+                    # 初始化状态历史
+                    if not hasattr(a, 'global_status_history'):
+                        a.global_status_history = []
+                    status_history = a.global_status_history
+                    
+                    start_time = time.time()
+                    start_timestamp = datetime.now().strftime("%H:%M:%S")
+                    
+                    # 获取当前长章节模式状态用于日志显示
+                    long_mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                    current_mode = getattr(a, 'long_chapter_mode', 0)
+                    mode_text = long_mode_desc.get(current_mode, "关闭")
+                    
+                    # 检查是否有故事线需要修复
+                    if not hasattr(a, 'storyline') or not a.storyline.get('chapters'):
+                        error_text = "❌ 无故事线数据，请先点击'生成故事线'按钮"
+                        status_history.append(["故事线修复", error_text, start_timestamp, datetime.now()])
+                        yield (
+                            format_status_output(status_history),
+                            error_text,
+                            "无故事线数据"
+                        )
+                        return
+                    
+                    # 获取修复建议
+                    repair_suggestions = a.get_storyline_repair_suggestions() if hasattr(a, 'get_storyline_repair_suggestions') else {'needs_repair': False}
+                    
+                    if not repair_suggestions.get('needs_repair', False):
+                        success_text = repair_suggestions.get('message', '✅ 故事线完整，无需修复')
+                        status_history.append(["故事线修复", success_text, start_timestamp, datetime.now()])
+                        storyline_display = format_storyline_display(a.storyline)
+                        yield (
+                            format_status_output(status_history),
+                            storyline_display,
+                            "无需修复"
+                        )
+                        return
+                    
+                    # 需要修复，执行修复
+                    failed_chapters = repair_suggestions.get('failed_chapters', [])
+                    repair_info = f"🔧 检测到需要修复的章节: {', '.join(failed_chapters[:5])}\n   • 长章节模式: {mode_text}"
+                    status_history.append(["故事线修复", repair_info, start_timestamp, datetime.now()])
+                    
+                    # 先 yield 一次显示开始修复
+                    yield (
+                        format_status_output(status_history),
+                        f"🔧 正在修复故事线...\n\n需要修复: {', '.join(failed_chapters)}\n长章节模式: {mode_text}",
+                        f"修复中..."
+                    )
+                    
+                    # 设置目标章节数
+                    a.target_chapter_count = int(target_chapters) if target_chapters else a.target_chapter_count
+                    
+                    # 用于存储修复结果
+                    repair_result = {'success': False, 'error': None}
+                    initial_chapter_count = len(a.storyline.get('chapters', []))
+                    
+                    def do_repair():
+                        try:
+                            # 优先使用 StorylineManager 的 repair_storyline 方法（支持长章节模式）
+                            if hasattr(a, 'storyline_manager') and hasattr(a.storyline_manager, 'repair_storyline'):
+                                repair_result['success'] = a.storyline_manager.repair_storyline()
+                            elif hasattr(a, 'repair_storyline_selective'):
+                                print("⚠️ 回退到 repair_storyline_selective（可能不支持长章节模式）")
+                                repair_result['success'] = a.repair_storyline_selective()
+                            else:
+                                repair_result['success'] = False
+                        except Exception as e:
+                            repair_result['error'] = str(e)
+                            repair_result['success'] = False
+                    
+                    # 在后台线程中执行修复
+                    repair_thread = threading.Thread(target=do_repair)
+                    repair_thread.start()
+                    
+                    # 实时更新状态
+                    update_counter = 0
+                    max_wait_time = 600  # 10分钟超时
+                    
+                    while repair_thread.is_alive():
+                        if time.time() - start_time > max_wait_time:
+                            status_history.append(["故事线修复", "⚠️ 修复超时", datetime.now().strftime("%H:%M:%S"), datetime.now()])
+                            yield (
+                                format_status_output(status_history),
+                                "修复超时",
+                                "修复超时"
+                            )
+                            return
+                        
+                        # 每1秒更新一次状态
+                        if update_counter % 2 == 0:
+                            elapsed_time = int(time.time() - start_time)
+                            current_chapter_count = len(a.storyline.get('chapters', []))
+                            
+                            status_text = f"🔧 正在修复故事线...\n   • 目标: {a.target_chapter_count}章\n   • 当前: {current_chapter_count}章\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}\n   • 长章节模式: {mode_text}"
+                            
+                            # 更新或添加进度状态
+                            progress_found = False
+                            for i, item in enumerate(status_history):
+                                if len(item) >= 2 and item[0] == "故事线修复进度":
+                                    status_history[i] = ["故事线修复进度", status_text, datetime.now().strftime("%H:%M:%S"), datetime.now()]
+                                    progress_found = True
+                                    break
+                            
+                            if not progress_found:
+                                status_history.append(["故事线修复进度", status_text, datetime.now().strftime("%H:%M:%S"), datetime.now()])
+                            
+                            storyline_display = format_storyline_display(a.storyline, is_generating=True) if current_chapter_count > 0 else "修复中..."
+                            
+                            yield (
+                                format_status_output(status_history),
+                                storyline_display,
+                                f"修复中... {current_chapter_count}/{a.target_chapter_count}章"
+                            )
+                        
+                        update_counter += 1
+                        time.sleep(0.5)
+                    
+                    # 等待线程完成
+                    repair_thread.join(timeout=5)
+                    
+                    final_timestamp = datetime.now().strftime("%H:%M:%S")
+                    elapsed_time = int(time.time() - start_time)
+                    final_chapter_count = len(a.storyline.get('chapters', []))
+                    
+                    if repair_result['error']:
+                        error_text = f"❌ 修复失败: {repair_result['error']}"
+                        status_history.append(["故事线修复", error_text, final_timestamp, datetime.now()])
+                        yield (format_status_output(status_history), error_text, "修复失败")
+                    elif repair_result['success']:
+                        success_text = f"✅ 故事线修复完成\n   • 章节数: {final_chapter_count}\n   • 耗时: {format_time_duration(elapsed_time, include_seconds=True)}\n   • 长章节模式: {mode_text}"
+                        status_history.append(["故事线修复", success_text, final_timestamp, datetime.now()])
+                        storyline_display = format_storyline_display(a.storyline)
+                        yield (
+                            format_status_output(status_history),
+                            storyline_display,
+                            f"修复完成 {final_chapter_count}章"
+                        )
+                    else:
+                        partial_text = f"⚠️ 部分修复成功\n   • 章节数: {final_chapter_count}\n   • 耗时: {format_time_duration(elapsed_time, include_seconds=True)}\n   • 长章节模式: {mode_text}"
+                        status_history.append(["故事线修复", partial_text, final_timestamp, datetime.now()])
+                        storyline_display = format_storyline_display(a.storyline)
+                        yield (
+                            format_status_output(status_history),
+                            storyline_display,
+                            f"部分修复 {final_chapter_count}章"
+                        )
+                
+                except Exception as e:
+                    error_msg = f"❌ 故事线修复失败: {e}"
+                    yield (error_msg, error_msg, "修复失败")
+            
+            print("🔵 正在绑定修复故事线按钮...")
+            components['repair_storyline_button'].click(
+                fn=_wrap_repair_storyline,
+                inputs=[
+                    aign,
+                    components.get('target_chapters_slider'),
+                    components.get('long_chapter_mode_dropdown')
+                ],
+                outputs=[components.get('status_output'), storyline_text, components.get('gen_storyline_status')]
+            )
+            print("✅ 修复故事线按钮绑定完成")
+        
+        # 绑定修复重复章节按钮
+        if 'fix_duplicates_button' in components:
+            def _wrap_fix_duplicates(aign_state):
+                """修复重复章节"""
+                from datetime import datetime
+                from app_utils import format_status_output, format_storyline_display
+                
+                try:
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    print(f"🔧 开始修复重复章节...")
+                    
+                    if not hasattr(a, 'global_status_history'):
+                        a.global_status_history = []
+                    status_history = a.global_status_history
+                    
+                    start_timestamp = datetime.now().strftime("%H:%M:%S")
+                    status_history.append(["重复章节修复", "🔧 开始检查和修复重复章节...", start_timestamp, datetime.now()])
+                    
+                    if hasattr(a, 'storyline') and a.storyline and a.storyline.get('chapters'):
+                        chapters = a.storyline['chapters']
+                        original_count = len(chapters)
+                        
+                        seen_titles = set()
+                        unique_chapters = []
+                        
+                        for chapter in chapters:
+                            title = chapter.get('title', '') if isinstance(chapter, dict) else str(chapter)[:50]
+                            if title not in seen_titles:
+                                seen_titles.add(title)
+                                unique_chapters.append(chapter)
+                        
+                        a.storyline['chapters'] = unique_chapters
+                        removed_count = original_count - len(unique_chapters)
+                        
+                        success_text = f"✅ 重复章节修复完成\n   • 原始: {original_count}章\n   • 移除: {removed_count}章\n   • 剩余: {len(unique_chapters)}章"
+                        status_history.append(["重复章节修复", success_text, datetime.now().strftime("%H:%M:%S"), datetime.now()])
+                        
+                        storyline_display = format_storyline_display(a.storyline)
+                        return (
+                            format_status_output(status_history),
+                            storyline_display,
+                            f"已修复，剩余 {len(unique_chapters)} 章"
+                        )
+                    else:
+                        error_text = "❌ 没有找到故事线数据"
+                        status_history.append(["重复章节修复", error_text, datetime.now().strftime("%H:%M:%S"), datetime.now()])
+                        return (format_status_output(status_history), error_text, "修复失败")
+                
+                except Exception as e:
+                    error_msg = f"❌ 重复章节修复失败: {e}"
+                    return (error_msg, error_msg, "修复失败")
+            
+            print("🔵 正在绑定修复重复章节按钮...")
+            components['fix_duplicates_button'].click(
+                fn=_wrap_fix_duplicates,
+                inputs=[aign],
+                outputs=[components.get('status_output'), storyline_text, components.get('gen_storyline_status')]
+            )
+            print("✅ 修复重复章节按钮绑定完成")
+
         def _wrap_gen_beginning(aign_state, outline, user_requirements, embellishment_idea, enable_chapters, enable_ending, novel_title, character_list):
             """生成开头（生成器版本，支持实时状态更新）"""
             import threading
@@ -1625,6 +1869,43 @@ def bind_main_events(
             )
             print("✅ 风格选择事件绑定成功")
         
+        # 绑定剧情紧凑度滑块 - 同步到AIGN实例
+        if components.get('chapters_per_plot_slider'):
+            def on_chapters_per_plot_change(value, aign_state):
+                """章节/剧情滑块变化时同步到AIGN实例"""
+                try:
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    if hasattr(a, 'chapters_per_plot'):
+                        a.chapters_per_plot = int(value)
+                        print(f"📊 剧情节奏已更新为: {a.chapters_per_plot}章/剧情")
+                except Exception as e:
+                    print(f"⚠️ 剧情节奏更新失败: {e}")
+            
+            components['chapters_per_plot_slider'].change(
+                fn=on_chapters_per_plot_change,
+                inputs=[components['chapters_per_plot_slider'], aign],
+                outputs=[]
+            )
+            print("✅ 剧情节奏滑块事件绑定成功")
+        
+        if components.get('num_climaxes_slider'):
+            def on_num_climaxes_change(value, aign_state):
+                """高潮数量滑块变化时同步到AIGN实例"""
+                try:
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    if hasattr(a, 'num_climaxes'):
+                        a.num_climaxes = int(value)
+                        print(f"📊 高潮数量已更新为: {a.num_climaxes}")
+                except Exception as e:
+                    print(f"⚠️ 高潮数量更新失败: {e}")
+            
+            components['num_climaxes_slider'].change(
+                fn=on_num_climaxes_change,
+                inputs=[components['num_climaxes_slider'], aign],
+                outputs=[]
+            )
+            print("✅ 高潮数量滑块事件绑定成功")
+        
         print("✅ 所有事件处理函数绑定成功")
         return True
         
@@ -1677,7 +1958,9 @@ def bind_page_load_events(
             components['novel_title_text'],
             components['storyline_text'],
             components['import_auto_saved_button'],
-            components['long_chapter_mode_dropdown']
+            components['long_chapter_mode_dropdown'],
+            components['chapters_per_plot_slider'],
+            components['num_climaxes_slider']
         ]
         
         if original_modules_loaded:

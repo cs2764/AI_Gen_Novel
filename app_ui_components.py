@@ -340,7 +340,28 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             interactive=True,
             info="选择章节分段生成模式：关闭=传统单次生成；2/3/4段=将章节拆分为多个剧情段，逐段生成与润色后合并"
         )
+        # 剧情紧凑度设置 - 直接放在长章节模式下方
+        with gr.Row():
+            components['chapters_per_plot_slider'] = gr.Slider(
+                minimum=1,
+                maximum=30,
+                value=loaded_data.get("chapters_per_plot", 5),
+                step=1,
+                label="剧情节奏 (章/剧情)",
+                interactive=True,
+                info="每多少章构成一个完整剧情单元（生成短章节的模型建议6-10，长章节模型建议3-5）"
+            )
+            components['num_climaxes_slider'] = gr.Slider(
+                minimum=1,
+                maximum=20,
+                value=loaded_data.get("num_climaxes", 5),
+                step=1,
+                label="高潮数量",
+                interactive=True,
+                info="故事中的高潮点总数"
+            )
         components['gen_detailed_outline_button'] = gr.Button("生成详细大纲", variant="secondary")
+
         components['detailed_outline_text'] = gr.Textbox(
             loaded_data.get("detailed_outline", ""),
             label="详细大纲", 

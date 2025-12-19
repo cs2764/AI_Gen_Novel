@@ -116,6 +116,10 @@ class AIGN:
         self.compact_mode = True  # 精简模式，默认开启
         # 长章节模式：0=关闭，2=2段合并，3=3段合并，4=4段合并（默认关闭）
         self.long_chapter_mode = 0
+        # 剧情紧凑度设置：控制剧情节奏和高潮分布
+        self.chapters_per_plot = 5  # 每个剧情单元的章节数，默认5章
+        self.num_climaxes = 5       # 故事高潮总数，默认5个
+
         
         # 详细大纲相关属性
         self.detailed_outline = ""
@@ -1481,7 +1485,12 @@ class AIGN:
         
         # 生成动态剧情结构
         from dynamic_plot_structure import generate_plot_structure, format_structure_for_prompt
-        plot_structure = generate_plot_structure(self.target_chapter_count)
+        # 传递用户自定义的剧情紧凑度设置
+        plot_structure = generate_plot_structure(
+            self.target_chapter_count,
+            chapters_per_plot=getattr(self, 'chapters_per_plot', 5),
+            num_climaxes=getattr(self, 'num_climaxes', 5)
+        )
         structure_info = format_structure_for_prompt(plot_structure, self.target_chapter_count)
         
         print(f"📊 推荐剧情结构：{plot_structure['type']}")
@@ -2142,13 +2151,24 @@ class AIGN:
             
         if not hasattr(self, 'target_chapter_count') or self.target_chapter_count <= 0:
             return missing_batches
+        
+        # 根据长章节模式确定批次大小
+        segment_count = getattr(self, 'long_chapter_mode', 0)
+        try:
+            segment_count = int(segment_count) if segment_count else 0
+        except (ValueError, TypeError):
+            segment_count = 0
+        
+        # 长章节模式使用5章一批，普通模式使用10章一批
+        batch_size = 5 if segment_count > 0 else 10
+        print(f"🔍 检测缺失批次：长章节模式={'启用' if segment_count > 0 else '关闭'}，批次大小={batch_size}章")
             
         chapters = self.storyline.get('chapters', [])
         if not chapters:
             # 如果没有任何章节，创建所有批次
             total_chapters = self.target_chapter_count
-            for start_chapter in range(1, total_chapters + 1, 10):
-                end_chapter = min(start_chapter + 9, total_chapters)
+            for start_chapter in range(1, total_chapters + 1, batch_size):
+                end_chapter = min(start_chapter + batch_size - 1, total_chapters)
                 missing_batches.append({
                     'start_chapter': start_chapter,
                     'end_chapter': end_chapter,
@@ -2165,8 +2185,8 @@ class AIGN:
         
         # 检测缺失的章节范围
         total_chapters = self.target_chapter_count
-        for start_chapter in range(1, total_chapters + 1, 10):
-            end_chapter = min(start_chapter + 9, total_chapters)
+        for start_chapter in range(1, total_chapters + 1, batch_size):
+            end_chapter = min(start_chapter + batch_size - 1, total_chapters)
             
             # 检查这个批次中是否有缺失的章节
             batch_chapters = set(range(start_chapter, end_chapter + 1))

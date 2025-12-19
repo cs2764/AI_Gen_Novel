@@ -422,7 +422,14 @@ class OutlineGenerator:
         # 生成动态剧情结构
         try:
             from dynamic_plot_structure import generate_plot_structure, format_structure_for_prompt
-            plot_structure = generate_plot_structure(self.aign.target_chapter_count)
+            # 传递用户自定义的剧情紧凑度设置
+            chapters_per_plot = getattr(self.aign, 'chapters_per_plot', 5)
+            num_climaxes = getattr(self.aign, 'num_climaxes', 5)
+            plot_structure = generate_plot_structure(
+                self.aign.target_chapter_count, 
+                chapters_per_plot=chapters_per_plot,
+                num_climaxes=num_climaxes
+            )
             structure_info = format_structure_for_prompt(plot_structure, self.aign.target_chapter_count)
             
             print(f"📊 推荐剧情结构：{plot_structure['type']}")

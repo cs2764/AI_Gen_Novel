@@ -78,7 +78,7 @@ DEFAULT_MODELS = {
 # 生成参数默认值
 DEFAULT_GENERATION_PARAMS = {
     "temperature": 0.7,
-    "max_tokens": 25000,  # 默认20000 tokens，确保章节内容不被截断
+    "max_tokens": 40000,  # 默认32K tokens，确保章节内容不被截断
     "top_p": 0.9,
     "frequency_penalty": 0.0,
     "presence_penalty": 0.0

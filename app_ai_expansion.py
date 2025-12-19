@@ -226,6 +226,44 @@ def expand_embellishment_requirements(user_idea, user_requirements, embellishmen
 
 # ==================== 私有辅助函数 ====================
 
+def _remove_thinking_content(response):
+    """从AI响应中剔除思维链内容
+    
+    Args:
+        response (str): AI模型的原始响应
+        
+    Returns:
+        str: 剔除思维链后的内容
+        
+    处理的标签:
+        - <think>...</think>
+        - <thinking>...</thinking>
+        - <reasoning>...</reasoning>
+        - <reflection>...</reflection>
+    """
+    import re
+    
+    if not response:
+        return response
+    
+    # 剔除常见的思维链标签及其内容（支持多行匹配）
+    thinking_patterns = [
+        r'<think>.*?</think>',
+        r'<thinking>.*?</thinking>',
+        r'<reasoning>.*?</reasoning>',
+        r'<reflection>.*?</reflection>',
+    ]
+    
+    result = response
+    for pattern in thinking_patterns:
+        result = re.sub(pattern, '', result, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 清理多余的空行
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    return result.strip()
+
+
 def _extract_writing_expansion_content(response):
     """从AI响应中提取写作要求扩展内容
     
@@ -236,10 +274,14 @@ def _extract_writing_expansion_content(response):
         str: 提取和格式化后的内容
         
     提取逻辑:
+        - 首先剔除思维链内容
         - 查找【扩展后的写作要求】标记
         - 查找【写作指导实例】或【实战指导案例】标记
         - 组合两部分内容
     """
+    # 首先剔除思维链内容
+    response = _remove_thinking_content(response)
+    
     if "【扩展后的写作要求】" in response:
         start_pos = response.find("【扩展后的写作要求】") + len("【扩展后的写作要求】")
         
@@ -270,10 +312,14 @@ def _extract_embellishment_expansion_content(response):
         str: 提取和格式化后的内容
         
     提取逻辑:
+        - 首先剔除思维链内容
         - 查找【扩展后的润色要求】标记
         - 查找【润色实例对比】或【高级润色实例对比】标记
         - 组合两部分内容
     """
+    # 首先剔除思维链内容
+    response = _remove_thinking_content(response)
+    
     if "【扩展后的润色要求】" in response:
         start_pos = response.find("【扩展后的润色要求】") + len("【扩展后的润色要求】")
         

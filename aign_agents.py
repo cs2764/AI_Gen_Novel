@@ -88,7 +88,7 @@ class MarkdownAgent:
         name: str,
         temperature=0.8,
         top_p=0.8,
-        max_tokens=25000,  # 默认20000 tokens，确保章节内容不被截断
+        max_tokens=40000,  # 默认32K tokens，确保章节内容不被截断
         use_memory=False,
         first_replay="明白了。",
         is_speak=True,
@@ -240,10 +240,10 @@ class MarkdownAgent:
         
         for limited in limited_agents:
             if limited in agent_name:
-                return 20000
+                return 32000
         
-        # 其他智能体 20,000 token 限制（主要生成任务）
-        return 25000
+        # 其他智能体 40,000 token 限制（主要生成任务）
+        return 40000
 
     def query(self, user_input: str) -> dict:
         """查询AI代理
@@ -412,16 +412,10 @@ class MarkdownAgent:
                 print(f"   {msg_content[:200]}{'...' if len(msg_content) > 200 else ''}")
                 print("-" * 40)
             print("=" * 60)
-        elif debug_level == '1':  # 基础调试模式：只显示基本信息
-            print("🔍 API调用基础信息：")
-            
+        elif debug_level == '1':  # 基础调试模式：只显示关键统计信息
             # 计算token数量
             user_input_tokens = self.count_tokens(user_input)
             total_prompt_tokens = self.count_tokens("\n".join([msg["content"] for msg in full_messages]))
-            
-            print(f"   📤 用户输入长度: {len(user_input)} 字符 / {user_input_tokens} tokens")
-            print(f"   📋 完整提示词长度: {total_prompt_length} 字符 / {total_prompt_tokens} tokens")
-            print(f"   📝 历史消息数: {len(self.history)} 条")
             
             # 显示智能体名称和风格信息
             agent_name = getattr(self, 'name', 'Unknown')
@@ -430,85 +424,41 @@ class MarkdownAgent:
                 style_name = getattr(self.parent_aign, 'style_name', None)
                 if style_name and style_name != "无":
                     style_info = f" | 风格: {style_name}"
-            print(f"   🏷️  智能体: {agent_name}{style_info}")
             
-            # 详细分析提示词组成 - 解析用户输入中的各个部分
-            print(f"   📊 提示词组成分析:")
-            
-            # 调试：显示history的实际结构（简化版）
-            print(f"   🔍 History结构: {len(self.history)} 条消息")
-            for idx, msg in enumerate(self.history):
-                role = msg.get("role", "unknown")
-                content_len = len(msg.get("content", ""))
-                print(f"      • [{idx}] {role}: {content_len} 字符")
-            
-            # 1. 系统提示词
+            # 1. 系统提示词统计
+            sys_prompt_len = 0
+            sys_prompt_tokens = 0
             if len(self.history) > 0:
                 sys_prompt_content = self.history[0].get("content", "")
                 sys_prompt_len = len(sys_prompt_content)
                 sys_prompt_tokens = self.count_tokens(sys_prompt_content)
-                print(f"   🔧 系统提示词: {sys_prompt_len} 字符 / {sys_prompt_tokens} tokens")
-                
-                # 显示系统提示词的前200和后200字符，帮助诊断
-                if sys_prompt_len > 0:
-                    preview_text = sys_prompt_content[:200]
-                    print(f"      📄 前200字符:\n{preview_text}{'...' if sys_prompt_len > 200 else ''}")
-                    if sys_prompt_len > 400:
-                        print(f"      📄 后200字符:\n...{sys_prompt_content[-200:]}")
-                else:
-                    print(f"      ⚠️  系统提示词为空！")
-                
-                # 检查是否有重复内容
-                if sys_prompt_len > 1000:
-                    # 检查是否整个提示词被重复
-                    mid_point = sys_prompt_len // 2
-                    first_half = sys_prompt_content[:mid_point]
-                    second_half = sys_prompt_content[mid_point:]
-                    if first_half == second_half:
-                        print(f"      ⚠️  发现系统提示词被完整重复了2次!")
-            else:
-                sys_prompt_len = 0
-                sys_prompt_tokens = 0
-                print(f"   🔧 系统提示词: 0 字符 / 0 tokens")
             
-            # 2. AI回复（如果有）
+            # 2. AI回复统计
+            assistant_reply_len = 0
+            assistant_reply_tokens = 0
             if len(self.history) > 1:
                 assistant_reply_content = self.history[1].get("content", "")
                 assistant_reply_len = len(assistant_reply_content)
                 assistant_reply_tokens = self.count_tokens(assistant_reply_content)
-                print(f"   🤖 AI回复: {assistant_reply_len} 字符 / {assistant_reply_tokens} tokens")
-            else:
-                assistant_reply_len = 0
-                assistant_reply_tokens = 0
             
             # 3. 解析用户输入的各个组成部分
-            print(f"   📝 用户输入详细组成:")
-            
-            # 尝试解析用户输入中的各个字段
             input_parts = {}
             current_key = None
             current_value = []
             
             for line in user_input.split('\n'):
-                # 检测是否是新的字段标题（多种格式）
-                # 格式1: ## 字段名: 或 ## 字段名：
-                # 格式2: **字段名**: 或 **字段名**：
-                # 格式3: 字段名: （纯文本，首行且包含冒号）
+                stripped_line = line.strip()
                 is_new_field = False
                 field_name = None
                 field_value_start = None
                 
-                stripped_line = line.strip()
-                
                 if stripped_line.startswith('##') and (':' in stripped_line or '：' in stripped_line):
-                    # 格式1: ## 字段名: 内容
                     separator = ':' if ':' in stripped_line else '：'
                     parts = stripped_line.split(separator, 1)
                     field_name = parts[0].replace('##', '').strip()
                     field_value_start = parts[1].strip() if len(parts) > 1 else ''
                     is_new_field = True
                 elif stripped_line.startswith('**') and ('**:' in stripped_line or '**：' in stripped_line):
-                    # 格式2: **字段名**: 内容
                     separator = '**:' if '**:' in stripped_line else '**：'
                     parts = stripped_line.split(separator, 1)
                     field_name = parts[0].replace('**', '').strip()
@@ -516,51 +466,34 @@ class MarkdownAgent:
                     is_new_field = True
                 
                 if is_new_field:
-                    # 保存上一个字段
                     if current_key:
                         input_parts[current_key] = '\n'.join(current_value)
-                    # 开始新字段
                     current_key = field_name
                     current_value = [field_value_start] if field_value_start else []
                 else:
                     if current_key:
                         current_value.append(line)
-                    elif not input_parts:  # 如果还没有找到任何字段，整体作为一个字段
+                    elif not input_parts:
                         if not current_key:
                             current_key = "内容"
                             current_value = []
                         current_value.append(line)
             
-            # 保存最后一个字段
             if current_key:
                 input_parts[current_key] = '\n'.join(current_value)
             
-            # 显示各个部分的长度和token数
-            total_parts_len = 0
-            total_parts_tokens = 0
+            # 构建用户输入详细组成字符串
+            input_parts_summary = []
             for key, value in input_parts.items():
                 part_len = len(value)
                 part_tokens = self.count_tokens(value)
-                total_parts_len += part_len
-                total_parts_tokens += part_tokens
-                # 只显示主要字段
                 if part_len > 50 or key in ['大纲', '写作要求', '润色要求', '要润色的内容', '前文记忆', '临时设定', '计划', '人物列表', '详细大纲', '基础大纲', '前2章故事线', '后2章故事线', '前五章总结', '后五章梗概', '上一章原文', '本章故事线', '上一段原文']:
-                    print(f"      • {key}: {part_len} 字符 / {part_tokens} tokens")
+                    input_parts_summary.append(f"{key}:{part_len}字/{part_tokens}tk")
             
-            # 如果解析失败，显示原始长度
-            if not input_parts:
-                print(f"      • [无法解析字段]: {len(user_input)} 字符 / {user_input_tokens} tokens")
-            
-            # 计算总长度
-            calculated_total_chars = sys_prompt_len + assistant_reply_len + len(user_input)
-            calculated_total_tokens = sys_prompt_tokens + assistant_reply_tokens + user_input_tokens
-            print(f"   🧮 计算总长度: {calculated_total_chars} 字符 / {calculated_total_tokens} tokens")
-            print(f"   ❗ 实际总长度: {total_prompt_length} 字符 / {total_prompt_tokens} tokens")
-            
-            if total_prompt_length != calculated_total_chars:
-                print(f"   ⚠️  字符数不匹配! 差异: {total_prompt_length - calculated_total_chars} 字符")
-            
-            print("-" * 50)
+            # 输出紧凑格式
+            print(f"🔍 [{agent_name}{style_info}] 系统:{sys_prompt_len}字/{sys_prompt_tokens}tk | 用户:{len(user_input)}字/{user_input_tokens}tk | 总计:{total_prompt_length}字/{total_prompt_tokens}tk")
+            if input_parts_summary:
+                print(f"   📝 {' | '.join(input_parts_summary)}")
         
         # 检测发送提示词长度是否过长
         if hasattr(self, 'parent_aign') and self.parent_aign and total_prompt_length > self.parent_aign.overlength_threshold:
@@ -599,7 +532,7 @@ class MarkdownAgent:
             temperature=self.temperature,
             top_p=self.top_p,
             max_tokens=self.max_tokens,  # 传递max_tokens参数，防止输出被截断
-            stream=False,  # 明确禁用流式输出，使用非流式模式
+            stream=True,  # 启用流式输出，支持实时显示生成内容
         )
         
         # 处理流式和非流式响应
@@ -783,17 +716,13 @@ class MarkdownAgent:
                 response_content, content_type, self.name, direction="received"
             )
         
-        # 显示API响应统计信息
+        # 显示API响应统计信息（紧凑格式）
         if debug_level in ['1', '2']:
             response_length = len(resp.get("content", ""))
             total_tokens = resp.get("total_tokens", 0)
-            print(f"📊 API响应统计:")
-            print(f"   📤 响应内容长度: {response_length} 字符")
-            print(f"   🪙 总token消耗: {total_tokens}")
-            if total_tokens > 0 and total_prompt_length > 0:
-                # 估算token使用比例
-                print(f"   💰 token效率: {total_prompt_length}/{total_tokens} = {total_prompt_length/total_tokens:.2f} 字符/token")
-            print("-" * 50)
+            api_time = time.time() - api_start_time
+            response_tokens = self.count_tokens(resp.get("content", ""))
+            print(f"� 响应:{response_length}字/{response_tokens}tk | 耗时:{api_time:.1f}s | 总token:{total_tokens}")
         
         # 🔢 Token累积统计 - 记录发送和接收的Token数
         if hasattr(self, 'parent_aign') and self.parent_aign:

@@ -1,5 +1,37 @@
 # 更新日志 | Changelog
 
+## [3.8.0] - 2025-12-19 🚀 功能更新 | Feature Update
+
+### ✨ 新功能 | New Features
+
+#### 📉 剧情紧凑度控制 | Plot Compactness Control
+- **自定义节奏**：新增"剧情节奏" (Chapters per Plot) 和"高潮数量" (Number of Climaxes) 调节滑块
+- **Custom Pacing**: New sliders for fine-tuning story pacing and climax frequency
+- **直接控制**：用户可以根据模型能力（长窗口 vs 短窗口）调整每个剧情单元的章节数
+- **Direct Control**: Users can adjust chapters per plot unit based on model capabilities
+- **灵活结构**：支持生成紧凑的3-5章剧情或宽松的6-10章剧情
+- **Flexible Structure**: Supports generating tight 3-5 chapter plots or loose 6-10 chapter plots
+
+#### 🚀 Token能力升级 | Token Capability Upgrade
+- **40K Token限制**：默认最大Token数从2.5万提升至4万
+- **40K Token Limit**: Default max tokens increased from 25K to 40K
+- **内容完整性**：更好地支持生成超长章节内容，减少截断风险
+- **Content Integrity**: Better support for extended chapters with reduced truncation risk
+- **大模型适配**：针对DeepSeek V3、Claude 3.5 Sonnet等大窗口模型优化
+- **Large Model Ready**: Optimized for modern large-context models
+
+### 🔧 功能改进 | Improvements
+
+#### 🛠️ 系统增强 | System Enhancements
+- **故事线修复**：增强的进度追踪，支持基于生成器的实时状态更新
+- **Storyline Repair**: Enhanced progress tracking with generator-based updates
+- **Lambda AI**：改进超时处理和错误恢复机制，提升稳定性
+- **Lambda AI**: Improved timeout handling and error recovery for better stability
+- **调试输出**：简化终端日志输出，移除冗余字符统计警告，提高可读性
+- **Debug Output**: Simplified terminal logging, removed redundant warnings for better readability
+
+---
+
 ## [3.7.0] - 2025-12-17 🚀 重大功能更新 | Major Feature Update
 
 ### ✨ 新功能 | New Features

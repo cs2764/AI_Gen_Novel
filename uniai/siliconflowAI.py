@@ -42,9 +42,9 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
     ) -> dict:
 
         
-        # SiliconFlow AI默认max_tokens设置为20000（确保章节内容不被截断）
+        # SiliconFlow AI默认max_tokens设置为32000（确保章节内容不被截断）
         if max_tokens is None:
-            max_tokens = 20000
+            max_tokens = 40000
         
         # 如果设置了系统提示词，合并到第一个用户消息的开头
         if system_prompt and messages:

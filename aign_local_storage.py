@@ -251,6 +251,13 @@ class LocalStorageManager:
                     # 更新润色器以匹配加载的设置
                     if hasattr(self.aign, 'updateEmbellishersForCosyVoice'):
                         self.aign.updateEmbellishersForCosyVoice()
+                if "chapters_per_plot" in settings:
+                    self.aign.chapters_per_plot = settings["chapters_per_plot"]
+                if "num_climaxes" in settings:
+                    self.aign.num_climaxes = settings["num_climaxes"]
+                # 如果加载了剧情紧凑度设置，添加到加载项列表
+                if "chapters_per_plot" in settings or "num_climaxes" in settings:
+                    loaded_items.append(f"剧情紧凑度: {self.aign.chapters_per_plot}章/剧情, {self.aign.num_climaxes}个高潮")
             
             if loaded_items:
                 print(f"✅ 本地数据加载完成，已加载 {len(loaded_items)} 项:")
@@ -331,12 +338,14 @@ class LocalStorageManager:
                 "enable_chapters": getattr(self.aign, 'enable_chapters', True),
                 "enable_ending": getattr(self.aign, 'enable_ending', True),
                 "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', 0),
-                "cosyvoice_mode": getattr(self.aign, 'cosyvoice_mode', False)
+                "cosyvoice_mode": getattr(self.aign, 'cosyvoice_mode', False),
+                "chapters_per_plot": getattr(self.aign, 'chapters_per_plot', 5),
+                "num_climaxes": getattr(self.aign, 'num_climaxes', 5)
             }
             
             result = self.save_to_local("user_settings", settings=settings)
             if result:
-                print(f"💾 用户设置已自动保存 (目标章节数: {self.aign.target_chapter_count}章, 长章节: {settings['long_chapter_mode']}, CosyVoice: {settings['cosyvoice_mode']})")
+                print(f"💾 用户设置已自动保存 (目标章节数: {self.aign.target_chapter_count}章, 长章节: {settings['long_chapter_mode']}, 剧情节奏: {settings['chapters_per_plot']}章/剧情, 高潮数: {settings['num_climaxes']})")
             return result
         except Exception as e:
             print(f"❌ 保存用户设置失败: {e}")

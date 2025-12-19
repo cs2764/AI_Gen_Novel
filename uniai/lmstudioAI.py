@@ -265,11 +265,11 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
             
             # 根据上下文设置不同的max_tokens
             if is_detailed_outline:
-                params["max_tokens"] = 20000  # 详细大纲生成
-                print("🔧 LM Studio: 检测到详细大纲生成，设置max_tokens=20000")
+                params["max_tokens"] = 40000  # 详细大纲生成
+                print("🔧 LM Studio: 检测到详细大纲生成，设置max_tokens=40000")
             else:
-                params["max_tokens"] = 20000   # 其他情况
-                print("🔧 LM Studio: 其他情况，设置max_tokens=20000")
+                params["max_tokens"] = 40000   # 其他情况
+                print("🔧 LM Studio: 其他情况，设置max_tokens=40000")
 
         try:
             if not stream:

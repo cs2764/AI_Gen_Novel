@@ -2780,39 +2780,23 @@ def create_gradio5_original_app():
                     [aign, status_output, writing_plan_text, temp_setting_text, writing_memory_text, novel_content_text, gen_next_paragraph_button],
                 )
 
-                # 绑定故事线生成按钮 - 已由app_event_handlers.py处理，此处注释以避免重复绑定
-                # def gen_storyline_button_clicked_wrapper(*args):
-                #     """包装函数用于调试故事线按钮"""
-                #     print("\n" + "="*80)
-                #     print("📖 故事线生成按钮被点击！")
-                #     print(f"📖 接收到的参数数量: {len(args)}")
-                #     print(f"📖 参数类型: {[type(arg).__name__ for arg in args]}")
-                #     print("="*80 + "\n")
-                #     try:
-                #         for result in gen_storyline_button_clicked(*args):
-                #             print("📖 生成器返回一个结果")
-                #             yield result
-                #     except Exception as e:
-                #         print(f"❌ 故事线生成包装器捕获异常: {e}")
-                #         import traceback
-                #         traceback.print_exc()
-                #         raise
-                # 
-                # print("🔵 正在绑定故事线生成按钮...")
-                # gen_storyline_button.click(
-                #     gen_storyline_button_clicked_wrapper,
-                #     [aign, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, character_list_text, target_chapters_slider, status_output],
-                #     [aign, status_output, gen_storyline_status, storyline_text]
-                # )
-                # print("✅ 故事线生成按钮绑定完成")
-                print("📖 故事线按钮将由app_event_handlers.py绑定")
+                # 绑定故事线生成按钮
+                print("🔵 正在绑定故事线生成按钮...")
+                gen_storyline_button.click(
+                    gen_storyline_button_clicked,
+                    [aign, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, character_list_text, target_chapters_slider, status_output],
+                    [aign, status_output, gen_storyline_status, storyline_text]
+                )
+                print("✅ 故事线生成按钮绑定完成")
 
                 # 绑定修复故事线按钮
+                print("🔵 正在绑定修复故事线按钮...")
                 repair_storyline_button.click(
                     repair_storyline_button_clicked,
                     [aign, target_chapters_slider, status_output],
                     [aign, status_output, gen_storyline_status, storyline_text]
                 )
+                print("✅ 修复故事线按钮绑定完成")
 
                 # 绑定修复重复章节按钮
                 fix_duplicates_button.click(
@@ -3182,17 +3166,23 @@ def create_gradio5_original_app():
                         
                         # 检查是否有自动保存数据，决定导入按钮的可见性
                         import_button_state = check_auto_saved_data()
+                        
+                        # 获取剧情紧凑度设置
+                        chapters_per_plot = getattr(aign_instance, 'chapters_per_plot', 5)
+                        num_climaxes = getattr(aign_instance, 'num_climaxes', 5)
+                        print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
 
-                        # 返回合并的结果，包含按钮状态
+                        # 返回合并的结果，包含按钮状态和剧情紧凑度设置
                         # 输出组件顺序: provider_info_display, progress_text, output_file_text, novel_content_text, 
                         #              user_idea_text, user_requirements_text, embellishment_idea_text, 
-                        #              detailed_outline_text, novel_title_text, storyline_text, import_auto_saved_button
+                        #              detailed_outline_text, novel_title_text, storyline_text, import_auto_saved_button, chapters_per_plot_slider, num_climaxes_slider
                         # main_data 包含: progress_text, user_idea, user_requirements, embellishment_idea, detailed_outline, title, storyline (7个值)
                         # 需要插入 output_file_text 和 novel_content_text 的空值
-                        return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state]
+                        return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, chapters_per_plot, num_climaxes]
                     except Exception as e:
                         print(f"⚠️ 合并页面加载失败: {e}")
-                        return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False)]
+                        return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), 5, 5]
+
 
                 demo.load(
                     combined_page_load,

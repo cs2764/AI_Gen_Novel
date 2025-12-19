@@ -6,12 +6,14 @@
 根据章节数自动调整剧情结构，支持从简单的三段式到复杂的多高潮结构
 """
 
-def generate_plot_structure(total_chapters):
+def generate_plot_structure(total_chapters, chapters_per_plot=None, num_climaxes=None):
     """
     根据总章节数生成动态剧情结构
     
     Args:
         total_chapters (int): 总章节数
+        chapters_per_plot (int, optional): 每个剧情单元的章节数，默认自动计算
+        num_climaxes (int, optional): 高潮总数，默认自动计算
         
     Returns:
         dict: 包含剧情结构信息的字典
@@ -25,10 +27,11 @@ def generate_plot_structure(total_chapters):
         return _generate_medium_structure(total_chapters)
     elif total_chapters <= 60:
         # 长篇：五段式结构（增加转折点）
-        return _generate_long_structure(total_chapters)
+        return _generate_long_structure(total_chapters, chapters_per_plot, num_climaxes)
     else:
-        # 超长篇：多高潮复杂结构
-        return _generate_epic_structure(total_chapters)
+        # 超长篇：多高潮复杂结构（使用用户自定义参数）
+        return _generate_epic_structure(total_chapters, chapters_per_plot, num_climaxes)
+
 
 def _generate_short_structure(total_chapters):
     """短篇小说结构（10章以内）"""
@@ -108,8 +111,14 @@ def _generate_medium_structure(total_chapters):
     }
     return structure
 
-def _generate_long_structure(total_chapters):
-    """长篇小说结构（31-60章）"""
+def _generate_long_structure(total_chapters, chapters_per_plot=None, num_climaxes=None):
+    """长篇小说结构（31-60章）
+    
+    Args:
+        total_chapters: 总章节数
+        chapters_per_plot: 每个剧情单元的章节数（可选，用于未来扩展）
+        num_climaxes: 高潮总数（可选，用于未来扩展）
+    """
     opening_chapters = max(3, total_chapters // 8)
     ending_chapters = max(2, total_chapters // 12)
     first_climax_chapters = max(2, total_chapters // 10)
@@ -169,27 +178,47 @@ def _generate_long_structure(total_chapters):
     }
     return structure
 
-def _generate_epic_structure(total_chapters):
+def _generate_epic_structure(total_chapters, chapters_per_plot=None, num_climaxes_param=None):
     """史诗级小说结构（60章以上）
     
     动态计算高潮数量，确保每10-15章有一个高潮，保持密集的剧情节奏。
     结构：史诗开篇 → [发展阶段 → 高潮] × N → 史诗收官
+    
+    Args:
+        total_chapters: 总章节数
+        chapters_per_plot: 每个剧情单元的章节数（用户自定义）
+        num_climaxes_param: 高潮总数（用户自定义）
     """
     # 基础配置
     opening_chapters = max(5, round(total_chapters * 0.07))
     ending_chapters = max(5, round(total_chapters * 0.07))
     
-    # 动态计算高潮点数量（每12-15章一个高潮，确保60章以上至少有5个高潮）
+    # 使用用户自定义的高潮数量，或自动计算
     available_chapters = total_chapters - opening_chapters - ending_chapters
-    num_climaxes = max(5, available_chapters // 12)  # 每12章一个高潮周期
+    if num_climaxes_param is not None and num_climaxes_param > 0:
+        # 用户自定义高潮数量
+        num_climaxes = min(num_climaxes_param, max(1, available_chapters // 3))  # 确保合理范围
+        print(f"📊 使用用户自定义高潮数量: {num_climaxes}")
+    else:
+        # 自动计算：每12章一个高潮，确保60章以上至少有5个高潮
+        num_climaxes = max(5, available_chapters // 12)
     
-    # 每个高潮3-4章
-    climax_chapters_each = max(3, round(total_chapters * 0.03))
-    total_climax_chapters = num_climaxes * climax_chapters_each
-    
-    # 剩余章节分配给发展阶段
-    total_development_chapters = total_chapters - opening_chapters - total_climax_chapters - ending_chapters
-    development_chapters_each = max(5, total_development_chapters // num_climaxes)
+    # 使用用户自定义的剧情节奏计算发展阶段章节数
+    if chapters_per_plot is not None and chapters_per_plot > 0:
+        # 用户自定义每个剧情单元的章节数
+        development_chapters_each = max(3, chapters_per_plot)
+        print(f"📊 使用用户自定义剧情节奏: 每{development_chapters_each}章一个剧情单元")
+        # 每个高潮3-4章
+        climax_chapters_each = max(3, round(total_chapters * 0.03))
+        total_climax_chapters = num_climaxes * climax_chapters_each
+    else:
+        # 每个高潮3-4章
+        climax_chapters_each = max(3, round(total_chapters * 0.03))
+        total_climax_chapters = num_climaxes * climax_chapters_each
+        # 剩余章节分配给发展阶段
+        total_development_chapters = total_chapters - opening_chapters - total_climax_chapters - ending_chapters
+        development_chapters_each = max(5, total_development_chapters // num_climaxes)
+
     
     structure = {
         "type": f"多高潮史诗结构（{num_climaxes}个发展阶段 + {num_climaxes}个高潮）",

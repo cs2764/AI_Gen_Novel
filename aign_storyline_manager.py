@@ -850,69 +850,112 @@ class StorylineManager:
             print(f"   原因: {batch.get('error', '未知错误')}")
             
             try:
-                # 构建修复请求的提示词
-                repair_prompt = f"""
-根据以下故事设定，重新生成第{start_chapter}到第{end_chapter}章的详细故事线：
-
-用户想法：{getattr(self.aign, 'user_idea', '')}
-写作要求：{getattr(self.aign, 'user_requirements', '')}
-润色要求：{getattr(self.aign, 'embellishment_idea', '')}
-总章节数：{self.aign.target_chapter_count}
-
-请按照JSON格式生成第{start_chapter}-{end_chapter}章的故事线，每章包含：
-- chapter_number: 章节号
-- title: 章节标题
-- plot_summary: 详细剧情总结
-- key_events: 关键事件列表
-- character_development: 人物发展
-- chapter_mood: 章节氛围
-
-注意：这是修复生成，请确保章节编号连续且符合整体故事脉络。
-"""
+                # 准备输入（复用 _build_storyline_prompt 所需的格式）
+                # 获取当前大纲
+                if hasattr(self.aign, 'getCurrentOutline'):
+                    current_outline = self.aign.getCurrentOutline()
+                else:
+                    current_outline = getattr(self.aign, 'novel_outline', '')
                 
-                # 调用AI生成修复内容
-                resp = self.storyline_generator.query_with_json_repair(repair_prompt)
+                inputs = {
+                    "大纲": current_outline,
+                    "人物列表": getattr(self.aign, 'character_list', ''),
+                    "用户想法": getattr(self.aign, 'user_idea', ''),
+                    "写作要求": getattr(self.aign, 'user_requirements', ''),
+                    "章节范围": f"{start_chapter}-{end_chapter}章"
+                }
                 
-                if 'parsed_json' in resp:
-                    batch_storyline = resp['parsed_json']
+                # 如果有详细大纲，也一同发送给AI提供更多上下文
+                if getattr(self.aign, 'detailed_outline', '') and self.aign.detailed_outline != getattr(self.aign, 'novel_outline', ''):
+                    inputs["详细大纲"] = self.aign.detailed_outline
+                
+                # 如果有前置故事线，加入上下文
+                if self.aign.storyline and self.aign.storyline.get("chapters"):
+                    prev_storyline = self._format_prev_storyline(self.aign.storyline["chapters"][-5:])
+                    inputs["前置故事线"] = prev_storyline
+                
+                # 使用 _build_storyline_prompt 构建提示词（会自动处理长章节模式）
+                repair_prompt, segment_count = self._build_storyline_prompt(inputs, start_chapter, end_chapter)
+                
+                # 添加修复说明
+                repair_prompt += f"\n\n**注意：这是修复生成，请确保章节编号连续且符合整体故事脉络。**"
+                
+                print(f"🔧 修复提示词构建完成，长章节模式: {'需要' + str(segment_count) + '段' if segment_count > 0 else '不需要分段'}")
+                
+                # 尝试使用增强的故事线生成器
+                try:
+                    from enhanced_storyline_generator import EnhancedStorylineGenerator
+                    enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM)
                     
-                    # 验证生成的故事线
-                    validation_result = self._validate_storyline_batch(batch_storyline, start_chapter, end_chapter)
+                    messages = [{"role": "user", "content": repair_prompt}]
+                    require_segments = segment_count > 0
                     
-                    if validation_result["valid"]:
-                        # 找到并替换现有故事线中对应的章节
-                        existing_chapters = self.aign.storyline.get("chapters", [])
-                        
-                        # 移除旧的失败章节
-                        self.aign.storyline["chapters"] = [
-                            ch for ch in existing_chapters 
-                            if not (start_chapter <= ch.get('chapter_number', 0) <= end_chapter)
-                        ]
-                        
-                        # 添加修复后的章节
-                        new_chapters = batch_storyline.get("chapters", [])
-                        self.aign.storyline["chapters"].extend(new_chapters)
-                        
-                        # 按章节号重新排序
-                        self.aign.storyline["chapters"].sort(key=lambda item: item.get("chapter_number", 0))
-                        
-                        print(f"✅ 第{start_chapter}-{end_chapter}章修复成功")
-                        print(f"   修复章节数：{len(new_chapters)}")
-                        repaired_batches += 1
-                    else:
-                        print(f"❌ 第{start_chapter}-{end_chapter}章验证失败: {validation_result['error']}")
+                    print(f"🚀 使用增强生成器进行修复...")
+                    batch_storyline, generation_status = enhanced_generator.generate_storyline_batch(
+                        messages=messages,
+                        temperature=0.8,
+                        require_segments=require_segments,
+                        segment_count=segment_count
+                    )
+                    
+                    if batch_storyline is None:
+                        error_msg = f"第{start_chapter}-{end_chapter}章修复生成失败: {generation_status}"
+                        print(f"❌ {error_msg}")
                         self.aign.failed_batches.append({
                             "start_chapter": start_chapter,
                             "end_chapter": end_chapter,
-                            "error": f"修复后验证失败: {validation_result['error']}"
+                            "error": generation_status
                         })
+                        continue
+                    
+                    print(f"✅ 增强生成器修复成功，使用方法: {generation_status}")
+                    
+                except ImportError:
+                    # 回退到标准生成方式
+                    print("⚠️ 增强故事线生成器不可用，使用标准生成方式")
+                    resp = self.storyline_generator.query_with_json_repair(repair_prompt)
+                    
+                    if 'parsed_json' in resp:
+                        batch_storyline = resp['parsed_json']
+                    else:
+                        error_msg = f"第{start_chapter}-{end_chapter}章修复生成失败"
+                        print(f"❌ {error_msg}")
+                        self.aign.failed_batches.append({
+                            "start_chapter": start_chapter,
+                            "end_chapter": end_chapter,
+                            "error": f"修复时生成失败: {resp.get('content', '未知错误')}"
+                        })
+                        continue
+                
+                # 验证生成的故事线
+                validation_result = self._validate_storyline_batch(batch_storyline, start_chapter, end_chapter)
+                
+                if validation_result["valid"]:
+                    # 找到并替换现有故事线中对应的章节
+                    existing_chapters = self.aign.storyline.get("chapters", [])
+                    
+                    # 移除旧的失败章节
+                    self.aign.storyline["chapters"] = [
+                        ch for ch in existing_chapters 
+                        if not (start_chapter <= ch.get('chapter_number', 0) <= end_chapter)
+                    ]
+                    
+                    # 添加修复后的章节
+                    new_chapters = batch_storyline.get("chapters", [])
+                    self.aign.storyline["chapters"].extend(new_chapters)
+                    
+                    # 按章节号重新排序
+                    self.aign.storyline["chapters"].sort(key=lambda item: item.get("chapter_number", 0))
+                    
+                    print(f"✅ 第{start_chapter}-{end_chapter}章修复成功")
+                    print(f"   修复章节数：{len(new_chapters)}")
+                    repaired_batches += 1
                 else:
-                    error_msg = f"第{start_chapter}-{end_chapter}章修复生成失败"
-                    print(f"❌ {error_msg}")
+                    print(f"❌ 第{start_chapter}-{end_chapter}章验证失败: {validation_result['error']}")
                     self.aign.failed_batches.append({
                         "start_chapter": start_chapter,
                         "end_chapter": end_chapter,
-                        "error": f"修复时生成失败: {resp.get('content', '未知错误')}"
+                        "error": f"修复后验证失败: {validation_result['error']}"
                     })
                     
             except Exception as e:
