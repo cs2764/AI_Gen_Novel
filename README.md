@@ -1,10 +1,28 @@
-﻿# 🤖 AI Novel Generator v3.7.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.9.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.8.0 (2025-12-19)
+## 🎉 What's New in v3.9.0 (2026-01-14)
+
+**Feature Optimization!** Compact Mode Prompt Structure Enhancement.
+
+### ✨ New Features | 新功能
+
+#### 🎨 Compact Mode Prompt Optimization
+- **Template Restructure**: Optimized prompt template structure in compact mode for better consistency
+- **Writer & Embellisher Enhancement**: Improved organization with clearer instruction hierarchy
+- **Applied to All Styles**: Optimization applied to all 40+ writing style prompt files
+
+### 🔧 Stability | 系统稳定性
+
+- **Security Verified**: Project passed gitleaks security scan with no sensitive data exposure
+- **Documentation Update**: Updated all documentation to 2026-01-14
+
+---
+
+## 📚 Previous Version: v3.8.0 (2025-12-19)
 
 **Feature Update!** Plot Compactness Control and Token Limit Optimization.
 
@@ -545,6 +563,7 @@ TEMPERATURE_SETTINGS = {
 - 🔧 [配置指南](README_Provider_Config.md) - AI提供商配置
 - 💾 [数据管理](LOCAL_DATA_MANAGEMENT.md) - 本地数据管理
 - 🏗️ [架构文档](ARCHITECTURE.md) - 系统架构设计
+- 🚀 [优化策略探索](docs/optimization_strategies/) - 下一步功能优化计划和可行性分析
 
 ## ❓ 常见问题
 
@@ -651,8 +670,25 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
+### 🎉 v3.9.0 版本更新 (2026-01-14)
 
-### 🎉 v3.8.0 版本更新 (2025-12-19)
+**功能优化！** 精简模式提示词结构增强。
+
+#### ✨ 新功能
+
+##### 🎨 精简模式提示词优化
+- **模板结构重构**：优化了精简模式下的提示词模板结构，提升生成一致性
+- **写手与润色增强**：改进了writer和embellisher提示词的组织方式
+- **适用所有风格**：优化应用于40+写作风格的所有提示词文件
+
+#### 🔧 系统稳定性
+
+- **安全检查通过**：项目通过gitleaks安全扫描，无敏感数据泄露风险
+- **文档更新**：更新版本信息和相关文档至2026-01-14
+
+---
+
+### 📚 上一版本：v3.8.0 (2025-12-19)
 
 **功能更新！** 剧情紧凑度控制与Token限制优化。
 

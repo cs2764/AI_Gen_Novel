@@ -1,5 +1,25 @@
 # 更新日志 | Changelog
 
+## [3.9.0] - 2026-01-14 🚀 功能优化 | Feature Optimization
+
+### ✨ 新功能与优化 | New Features & Optimizations
+
+#### 🎨 精简模式提示词优化 | Compact Mode Prompt Optimization
+- **模板结构重构**：优化了精简模式（compact mode）下的提示词模板结构，提升生成一致性
+- **Template Structure Refactoring**: Optimized prompt template structure in compact mode for better generation consistency
+- **写手与润色提示词增强**：改进了writer和embellisher提示词的组织方式，更清晰的指令层次
+- **Writer & Embellisher Enhancement**: Improved organization of writer and embellisher prompts with clearer instruction hierarchy
+- **适用所有风格**：优化应用于40+写作风格的所有提示词文件
+- **Applied to All Styles**: Optimization applied to all prompt files across 40+ writing styles
+
+### 🔧 系统稳定性 | System Stability
+- **安全检查通过**：项目通过gitleaks安全扫描，无敏感数据泄露风险
+- **Security Check Passed**: Project passed gitleaks security scan with no sensitive data exposure risks
+- **文档更新**：更新版本信息和相关文档至2026-01-14
+- **Documentation Update**: Updated version info and related documentation to 2026-01-14
+
+---
+
 ## [3.8.0] - 2025-12-19 🚀 功能更新 | Feature Update
 
 ### ✨ 新功能 | New Features

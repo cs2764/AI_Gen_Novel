@@ -97,6 +97,14 @@ LAMBDA_CONFIG = {
     "system_prompt": ""
 }
 
+# OpenAI兼容模式2配置 (Lambda2)
+LAMBDA2_CONFIG = {
+    "api_key": "your-lambda2-api-key-here",
+    "model_name": "llama-4-maverick-17b-128e-instruct-fp8",
+    "base_url": "https://api.lambda.ai/v1",
+    "system_prompt": ""
+}
+
 NOVEL_SETTINGS = {
     "default_chapters": 20,
     "enable_chapters": True,
@@ -165,6 +173,7 @@ NETWORK_SETTINGS = {
             'CLAUDE_CONFIG',
             'GROK_CONFIG',
             'LAMBDA_CONFIG',
+            'LAMBDA2_CONFIG',
             'SILICONFLOW_CONFIG'
         ]
         
@@ -181,7 +190,7 @@ NETWORK_SETTINGS = {
         # 验证当前提供商设置
         # lambda: OpenAI兼容模式
         provider = config_module.CURRENT_PROVIDER
-        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda", "siliconflow"]
+        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda", "lambda2", "siliconflow"]
         
         if provider not in valid_providers:
             if allow_incomplete:
@@ -204,6 +213,7 @@ NETWORK_SETTINGS = {
             "claude": config_module.CLAUDE_CONFIG,
             "grok": config_module.GROK_CONFIG,
             "lambda": config_module.LAMBDA_CONFIG,
+            "lambda2": config_module.LAMBDA2_CONFIG,
             "siliconflow": config_module.SILICONFLOW_CONFIG
         }
         
@@ -439,6 +449,14 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
                 system_prompt=provider_config.get('system_prompt', '')
             )
         elif provider == "lambda":
+            from uniai.lambdaAI import lambdaChatLLM
+            return lambdaChatLLM(
+                model_name=provider_config['model_name'],
+                api_key=provider_config['api_key'],
+                base_url=provider_config.get('base_url'),
+                system_prompt=provider_config.get('system_prompt', '')
+            )
+        elif provider == "lambda2":
             from uniai.lambdaAI import lambdaChatLLM
             return lambdaChatLLM(
                 model_name=provider_config['model_name'],

@@ -67,7 +67,7 @@ class AIGNUtilities:
         return last_paragraph
     
     def sanitize_generated_text(self, text: str) -> str:
-        """移除生成内容中的非正文结构标签、流程括注和指导性提示
+        """移除生成内容中的非正文结构标签、流程括注、特殊符号和格式问题
         
         清理规则：
         - 删除整行的括注标签（包含关键词如 场景/冲突/结果/对话推进/Scene/Sequel 等）
@@ -75,7 +75,10 @@ class AIGNUtilities:
         - 删除以"关键词："开头的说明性行
         - 删除字数统计和评估信息
         - 删除篇幅限制说明
-        - 合并多余空行
+        - 删除多余的硬空行（最多保留2个连续空行）
+        - 删除影响阅读的特殊符号和不可见字符
+        - 删除重复的标点符号
+        - 标准化行尾空白
         
         Args:
             text (str): 待清理的文本
@@ -85,6 +88,24 @@ class AIGNUtilities:
         """
         try:
             content = text
+            
+            # 0) 统一换行符为\n
+            content = content.replace('\r\n', '\n').replace('\r', '\n')
+            
+            # 0.1) 删除不可见的特殊字符（零宽字符、方向控制字符等）
+            # 零宽空格、零宽非断字符、零宽连接符、从右到左标记、从左到右标记、软连字符等
+            invisible_chars = '\u200b\u200c\u200d\u200e\u200f\ufeff\u00ad\u2060\u2061\u2062\u2063\u2064'
+            for char in invisible_chars:
+                content = content.replace(char, '')
+            
+            # 0.2) 删除常见的装饰性符号（仅当单独成行或行首/行尾有多个时删除）
+            # 删除仅由装饰符号组成的行
+            decorative_pattern = re.compile(r'^[\s★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※·•\-_=~＝～—─═※◆◇★☆►◄▶◀]+\s*$', re.M)
+            content = decorative_pattern.sub('', content)
+            
+            # 0.3) 删除行首行尾的装饰性符号（但保留正文内容）
+            content = re.sub(r'^[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*', '', content, flags=re.M)
+            content = re.sub(r'[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*$', '', content, flags=re.M)
             
             # 1) 删除整行结构化括注
             pattern_full_line = re.compile(
@@ -136,10 +157,36 @@ class AIGNUtilities:
             )
             content = pattern_bullet_wc.sub("", content)
             
-            # 5) 合并多余空行（最多保留 2 个连续空行）
-            content = re.sub(r"\n{3,}", "\n\n", content)
+            # 5) 清理重复标点符号
+            # 多个连续的句号合并为一个（中文和英文）
+            content = re.sub(r'。{2,}', '。', content)
+            content = re.sub(r'\.{4,}', '...', content)  # 保留省略号风格的三点
+            # 多个连续的逗号合并为一个
+            content = re.sub(r'，{2,}', '，', content)
+            content = re.sub(r',{2,}', ',', content)
+            # 多个连续的感叹号或问号限制为最多三个
+            content = re.sub(r'！{4,}', '！！！', content)
+            content = re.sub(r'\!{4,}', '!!!', content)
+            content = re.sub(r'？{4,}', '？？？', content)
+            content = re.sub(r'\?{4,}', '???', content)
+            # 多个省略号合并
+            content = re.sub(r'…{2,}', '……', content)
+            content = re.sub(r'\.\.\.\.+', '...', content)
             
-            return content.strip()
+            # 6) 删除每行行尾的空白字符
+            content = re.sub(r'[ \t]+$', '', content, flags=re.M)
+            
+            # 7) 删除每行行首的多余空白（保留段落缩进，通常是2个中文全角空格）
+            # 只删除超过4个空格/Tab的行首空白
+            content = re.sub(r'^[ \t]{5,}', '    ', content, flags=re.M)
+            
+            # 8) 合并多余空行（最多保留2个连续空行）
+            content = re.sub(r'\n{3,}', '\n\n', content)
+            
+            # 9) 删除文章开头和结尾的空白行
+            content = content.strip()
+            
+            return content
         
         except Exception as e:
             print(f"⚠️ 文本清理失败: {e}")

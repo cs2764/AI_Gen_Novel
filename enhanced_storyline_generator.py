@@ -13,8 +13,9 @@ from typing import Dict, List, Any, Optional, Tuple
 class EnhancedStorylineGenerator:
     """增强的故事线生成器，支持OpenRouter的structured outputs和tool calling"""
 
-    def __init__(self, chatLLM):
+    def __init__(self, chatLLM, aign_instance=None):
         self.chatLLM = chatLLM
+        self.aign_instance = aign_instance  # 用于更新实时数据流窗口
         self.max_retries = 2
         self.provider_name = self._detect_provider()
         
@@ -59,8 +60,65 @@ class EnhancedStorylineGenerator:
     
     def _supports_tool_calling(self):
         """检查当前提供商是否支持工具调用（但可能有格式限制）"""
-        # 只有OpenRouter支持工具调用，LM Studio已禁用tool calling
-        return self.provider_name in ["openrouter"]
+        # OpenRouter和LM Studio支持工具调用
+        # LM Studio需要使用支持function calling的模型（如Qwen2.5, Llama 3.1+, Mistral等）
+        return self.provider_name in ["openrouter", "lmstudio"]
+    
+    def _update_stream_display(self, content, method_name="故事线生成"):
+        """更新实时数据流窗口显示
+        
+        Args:
+            content: 要显示的内容（可以是字符串或字典）
+            method_name: 当前使用的生成方法名称
+        """
+        if not self.aign_instance:
+            return
+        
+        try:
+            # 使用非流式内容设置方法（因为我们使用的是非流式API调用）
+            if hasattr(self.aign_instance, 'set_non_stream_content'):
+                # 构建显示内容
+                display_content = f"📖 {method_name}\\n"
+                display_content += "━" * 40 + "\\n"
+                
+                # 如果内容是字典，格式化显示章节信息
+                data = content if isinstance(content, dict) else None
+                if data is None and isinstance(content, str):
+                    try:
+                        data = json.loads(content)
+                    except:
+                        data = None
+                
+                if isinstance(data, dict) and 'chapters' in data:
+                    chapters = data['chapters']
+                    display_content += f"✅ 成功生成 {len(chapters)} 章故事线\\n\\n"
+                    for chapter in chapters[:5]:  # 最多显示5章
+                        ch_num = chapter.get('chapter_number', '?')
+                        ch_title = chapter.get('title', '未知标题')
+                        ch_summary = chapter.get('plot_summary', '')[:80]
+                        display_content += f"第{ch_num}章: {ch_title}\\n"
+                        display_content += f"   └ {ch_summary}...\\n\\n"
+                    if len(chapters) > 5:
+                        display_content += f"... 还有 {len(chapters) - 5} 章\\n"
+                else:
+                    # 非章节格式，显示原始内容预览
+                    content_str = str(content) if not isinstance(content, str) else content
+                    display_content += content_str[:500] + ("..." if len(content_str) > 500 else "")
+                
+                content_len = len(str(content)) if content else 0
+                self.aign_instance.set_non_stream_content(
+                    display_content,
+                    method_name,
+                    content_len
+                )
+            
+            # 同时记录日志
+            if hasattr(self.aign_instance, 'log_message'):
+                content_len = len(str(content)) if content else 0
+                self.aign_instance.log_message(f"📖 {method_name}: 生成了 {content_len} 字符的内容")
+                
+        except Exception as e:
+            print(f"⚠️ 更新流式窗口失败: {e}")
 
     def _save_error_data(self, error_type: str, original_messages: List[Dict[str, str]],
                         response_content: str, error_details: str, attempt_number: int = 1):
@@ -724,6 +782,9 @@ class EnhancedStorylineGenerator:
                     # 使用统一的调试方法检查章节数量
                     self._debug_chapter_count(data, expected_count, "Structured Outputs")
                     
+                    # 更新实时数据流窗口
+                    self._update_stream_display(data, "Structured Outputs生成故事线")
+                    
                     return data, "structured_output_success"
                 except json.JSONDecodeError as e:
                     print(f"⚠️ Structured Outputs返回内容无法解析: {e}")
@@ -766,10 +827,12 @@ class EnhancedStorylineGenerator:
             print(f"🔢 期望生成章节数: {expected_count}")
 
             # 根据提供商调整tool_choice格式
-            # 注意：LM Studio已在_supports_tool_calling中被禁用，此代码仅为备用
+            # LM Studio和OpenRouter都支持对象格式的tool_choice
+            # 参考: https://lmstudio.ai/docs/developer/openai-compat/tools
             if self.provider_name == "lmstudio":
-                # LM Studio只支持字符串格式的tool_choice
-                tool_choice_param = "auto"  # 使用auto让模型自动选择工具
+                # LM Studio支持 "auto", "none", 或对象格式
+                # 使用对象格式强制调用特定函数
+                tool_choice_param = {"type": "function", "function": {"name": "generate_storyline_batch"}}
             else:
                 # OpenRouter和其他提供商支持对象格式
                 tool_choice_param = {"type": "function", "function": {"name": "generate_storyline_batch"}}
@@ -798,6 +861,10 @@ class EnhancedStorylineGenerator:
                             # 使用统一的调试方法检查章节数量
                             self._debug_chapter_count(data, expected_count, "Tool Calling")
                             self._record_success("tool_calling_success")
+                            
+                            # 更新实时数据流窗口
+                            self._update_stream_display(data, "Tool Calling生成故事线")
+                            
                             return data, "tool_calling_success"
                         except json.JSONDecodeError as e:
                             print(f"⚠️ Tool Calling参数无法解析: {e}")
@@ -880,6 +947,10 @@ class EnhancedStorylineGenerator:
                             expected_count = self._extract_chapter_count_from_messages(messages)
                             self._debug_chapter_count(data, expected_count, f"传统方法(第{retry+1}次)")
                             self._record_success(f"traditional_success_attempt_{retry+1}")
+                            
+                            # 更新实时数据流窗口
+                            self._update_stream_display(data, f"传统方法(第{retry+1}次)生成故事线")
+                            
                             return data, f"traditional_success_attempt_{retry+1}"
                         else:
                             print(f"⚠️ JSON格式正确但结构不符合要求")
@@ -900,6 +971,10 @@ class EnhancedStorylineGenerator:
                         # 记录成功案例
                         self._log_successful_generation("enhanced_json_repair", retry + 1, fixed_data)
                         self._record_success("enhanced_json_repair")
+                        
+                        # 更新实时数据流窗口
+                        self._update_stream_display(fixed_data, f"JSON修复(第{retry+1}次)生成故事线")
+                        
                         return fixed_data, f"enhanced_json_repair_success_attempt_{retry+1}"
                     else:
                         print(f"❌ 第{retry+1}次尝试增强JSON修复失败")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 模型获取器 - 从各个AI提供商API获取实时模型列表
-支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Grok, SiliconFlow
+支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Lambda2, Grok, SiliconFlow
 """
 
 import requests
@@ -51,7 +51,7 @@ class ModelFetcher:
         从指定提供商获取模型列表
         
         Args:
-            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, grok, siliconflow)
+            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, lambda2, grok, siliconflow)
             api_key: API密钥
             **kwargs: 其他参数
             
@@ -81,6 +81,8 @@ class ModelFetcher:
                 return self._fetch_fireworks_models(api_key, **kwargs)
             elif provider == 'lambda':
                 return self._fetch_lambda_models(api_key, **kwargs)
+            elif provider == 'lambda2':
+                return self._fetch_lambda2_models(api_key, **kwargs)
             elif provider == 'grok':
                 return self._fetch_grok_models(api_key, **kwargs)
             elif provider == 'siliconflow':
@@ -430,6 +432,69 @@ class ModelFetcher:
                 provider='lambda',
                 owned_by='lambda',
                 description='Lambda/OpenAI兼容模式'
+            ))
+        
+        return models
+    
+    def _fetch_lambda2_models(self, api_key: str, base_url: str = "https://api.lambda.ai/v1") -> List[ModelInfo]:
+        """获取Lambda2 (OpenAI兼容模式2) 模型列表"""
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            response = self.session.get(f"{base_url}/models", headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            for model_data in data.get('data', []):
+                models.append(ModelInfo(
+                    id=model_data.get('id', ''),
+                    name=model_data.get('id', ''),
+                    provider='lambda2',
+                    created_at=str(model_data.get('created', '')),
+                    owned_by=model_data.get('owned_by', 'lambda'),
+                    description='Lambda2/OpenAI兼容模式2'
+                ))
+            
+            if models:
+                return models
+            else:
+                # 如果API返回空列表，使用默认模型列表
+                return self._get_default_lambda2_models()
+                
+        except Exception as e:
+            logger.warning(f"获取Lambda2模型列表失败: {e}，使用默认列表")
+            return self._get_default_lambda2_models()
+    
+    def _get_default_lambda2_models(self) -> List[ModelInfo]:
+        """获取Lambda2默认模型列表（当API请求失败时使用）"""
+        known_models = [
+            "llama-4-maverick-17b-128e-instruct-fp8",
+            "llama-4-scout-17b-16e-instruct",
+            "deepseek-r1-0528",
+            "deepseek-v3-0324",
+            "llama3.1-8b-instruct",
+            "llama3.1-70b-instruct-fp8",
+            "llama3.1-405b-instruct-fp8",
+            "llama3.3-70b-instruct-fp8",
+            "qwen3-32b-fp8",
+            "hermes3-8b",
+            "hermes3-70b",
+            "hermes3-405b"
+        ]
+        
+        models = []
+        for model_id in known_models:
+            models.append(ModelInfo(
+                id=model_id,
+                name=model_id,
+                provider='lambda2',
+                owned_by='lambda',
+                description='Lambda2/OpenAI兼容模式2'
             ))
         
         return models

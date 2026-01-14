@@ -43,6 +43,7 @@ STYLE_MAPPING = {
     "幼儿故事": "youer",
     "儿童绘本": "ertong_huiben",
     "儿童童话": "ertong_tonghua",
+    "金庸武侠": "jinyong",
 }
 
 def get_style_choices():

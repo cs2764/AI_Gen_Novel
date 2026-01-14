@@ -542,7 +542,15 @@ class MarkdownAgent:
             final_result = None
             accumulated_content = ""
             stream_successful = False
-            min_content_length = 50  # 最小内容长度阈值
+            
+            # 根据智能体类型设置不同的最小内容长度阈值
+            # TitleGenerator等短输出智能体需要较低的阈值
+            short_output_agents = ['TitleGenerator', 'TitleGeneratorJSON']
+            if self.name in short_output_agents:
+                min_content_length = 5  # 标题只需要5个字符即可
+            else:
+                min_content_length = 50  # 其他智能体需要50个字符
+            
             chunk_count = 0  # 记录接收到的数据块数量
             last_chunk_time = time.time()  # 记录最后接收数据块的时间
 
@@ -581,14 +589,21 @@ class MarkdownAgent:
                     # 检查内容是否包含成功标记
                     has_success_marker = any(marker in accumulated_content for marker in success_markers)
                     
-                    # 检查内容长度是否足够
-                    has_sufficient_length = len(accumulated_content) > 200
+                    # 检查内容长度是否足够（对短输出智能体使用不同的阈值）
+                    is_short_output_agent = self.name in short_output_agents
+                    if is_short_output_agent:
+                        has_sufficient_length = len(accumulated_content) >= min_content_length  # 标题等短内容只需满足最小长度
+                    else:
+                        has_sufficient_length = len(accumulated_content) > 200
                     
                     # 检查内容是否看起来完整（不是被截断的）
                     looks_complete = not accumulated_content.endswith('...') and not accumulated_content.endswith('..')
                     
-                    # 检查是否接收到足够的数据块
-                    has_enough_chunks = chunk_count >= 3  # 至少接收到3个数据块
+                    # 检查是否接收到足够的数据块（对短输出智能体放宽要求）
+                    if is_short_output_agent:
+                        has_enough_chunks = chunk_count >= 1  # 短输出只需1个数据块
+                    else:
+                        has_enough_chunks = chunk_count >= 3  # 至少接收到3个数据块
                     
                     # 检查是否在合理时间内完成
                     completion_time = time.time() - last_chunk_time
@@ -598,7 +613,8 @@ class MarkdownAgent:
                     success_criteria = [
                         has_success_marker,
                         (has_sufficient_length and looks_complete and has_enough_chunks),
-                        (len(accumulated_content) > 500)  # 如果内容很长，直接认为成功
+                        (len(accumulated_content) > 500),  # 如果内容很长，直接认为成功
+                        (is_short_output_agent and len(accumulated_content) >= min_content_length)  # 短输出智能体特殊通道
                     ]
                     
                     if any(success_criteria) and reasonable_time:
@@ -795,6 +811,10 @@ class MarkdownAgent:
     def getOutput(self, input_content: str, output_keys: list) -> dict:
         """解析类md格式中 # key 的内容，未解析全部output_keys中的key会报错
         
+        支持两种格式：
+        1. # key 格式（markdown标题）
+        2. ===key=== 格式（非markdown标记）
+        
         Args:
             input_content: 输入内容
             output_keys: 期望输出的键列表
@@ -805,20 +825,62 @@ class MarkdownAgent:
         resp = self.query(input_content)
         output = resp["content"]
 
-        lines = output.split("\n")
         sections = {}
+        
+        # 首先尝试解析 ===key=== 格式（用于润色器输出）
+        # 定义可能的key映射关系
+        key_mappings = {
+            "润色内容": ["润色结果", "润色后内容", "润色文本"],
+            "润色结果": ["润色内容", "润色后内容", "润色文本"],
+        }
+        
+        for expected_key in output_keys:
+            # 获取所有可能的key名称（包括expected_key本身）
+            possible_keys = [expected_key]
+            if expected_key in key_mappings:
+                possible_keys.extend(key_mappings[expected_key])
+            
+            # 尝试每个可能的key
+            for key_name in possible_keys:
+                start_marker = f"==={key_name}==="
+                end_marker = "===END==="
+                
+                if start_marker in output:
+                    start_pos = output.find(start_marker) + len(start_marker)
+                    end_pos = output.find(end_marker, start_pos) if end_marker in output[start_pos:] else len(output)
+                    
+                    content = output[start_pos:end_pos].strip()
+                    if content:
+                        sections[expected_key] = content
+                        if key_name != expected_key:
+                            print(f"🔄 格式转换：'{start_marker}' → '{expected_key}'")
+                        break
+        
+        # 如果 ===key=== 格式解析没有找到所有key，继续使用 # key 格式解析
+        lines = output.split("\n")
         current_section = ""
         for line in lines:
-            if line.startswith("# ") or line.startswith(" # "):
-                # new key
+            if line.startswith("# "):
+                # new key - 直接从 "# " 后截取
                 current_section = line[2:].strip()
-                sections[current_section] = []
+                if current_section not in sections:  # 不覆盖已解析的内容
+                    sections[current_section] = []
+            elif line.lstrip().startswith("# "):
+                # new key - 先去除前导空格再截取
+                stripped_line = line.lstrip()
+                current_section = stripped_line[2:].strip()
+                if current_section not in sections:  # 不覆盖已解析的内容
+                    sections[current_section] = []
             else:
                 # add content to current key
-                if current_section:
+                # 仅当current_section是列表类型时才添加内容（跳过已从===格式解析的内容）
+                if current_section and isinstance(sections.get(current_section), list):
                     sections[current_section].append(line.strip())
+        
+        # 将列表转换为字符串
         for key in sections.keys():
-            sections[key] = "\n".join(sections[key]).strip()
+            if isinstance(sections[key], list):
+                sections[key] = "\n".join(sections[key]).strip()
 
         # 智能解析：处理AI直接把内容放在key位置的情况
         for k in output_keys:
@@ -845,6 +907,19 @@ class MarkdownAgent:
         Returns:
             str: 匹配到的内容，如果没有匹配则返回None
         """
+        # 定义等效key映射（双向匹配）
+        equivalent_keys = {
+            "润色结果": ["润色内容", "润色后内容", "润色文本"],
+            "润色内容": ["润色结果", "润色后内容", "润色文本"],
+        }
+        
+        # 首先尝试等效key匹配
+        if expected_key in equivalent_keys:
+            for alt_key in equivalent_keys[expected_key]:
+                if alt_key in sections and len(sections[alt_key]) > 0:
+                    print(f"🔄 等效Key匹配：'{alt_key}' → '{expected_key}'")
+                    return sections[alt_key]
+        
         # 特殊处理：标题生成器的情况
         if expected_key == "标题":
             # 查找所有以 # 开头的行，排除 END

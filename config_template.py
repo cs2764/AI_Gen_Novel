@@ -44,12 +44,23 @@ GROK_API_KEY = "your_grok_api_key_here"
 GROK_BASE_URL = "https://api.x.ai/v1"
 
 # OpenAI兼容模式配置 (Lambda AI)
-# 提供OpenAI兼容的API服务，支持多种开源模型
-LAMBDA_API_KEY = "your_lambda_api_key_here"
-LAMBDA_BASE_URL = "https://api.lambda.ai/v1"
+LAMBDA_CONFIG = {
+    "api_key": "your-lambda-api-key-here",
+    "model_name": "llama-4-maverick-17b-128e-instruct-fp8",
+    "base_url": "https://api.lambda.ai/v1",
+    "system_prompt": ""
+}
 
-# SiliconFlow配置
-# 国内GPU云服务商，支持多种开源模型
+# OpenAI兼容模式2配置 (Lambda AI 备用)
+# 可用于配置第二个Lambda账户或其他OpenAI兼容的API服务
+LAMBDA2_CONFIG = {
+    "api_key": "your-lambda2-api-key-here",
+    "model_name": "llama-4-maverick-17b-128e-instruct-fp8",
+    "base_url": "https://api.lambda.ai/v1",
+    "system_prompt": ""
+}
+
+# SiliconFlow配置 (SiliconFlow AI)国内GPU云服务商，支持多种开源模型
 SILICONFLOW_API_KEY = "your_siliconflow_api_key_here"
 SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
 
@@ -132,6 +143,7 @@ FILE_CONFIG = {
 • Fireworks: https://fireworks.ai/
 • Grok: https://console.x.ai/
 • Lambda (OpenAI兼容模式): https://lambda.ai/
+• Lambda2 (OpenAI兼容模式2): 第二个Lambda账户或其他OpenAI兼容服务
 • SiliconFlow: https://siliconflow.cn/
 
 🛡️ 安全提醒：

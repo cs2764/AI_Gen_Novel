@@ -229,11 +229,17 @@ class TTSFileProcessor:
             response = llm_response.get("content", "") if isinstance(llm_response, dict) else str(llm_response)
             
             if response and response.strip():
-                # 提取润色结果部分
-                if "# 润色结果" in response:
+                # 提取润色结果部分 (支持新旧两种标记格式)
+                start_marker = None
+                end_marker = None
+                if "===润色结果===" in response:
+                    start_marker = "===润色结果==="
+                    end_marker = "===END==="
+                elif "# 润色结果" in response:
                     start_marker = "# 润色结果"
                     end_marker = "# END"
-                    
+                
+                if start_marker:
                     start_pos = response.find(start_marker)
                     if start_pos != -1:
                         start_pos += len(start_marker)

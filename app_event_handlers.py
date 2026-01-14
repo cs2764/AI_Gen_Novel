@@ -693,14 +693,44 @@ def bind_main_events(
                 gen_thread.start()
                 
                 update_counter = 0
-                max_wait_time = 1800  # 30分钟超时（与API设置一致）
+                # 改进的超时机制：基于进度停滞而非累积时间
+                # 动态计算最大等待时间：基础时间 + 每章额外时间
+                base_wait_time = 600  # 基础等待时间10分钟
+                per_chapter_time = 30  # 每章额外30秒
+                max_wait_time = base_wait_time + (a.target_chapter_count * per_chapter_time)
+                max_wait_time = min(max_wait_time, 7200)  # 上限2小时
+                
+                # 进度停滞超时：如果10分钟内没有新章节生成，才认为超时
+                stall_timeout = 600  # 10分钟无进度则超时
+                last_progress_time = time.time()  # 最后一次有进度的时间
                 last_chapter_count = 0
                 is_timeout = False  # 标记是否因超时退出循环
                 
+                print(f"📊 超时设置: 动态最大等待={max_wait_time}秒, 停滞超时={stall_timeout}秒")
+                
                 while gen_thread.is_alive():
+                    # 检查进度停滞超时（而非累积时间超时）
+                    storyline_dict = getattr(a, 'storyline', {}) or {}
+                    current_chapter_count = len(storyline_dict.get('chapters', [])) if storyline_dict else 0
+                    
+                    # 如果章节数有变化，重置停滞计时器
+                    if current_chapter_count > last_chapter_count:
+                        last_progress_time = time.time()
+                        print(f"📈 进度更新: {last_chapter_count} -> {current_chapter_count} 章")
+                    
+                    # 检查是否停滞超时
+                    time_since_last_progress = time.time() - last_progress_time
+                    if time_since_last_progress > stall_timeout:
+                        timeout_timestamp = datetime.now().strftime("%H:%M:%S")
+                        status_history.append(["系统", f"⚠️ 生成停滞超时 (已{int(time_since_last_progress/60)}分钟无新进度)", timeout_timestamp, generation_start_time])
+                        is_timeout = True
+                        break
+                    
+                    # 仍保留总时间上限检查，但大幅增加
                     if time.time() - start_time > max_wait_time:
                         timeout_timestamp = datetime.now().strftime("%H:%M:%S")
-                        status_history.append(["系统", "⚠️ 生成超时", timeout_timestamp, generation_start_time])
+                        total_elapsed = int(time.time() - start_time)
+                        status_history.append(["系统", f"⚠️ 达到最大等待时间 ({total_elapsed//60}分钟)", timeout_timestamp, generation_start_time])
                         is_timeout = True
                         break
                     
@@ -709,14 +739,16 @@ def bind_main_events(
                         elapsed_time = int(time.time() - start_time)
                         current_timestamp = datetime.now().strftime("%H:%M:%S")
                         
-                        storyline_dict = getattr(a, 'storyline', {}) or {}
-                        chapter_count = len(storyline_dict.get('chapters', [])) if storyline_dict else 0
+                        # 使用已获取的 current_chapter_count，避免重复获取
+                        chapter_count = current_chapter_count
                         
                         # 只有章节数变化或每10秒强制更新一次时才 yield
                         should_update = (chapter_count != last_chapter_count) or (update_counter % 20 == 0)
                         
                         if should_update:
-                            status_text = f"🗂️ 正在生成故事线...\n   • 目标: {a.target_chapter_count}章\n   • 已生成: {chapter_count}章\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                            # 显示剩余时间估计和停滞检测信息
+                            stall_info = f"\n   • 进度检测: {int(time_since_last_progress)}秒" if time_since_last_progress > 60 else ""
+                            status_text = f"🗂️ 正在生成故事线...\n   • 目标: {a.target_chapter_count}章\n   • 已生成: {chapter_count}章\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}{stall_info}"
                             
                             stage_found = False
                             for i, item in enumerate(status_history):
@@ -740,6 +772,7 @@ def bind_main_events(
                                 f"生成中... {chapter_count}/{a.target_chapter_count}章"
                             )
                             
+                            # 更新 last_chapter_count 用于下次 UI 更新比较
                             last_chapter_count = chapter_count
                     
                     update_counter += 1
@@ -841,14 +874,40 @@ def bind_main_events(
                 gen_thread.start()
                 
                 update_counter = 0
-                max_wait_time = 1800  # 30分钟超时（与API设置一致）
+                # 改进的超时机制：基于进度停滞而非累积时间
+                base_wait_time = 600  # 基础等待时间10分钟
+                per_chapter_time = 30  # 每章额外30秒
+                max_wait_time = base_wait_time + (a.target_chapter_count * per_chapter_time)
+                max_wait_time = min(max_wait_time, 7200)  # 上限2小时
+                
+                # 进度停滞超时：如果10分钟内没有新章节生成，才认为超时
+                stall_timeout = 600  # 10分钟无进度则超时
+                last_progress_time = time.time()
                 last_chapter_count = 0
                 is_timeout = False  # 标记是否因超时退出循环
                 
+                print(f"📊 超时设置: 动态最大等待={max_wait_time}秒, 停滞超时={stall_timeout}秒")
+                
                 while gen_thread.is_alive():
+                    # 检查进度停滞超时
+                    storyline_dict = getattr(a, 'storyline', {}) or {}
+                    current_chapter_count = len(storyline_dict.get('chapters', [])) if storyline_dict else 0
+                    
+                    # 如果章节数有变化，重置停滞计时器
+                    if current_chapter_count > last_chapter_count:
+                        last_progress_time = time.time()
+                    
+                    time_since_last_progress = time.time() - last_progress_time
+                    if time_since_last_progress > stall_timeout:
+                        timeout_timestamp = datetime.now().strftime("%H:%M:%S")
+                        status_history.append(["系统", f"⚠️ 生成停滞超时 (已{int(time_since_last_progress/60)}分钟无新进度)", timeout_timestamp, generation_start_time])
+                        is_timeout = True
+                        break
+                    
                     if time.time() - start_time > max_wait_time:
                         timeout_timestamp = datetime.now().strftime("%H:%M:%S")
-                        status_history.append(["系统", "⚠️ 生成超时", timeout_timestamp, generation_start_time])
+                        total_elapsed = int(time.time() - start_time)
+                        status_history.append(["系统", f"⚠️ 达到最大等待时间 ({total_elapsed//60}分钟)", timeout_timestamp, generation_start_time])
                         is_timeout = True
                         break
                     
@@ -857,14 +916,14 @@ def bind_main_events(
                         elapsed_time = int(time.time() - start_time)
                         current_timestamp = datetime.now().strftime("%H:%M:%S")
                         
-                        storyline_dict = getattr(a, 'storyline', {}) or {}
-                        chapter_count = len(storyline_dict.get('chapters', [])) if storyline_dict else 0
+                        chapter_count = current_chapter_count
                         
                         # 只有章节数变化或每10秒强制更新一次时才 yield
                         should_update = (chapter_count != last_chapter_count) or (update_counter % 20 == 0)
                         
                         if should_update:
-                            status_text = f"🗂️ 正在生成故事线...\n   • 目标: {a.target_chapter_count}章\n   • 已生成: {chapter_count}章\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                            stall_info = f"\n   • 进度检测: {int(time_since_last_progress)}秒" if time_since_last_progress > 60 else ""
+                            status_text = f"🗂️ 正在生成故事线...\n   • 目标: {a.target_chapter_count}章\n   • 已生成: {chapter_count}章\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}{stall_info}"
                             
                             stage_found = False
                             for i, item in enumerate(status_history):
@@ -1577,7 +1636,6 @@ def bind_main_events(
                 outputs=[progress_text, output_file_text, components.get('novel_content_text')]
             )
         
-        # 绑定自动保存数据导入按钮
         if 'import_auto_saved_button' in components:
             components['import_auto_saved_button'].click(
                 fn=import_auto_saved_data_handler,
@@ -1594,7 +1652,9 @@ def bind_main_events(
                     detailed_outline_text,
                     storyline_text,
                     components.get('long_chapter_mode_dropdown'),
-                    components.get('style_dropdown')
+                    components.get('style_dropdown'),
+                    components.get('chapters_per_plot_slider'),
+                    components.get('num_climaxes_slider')
                 ]
             )
         

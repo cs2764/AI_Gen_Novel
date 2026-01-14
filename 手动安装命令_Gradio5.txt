@@ -15,7 +15,7 @@ python -m venv gradio5_env
 
 # 3. 激活虚拟环境
 # Windows:
-gradio5_env\Scripts\activate.bat
+gradio5_env/Scripts/Activate.ps1
 # Linux/Mac:
 source gradio5_env/bin/activate
 

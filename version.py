@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "3.8.0"
+__version__ = "3.9.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2025-12-19)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-01-14)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -30,7 +30,7 @@ VERSION_INFO = {
         "完善的参数验证",
         "类型安全的组件绑定",
         "简洁优化的用户界面",
-        "API超时扩展至20分钟",
+        "API超时扩展至30分钟",
         "自动刷新功能默认开启",
         "生成按钮智能状态管理",
         "完善的安全措施和隐私保护",
@@ -41,7 +41,9 @@ VERSION_INFO = {
         "日期更新和系统文档",
         "测试文件组织和管理",
         "安全检查和隐私保护",
-        "双语文档支持"
+        "双语文档支持",
+        "40+写作风格提示词系统",
+        "精简模式提示词结构优化"
     ],
     "ai_providers": [
         "OpenRouter",

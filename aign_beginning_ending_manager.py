@@ -155,9 +155,9 @@ class BeginningEndingManager:
                 "润色要求": getattr(self.aign, 'embellishment_idea', ''),
                 "要润色的内容": beginning,
             },
-            output_keys=["润色结果"],
+            output_keys=["润色内容"],
         )
-        beginning = resp["润色结果"]
+        beginning = resp["润色内容"]
         print(f"✅ 开头润色完成，最终长度：{len(beginning)}字符")
         
         # 清理可能混入的结构化标签或非正文括注

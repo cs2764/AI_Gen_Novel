@@ -811,10 +811,11 @@ def create_gradio5_original_app():
         with gr.Row():
             # 左侧列 (scale=2, 对应原版row1)
             with gr.Column(scale=2, elem_id="row1"):
-                # 保持原版的Tab结构
-                with gr.Tab("开始"):
-                    with gr.Accordion("💡 创意输入 - 功能说明", open=False):
-                        gr.Markdown("""
+                # 使用Tabs容器以支持Tab切换事件
+                with gr.Tabs() as main_tabs:
+                    with gr.Tab("开始"):
+                        with gr.Accordion("💡 创意输入 - 功能说明", open=False):
+                            gr.Markdown("""
 **功能说明**：在这里输入你的小说创意和要求，AI将基于这些信息生成完整的小说大纲。
 
 #### 📝 输入要素：
@@ -1172,10 +1173,24 @@ def create_gradio5_original_app():
             
             # 右侧列 (scale=2, 对应原版row3)
             with gr.Column(scale=2, elem_id="row3"):
+                # 可收起的数据流面板 - 默认打开，自动生成时收起
+                with gr.Accordion("📡 实时数据流", open=True, elem_id="realtime_stream_accordion") as realtime_stream_accordion:
+                    realtime_stream_right = gr.Textbox(
+                        label="",
+                        lines=12,
+                        max_lines=20,
+                        interactive=False,
+                        show_copy_button=True,
+                        placeholder="等待API调用数据流...\n\n💡 提示：此区域显示当前API调用的实时响应数据",
+                        elem_id="realtime_stream_right",
+                        elem_classes=["stream-panel", "auto-scroll"],
+                        autoscroll=True
+                    )
+                # 小说正文 - 始终显示
                 novel_content_text = gr.Textbox(
                     label="📚 小说正文", 
-                    lines=32, 
-                    max_lines=100,
+                    lines=25, 
+                    max_lines=80,
                     interactive=True,
                     placeholder="📖 生成的小说内容将在这里实时显示...\n\n💡 提示：可以直接编辑内容，支持自动保存到浏览器",
                     elem_id="novel_content",
@@ -2874,7 +2889,7 @@ def create_gradio5_original_app():
                         # 确保aign_instance是AIGN对象而不是字符串
                         if isinstance(aign_instance, str):
                             print(f"⚠️ 进度刷新错误: 接收到字符串而不是AIGN对象")
-                            return ["刷新失败：参数错误", "", "", "", "暂无故事线内容", gr.update(visible=True), gr.update(visible=False)]
+                            return ["刷新失败：参数错误", "", "", "", "", "暂无故事线内容", gr.update(open=True), gr.update(visible=True), gr.update(visible=False)]
 
                         progress_info = update_progress(aign_instance)
 
@@ -2886,21 +2901,24 @@ def create_gradio5_original_app():
                         if hasattr(aign_instance, 'storyline') and aign_instance.storyline:
                             storyline_display = format_storyline_display(aign_instance.storyline)
 
-                        # 根据生成状态控制按钮可见性
+                        # 根据生成状态控制按钮可见性和Accordion展开状态
                         if is_generating:
-                            # 正在生成时隐藏自动生成按钮，显示停止按钮
                             auto_btn_visible = False
                             stop_btn_visible = True
+                            accordion_open = False  # 生成时收起数据流面板
                         else:
-                            # 未在生成时显示自动生成按钮，隐藏停止按钮
                             auto_btn_visible = True
                             stop_btn_visible = False
+                            accordion_open = True  # 未生成时展开数据流面板
 
-                        return progress_info + [storyline_display, gr.update(visible=auto_btn_visible), gr.update(visible=stop_btn_visible)]
+                        # progress_info包含: [progress_text, output_file, novel_content, stream_content]
+                        # 输出顺序: progress_text, output_file, novel_content, realtime_stream_text, realtime_stream_right, storyline, accordion, auto_btn, stop_btn
+                        stream_content = progress_info[3] if len(progress_info) > 3 else ""
+                        return progress_info + [stream_content, storyline_display, gr.update(open=accordion_open), gr.update(visible=auto_btn_visible), gr.update(visible=stop_btn_visible)]
                     except Exception as e:
                         print(f"⚠️ 进度刷新失败: {e}")
                         print(f"⚠️ aign_instance类型: {type(aign_instance)}")
-                        return ["刷新失败", "", "", "", "暂无故事线内容", gr.update(visible=True), gr.update(visible=False)]
+                        return ["刷新失败", "", "", "", "", "暂无故事线内容", gr.update(open=True), gr.update(visible=True), gr.update(visible=False)]
 
                 refresh_progress_btn.click(
                     auto_refresh_progress,
@@ -2930,7 +2948,7 @@ def create_gradio5_original_app():
                 progress_timer.tick(
                     fn=auto_refresh_progress_with_buttons,
                     inputs=[aign],
-                    outputs=[progress_text, output_file_text, novel_content_text, realtime_stream_text, storyline_text, auto_generate_button, stop_generate_button]
+                    outputs=[progress_text, output_file_text, novel_content_text, realtime_stream_text, realtime_stream_right, storyline_text, realtime_stream_accordion, auto_generate_button, stop_generate_button]
                 )
 
                 # 配置状态监控事件绑定 - Gradio 5.38.0新特性

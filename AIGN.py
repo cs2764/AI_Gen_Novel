@@ -1002,7 +1002,9 @@ class AIGN:
                 "enable_chapters": getattr(self, 'enable_chapters', True),
                 "enable_ending": getattr(self, 'enable_ending', True),
                 "long_chapter_mode": long_chapter_mode_value,
-                "cosyvoice_mode": getattr(self, 'cosyvoice_mode', False)
+                "cosyvoice_mode": getattr(self, 'cosyvoice_mode', False),
+                "chapters_per_plot": getattr(self, 'chapters_per_plot', 5),
+                "num_climaxes": getattr(self, 'num_climaxes', 5)
             }
             
             result = self._save_to_local("user_settings", settings=settings)
@@ -1148,39 +1150,98 @@ class AIGN:
                 return ""
 
     def sanitize_generated_text(self, text: str) -> str:
-        """移除生成内容中的非正文结构标签、流程括注和指导性提示。
+        """移除生成内容中的非正文结构标签、流程括注、特殊符号和格式问题。
+        
+        清理规则：
         - 删除整行的括注标签（包含关键词如 场景/冲突/结果/对话推进/Scene/Sequel 等）
         - 删除行内括注中包含上述关键词的部分
-        - 删除以“关键词：”开头的说明性行
+        - 删除以"关键词："开头的说明性行
+        - 删除多余的硬空行（最多保留2个连续空行）
+        - 删除影响阅读的特殊符号和不可见字符
+        - 删除重复的标点符号
+        - 标准化行尾空白
         """
         try:
-            # 统一换行
             import re
             content = text
+            
+            # 0) 统一换行符为\n
+            content = content.replace('\r\n', '\n').replace('\r', '\n')
+            
+            # 0.1) 删除不可见的特殊字符（零宽字符、方向控制字符等）
+            # 零宽空格、零宽非断字符、零宽连接符、从右到左标记、从左到右标记、软连字符等
+            invisible_chars = '\u200b\u200c\u200d\u200e\u200f\ufeff\u00ad\u2060\u2061\u2062\u2063\u2064'
+            for char in invisible_chars:
+                content = content.replace(char, '')
+            
+            # 0.2) 删除常见的装饰性符号（仅当单独成行或行首/行尾有多个时删除）
+            # 删除仅由装饰符号组成的行
+            decorative_pattern = re.compile(r'^[\s★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※·•\-_=~＝～—─═※◆◇★☆►◄▶◀]+\s*$', re.M)
+            content = decorative_pattern.sub('', content)
+            
+            # 0.3) 删除行首行尾的装饰性符号（但保留正文内容）
+            content = re.sub(r'^[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*', '', content, flags=re.M)
+            content = re.sub(r'[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*$', '', content, flags=re.M)
+            
             # 1) 删除整行结构化括注
             pattern_full_line = re.compile(r"^\s*[（(【\[\uff3b\uff08][^\n\r]{0,120}?(场景|冲突|阻碍|结果|反应|心理|对话|推进|铺垫|伏笔|反转|结构|动作|分解|延伸|Scene|Sequel)[^\n\r]{0,200}?[）)】\]\uff3d\uff09]\s*$", re.M)
             content = pattern_full_line.sub("", content)
-            # 2) 删除行首说明性标签行，如 “对话推进：……”“场景目标：……”
+            
+            # 2) 删除行首说明性标签行，如 "对话推进：……""场景目标：……"
             pattern_label_line = re.compile(r"^\s*(场景目标|冲突|阻碍|结果|情绪反应|心理描写|对话推进|对话延伸|动作分解|铺垫|伏笔|反转|结构|Scene|Sequel)\s*[:：].*$", re.M)
             content = pattern_label_line.sub("", content)
+            
             # 3) 删除行内括注（包含关键词）
             pattern_inline = re.compile(r"[（(【\[\uff3b\uff08][^）)】\]\uff3d\uff09\n\r]{0,80}?(场景|冲突|阻碍|结果|反应|心理|对话|推进|铺垫|伏笔|反转|结构|动作|分解|延伸|Scene|Sequel)[^）)】\]\uff3d\uff09\n\r]{0,200}?[）)】\]\uff3d\uff09]")
             content = pattern_inline.sub("", content)
-            # 4) 删除统计/评估类元信息行（如“全文共计3876字，达到扩展要求”）
+            
+            # 4) 删除统计/评估类元信息行（如"全文共计3876字，达到扩展要求"）
             pattern_meta_count = re.compile(r"(?im)^\s*(?:[-*•]\s*)?(?:全文|本章|全章|合计|总计|本节)[^\n\r]*?(?:共计|合计)?\s*\d{2,6}\s*字[^\n\r]*$")
             content = pattern_meta_count.sub("", content)
             pattern_meta_eval = re.compile(r"(?im)^.*?(达到|达成)[^\n\r]{0,8}(扩展要求|长度要求|达标)[^\n\r]*$")
             content = pattern_meta_eval.sub("", content)
-            # 4.1) 删除“篇幅限制/未完整展示/节选/示例”等说明行（含括注形式）
+            
+            # 4.1) 删除"篇幅限制/未完整展示/节选/示例"等说明行（含括注形式）
             pattern_length_note = re.compile(r"(?im)^\s*[（(【\[]?[^\n\r]{0,100}?(篇幅限制|未完整展示|仅展示|内容节选|节选|演示|示例)[^\n\r]{0,120}?(扩展标准|长度|达标|要求)?[^\n\r]*[）)】\]]?\s*$")
             content = pattern_length_note.sub("", content)
-            # 4.2) 删除包含"字"计量的枚举条目（如“1. 场景描写600字”）
+            
+            # 4.2) 删除包含"字"计量的枚举条目（如"1. 场景描写600字"）
             pattern_bullet_wc = re.compile(r"(?im)^\s*(?:\d+\.|[（(]\d+[）)]|[-*•])\s*[^\n\r]*?\d{2,6}\s*字[^\n\r]*$")
             content = pattern_bullet_wc.sub("", content)
-            # 5) 合并多余空行（最多保留 2 个连续空行）
-            content = re.sub(r"\n{3,}", "\n\n", content)
-            return content.strip()
-        except Exception:
+            
+            # 5) 清理重复标点符号
+            # 多个连续的句号合并为一个（中文和英文）
+            content = re.sub(r'。{2,}', '。', content)
+            content = re.sub(r'\.{4,}', '...', content)  # 保留省略号风格的三点
+            # 多个连续的逗号合并为一个
+            content = re.sub(r'，{2,}', '，', content)
+            content = re.sub(r',{2,}', ',', content)
+            # 多个连续的感叹号或问号限制为最多三个
+            content = re.sub(r'！{4,}', '！！！', content)
+            content = re.sub(r'\!{4,}', '!!!', content)
+            content = re.sub(r'？{4,}', '？？？', content)
+            content = re.sub(r'\?{4,}', '???', content)
+            # 多个省略号合并
+            content = re.sub(r'…{2,}', '……', content)
+            content = re.sub(r'\.\.\.\.+', '...', content)
+            
+            # 6) 删除每行行尾的空白字符
+            content = re.sub(r'[ \t]+$', '', content, flags=re.M)
+            
+            # 7) 删除每行行首的多余空白（保留段落缩进，通常是2个中文全角空格）
+            # 只删除超过4个空格/Tab的行首空白
+            content = re.sub(r'^[ \t]{5,}', '    ', content, flags=re.M)
+            
+            # 8) 合并多余空行（最多保留2个连续空行）
+            content = re.sub(r'\n{3,}', '\n\n', content)
+            
+            # 9) 删除文章开头和结尾的空白行
+            content = content.strip()
+            
+            return content
+        except Exception as e:
+            # 出错时返回原文本
+            print(f"⚠️ 文本清理失败: {e}")
             return text
 
     def genNovelOutline(self, user_idea=None):
@@ -1643,7 +1704,8 @@ class AIGN:
             try:
                 # 导入增强故事线生成器
                 from enhanced_storyline_generator import EnhancedStorylineGenerator
-                enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM)
+                # 传递AIGN实例以支持实时数据流显示
+                enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM, aign_instance=self)
                 
                 # 准备消息
                 prompt = self._build_storyline_prompt(inputs, start_chapter, end_chapter)
@@ -2388,6 +2450,56 @@ class AIGN:
         print(f"   • 修复成功: {repaired_batches}/{len(failed_batches_backup)} 个批次 ({success_rate:.1f}%)")
         print(f"   • 当前总章节数: {total_chapters}")
         
+        # 🔧 全局验证：检查实际故事线完整性，而不仅仅依赖批次验证结果
+        # 即使某些批次验证失败，只要实际章节完整就算成功
+        target_chapters = getattr(self, 'target_chapter_count', total_chapters)
+        if total_chapters > 0 and target_chapters > 0:
+            existing_chapter_nums = set()
+            for ch in self.storyline.get("chapters", []):
+                ch_num = ch.get("chapter_number", 0)
+                if ch_num > 0:
+                    existing_chapter_nums.add(ch_num)
+            
+            expected_chapter_nums = set(range(1, target_chapters + 1))
+            missing_chapters = expected_chapter_nums - existing_chapter_nums
+            
+            if not missing_chapters:
+                # 所有章节都存在，故事线实际完整
+                if self.failed_batches:
+                    print(f"\n✅ 全局验证：故事线实际完整（{total_chapters}/{target_chapters}章）")
+                    print(f"   批次验证曾报告失败，但章节{sorted(expected_chapter_nums)}均已存在")
+                    # 清空失败批次，因为实际故事线是完整的
+                    self.failed_batches = []
+                print(f"✅ 全部章节验证通过，故事线修复成功！")
+            elif len(missing_chapters) < len(expected_chapter_nums):
+                # 仍有缺失章节，更新failed_batches以反映实际情况
+                print(f"\n⚠️ 全局验证：仍有 {len(missing_chapters)} 章缺失")
+                print(f"   缺失章节: {sorted(missing_chapters)[:20]}{'...' if len(missing_chapters) > 20 else ''}")
+                
+                # 重新构建failed_batches基于实际缺失
+                sorted_missing = sorted(missing_chapters)
+                new_failed_batches = []
+                if sorted_missing:
+                    batch_start = sorted_missing[0]
+                    batch_end = sorted_missing[0]
+                    for ch in sorted_missing[1:]:
+                        if ch == batch_end + 1:
+                            batch_end = ch
+                        else:
+                            new_failed_batches.append({
+                                "start_chapter": batch_start,
+                                "end_chapter": batch_end,
+                                "error": "章节缺失，需要重新生成"
+                            })
+                            batch_start = ch
+                            batch_end = ch
+                    new_failed_batches.append({
+                        "start_chapter": batch_start,
+                        "end_chapter": batch_end,
+                        "error": "章节缺失，需要重新生成"
+                    })
+                self.failed_batches = new_failed_batches
+        
         if self.failed_batches:
             print(f"   • 仍有失败: {len(self.failed_batches)} 个批次")
             for batch in self.failed_batches:
@@ -2396,7 +2508,7 @@ class AIGN:
                 else:
                     print(f"     - 第{batch['start_chapter']}-{batch['end_chapter']}章: {batch['error']}")
         
-        return repaired_batches > 0
+        return repaired_batches > 0 or not self.failed_batches
     
     def format_time_duration(self, seconds, include_seconds=False):
         """格式化时间为友好的显示格式（几小时几分钟几秒）"""
@@ -4007,29 +4119,37 @@ class AIGN:
 
         self.no_memory_paragraph += f"\n{next_paragraph}"
 
-        print(f"💾 更新记忆和保存文件...")
-        self.updateMemory()
-        self.updateNovelContent()
-        self.recordNovel()
-        # 在生成章节过程中保存元数据
-        self.saveToFile(save_metadata=True)
-        
-        # 生成章节总结并更新故事线
-        if self.enable_chapters and self.chapter_count > 0:
-            # 获取章节标题（用于显示）
-            current_storyline = self.getCurrentChapterStoryline(self.chapter_count)
-            chapter_display_title = f"第{self.chapter_count}章"
-            if current_storyline and isinstance(current_storyline, dict) and current_storyline.get("title"):
-                story_title = current_storyline.get("title", "")
-                chapter_display_title = f"第{self.chapter_count}章：{story_title}"
-                
-            print(f"📋 正在生成{chapter_display_title}的剧情总结...")
-            summary_data = self.generateChapterSummary(next_paragraph, self.chapter_count)
-            if summary_data:
-                self.updateStorylineWithSummary(self.chapter_count, summary_data)
-                print(f"✅ {chapter_display_title}的故事线已更新")
-        
-        print(f"✅ 第{self.chapter_count}章处理完成")
+        # 最终章不需要生成新记忆和章节总结，直接保存文件即可
+        if is_final_chapter:
+            print(f"💾 最终章完成，直接保存文件（跳过记忆和总结生成）...")
+            self.updateNovelContent()
+            self.recordNovel()
+            self.saveToFile(save_metadata=True)
+            print(f"✅ 第{self.chapter_count}章（最终章）处理完成")
+        else:
+            print(f"💾 更新记忆和保存文件...")
+            self.updateMemory()
+            self.updateNovelContent()
+            self.recordNovel()
+            # 在生成章节过程中保存元数据
+            self.saveToFile(save_metadata=True)
+            
+            # 生成章节总结并更新故事线
+            if self.enable_chapters and self.chapter_count > 0:
+                # 获取章节标题（用于显示）
+                current_storyline = self.getCurrentChapterStoryline(self.chapter_count)
+                chapter_display_title = f"第{self.chapter_count}章"
+                if current_storyline and isinstance(current_storyline, dict) and current_storyline.get("title"):
+                    story_title = current_storyline.get("title", "")
+                    chapter_display_title = f"第{self.chapter_count}章：{story_title}"
+                    
+                print(f"📋 正在生成{chapter_display_title}的剧情总结...")
+                summary_data = self.generateChapterSummary(next_paragraph, self.chapter_count)
+                if summary_data:
+                    self.updateStorylineWithSummary(self.chapter_count, summary_data)
+                    print(f"✅ {chapter_display_title}的故事线已更新")
+            
+            print(f"✅ 第{self.chapter_count}章处理完成")
 
         return next_paragraph
     

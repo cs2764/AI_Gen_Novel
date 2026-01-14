@@ -74,9 +74,9 @@ novel_embellisher_cosyvoice_prompt = """
 ## Outputs:
 以固定格式输出：
 ```
-# 润色结果
+===润色结果===
 多段话，不需要标题，不少于2500字，包含CosyVoice2控制标记。
-# END
+===END===
 ```
 
 **长度要求说明：**
@@ -183,7 +183,7 @@ novel_embellisher_cosyvoice_prompt = """
 
 ## Example（有效标记版）:
 ```
-# 润色结果
+===润色结果===
 [huh]要打开吗？[breath]
 不会有什么奇怪的东西突然从里面蹦出来吧？[sigh]心跳开始不由自主地<strong>加快</strong>了。
 
@@ -201,7 +201,7 @@ novel_embellisher_cosyvoice_prompt = """
 "该死！"[breath]"她难道真的有什么<strong>不可告人</strong>的目的？"
 
 **注意：程序会自动在最终章末尾添加"（全文完）"标记**
-# END
+===END===
 ```
 """
 
@@ -256,9 +256,9 @@ novel_embellisher_cosyvoice_compact_prompt = """
 ## Outputs:
 以固定格式输出：
 ```
-# 润色结果
+===润色结果===
 润色后的内容，不少于3500字，包含CosyVoice2控制标记。**注意：不要添加"（全文完）"标记，程序会自动处理**
-# END
+===END===
 ```
 
 **长度要求说明：**
@@ -371,9 +371,9 @@ ending_embellisher_cosyvoice_prompt = """
 ## Outputs:
 以固定格式输出：
 ```
-# 润色结果
+===润色结果===
 多段话，不需要标题，不少于3000字，包含CosyVoice2控制标记。**注意：不要添加"（全文完）"标记，程序会自动处理**
-# END
+===END===
 ```
 
 **长度与风格说明：**

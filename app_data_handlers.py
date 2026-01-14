@@ -231,18 +231,20 @@ def import_auto_saved_data_handler(aign_state):
                 getattr(aign_instance, 'detailed_outline', '') or '',
                 storyline_display,
                 long_chapter_mode_value,
-                style_name
+                style_name,
+                getattr(aign_instance, 'chapters_per_plot', 5),
+                getattr(aign_instance, 'num_climaxes', 5)
             ]
         else:
             return [
                 "⚠️ 未找到可导入的自动保存数据",
-                "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无"
+                "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
             ]
             
     except Exception as e:
         return [
             f"❌ 导入失败: {str(e)}",
-            "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无"
+            "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
         ]
 
 

@@ -184,7 +184,8 @@ class StorylineManager:
                 # 使用增强的故事线生成器（如果可用）
                 try:
                     from enhanced_storyline_generator import EnhancedStorylineGenerator
-                    enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM)
+                    # 传递AIGN实例以支持实时数据流显示
+                    enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM, aign_instance=self.aign)
                     
                     # 准备消息（_build_storyline_prompt 返回 prompt 和 segment_count）
                     prompt, segment_count = self._build_storyline_prompt(inputs, start_chapter, end_chapter)
@@ -885,7 +886,8 @@ class StorylineManager:
                 # 尝试使用增强的故事线生成器
                 try:
                     from enhanced_storyline_generator import EnhancedStorylineGenerator
-                    enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM)
+                    # 传递AIGN实例以支持实时数据流显示
+                    enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM, aign_instance=self.aign)
                     
                     messages = [{"role": "user", "content": repair_prompt}]
                     require_segments = segment_count > 0
@@ -975,6 +977,57 @@ class StorylineManager:
         print(f"   • 修复成功: {repaired_batches}/{len(failed_batches_backup)} 个批次 ({success_rate:.1f}%)")
         print(f"   • 当前总章节数: {total_chapters}")
         
+        # 🔧 全局验证：检查实际故事线完整性，而不仅仅依赖批次验证结果
+        # 即使某些批次验证失败，只要实际章节完整就算成功
+        target_chapters = getattr(self.aign, 'target_chapter_count', total_chapters)
+        if total_chapters > 0 and target_chapters > 0:
+            existing_chapter_nums = set()
+            for ch in self.aign.storyline.get("chapters", []):
+                ch_num = ch.get("chapter_number", 0)
+                if ch_num > 0:
+                    existing_chapter_nums.add(ch_num)
+            
+            expected_chapter_nums = set(range(1, target_chapters + 1))
+            missing_chapters = expected_chapter_nums - existing_chapter_nums
+            
+            if not missing_chapters:
+                # 所有章节都存在，故事线实际完整
+                if self.aign.failed_batches:
+                    print(f"\n✅ 全局验证：故事线实际完整（{total_chapters}/{target_chapters}章）")
+                    print(f"   批次验证曾报告失败，但章节{sorted(expected_chapter_nums)}均已存在")
+                    # 清空失败批次，因为实际故事线是完整的
+                    self.aign.failed_batches = []
+                print(f"✅ 全部章节验证通过，故事线修复成功！")
+            elif len(missing_chapters) < len(expected_chapter_nums):
+                # 仍有缺失章节，更新failed_batches以反映实际情况
+                print(f"\n⚠️ 全局验证：仍有 {len(missing_chapters)} 章缺失")
+                print(f"   缺失章节: {sorted(missing_chapters)[:20]}{'...' if len(missing_chapters) > 20 else ''}")
+                
+                # 重新构建failed_batches基于实际缺失
+                # 将连续缺失的章节合并为批次
+                sorted_missing = sorted(missing_chapters)
+                new_failed_batches = []
+                if sorted_missing:
+                    batch_start = sorted_missing[0]
+                    batch_end = sorted_missing[0]
+                    for ch in sorted_missing[1:]:
+                        if ch == batch_end + 1:
+                            batch_end = ch
+                        else:
+                            new_failed_batches.append({
+                                "start_chapter": batch_start,
+                                "end_chapter": batch_end,
+                                "error": "章节缺失，需要重新生成"
+                            })
+                            batch_start = ch
+                            batch_end = ch
+                    new_failed_batches.append({
+                        "start_chapter": batch_start,
+                        "end_chapter": batch_end,
+                        "error": "章节缺失，需要重新生成"
+                    })
+                self.aign.failed_batches = new_failed_batches
+        
         if self.aign.failed_batches:
             print(f"   • 仍有失败: {len(self.aign.failed_batches)} 个批次")
             for batch in self.aign.failed_batches:
@@ -983,7 +1036,7 @@ class StorylineManager:
                 else:
                     print(f"     - 第{batch['start_chapter']}-{batch['end_chapter']}章: {batch['error']}")
         
-        return repaired_batches > 0
+        return repaired_batches > 0 or not self.aign.failed_batches
 
 
 # 导出公共类
