@@ -1,10 +1,35 @@
-﻿# 🤖 AI Novel Generator v3.9.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.10.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.9.0 (2026-01-14)
+## 🎉 What's New in v3.10.0 (2026-01-14)
+
+**RAG Optimization Strategy Planning!** Complete RAG style learning and creation optimization system design.
+
+### ✨ New Features | 新功能
+
+#### 🔍 RAG Style Learning & Creation Optimization Planning
+- **Complete RAG System Design**: Comprehensive technical documentation for RAG-based style learning and token optimization
+- **Dual Use Case Architecture**: Supports style learning RAG (indexing articles) and creative workflow RAG (indexing outlines/storylines/characters)
+- **Token Optimization**: Creative workflow RAG expected to save 40-80% token consumption
+- **Hybrid Embedding Architecture**: Supports local/cloud/Zenmux gateway configurations
+
+#### 📋 Optimization Strategy Reorganization
+- **Documentation Streamlining**: Reduced from 15 to 7 core optimization strategies
+- **RAG First Priority**: RAG set as primary core strategy (#01), other strategies adjusted for post-RAG implementation
+- **Deleted 8 Redundant Strategies**: Smart context compression, semantic caching, MCP integration, skill-based agents, chain of thought, reasoning models, multi-turn agent, hybrid architecture
+
+### 🔧 Stability | 系统稳定性
+
+- **Cache Cleanup**: Cleaned project `__pycache__` directories
+- **Test Script Organization**: Moved root directory test scripts to test folder
+- **Security Verified**: Project passed gitleaks security scan
+
+---
+
+## 📚 Previous Version: v3.9.0 (2026-01-14)
 
 **Feature Optimization!** Compact Mode Prompt Structure Enhancement.
 
@@ -15,39 +40,9 @@
 - **Writer & Embellisher Enhancement**: Improved organization with clearer instruction hierarchy
 - **Applied to All Styles**: Optimization applied to all 40+ writing style prompt files
 
-### 🔧 Stability | 系统稳定性
-
-- **Security Verified**: Project passed gitleaks security scan with no sensitive data exposure
-- **Documentation Update**: Updated all documentation to 2026-01-14
-
 ---
 
 ## 📚 Previous Version: v3.8.0 (2025-12-19)
-
-**Feature Update!** Plot Compactness Control and Token Limit Optimization.
-
-### ✨ New Features | 新功能
-
-#### 📉 Plot Compactness Control
-- **Custom Pacing**: New sliders for "Chapters per Plot" and "Number of Climaxes"
-- **Direct Control**: Users can now fine-tune the story pacing to be faster or slower
-- **Flexible Structure**: Supports generating tighter 3-5 chapter plots or looser 6-10 chapter plots
-
-#### 🚀 Token Capability Upgrade
-- **40K Token Limit**: Default max tokens increased from 25K to 40K
-- **Longer Content**: Better support for generating extended chapter content without truncation
-- **DeepSeek/Sonnet-3.5 Ready**: Optimized for modern models with larger context windows
-
-### 🔧 Improvements | 功能改进
-
-#### 🛠️ System Enhancements
-- **Storyline Repair**: Enhanced progress tracking with generator-based updates
-- **Lambda AI**: Improved timeout handling and error recovery
-- **Debug Output**: Simplified terminal logging for better readability
-
----
-
-## 📚 Previous Version: v3.7.0 (2025-12-17)
 
 **Major Feature Update!** New AI Provider and Enhanced Story Structure.
 
@@ -670,7 +665,32 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.9.0 版本更新 (2026-01-14)
+### 🎉 v3.10.0 版本更新 (2026-01-14)
+
+**RAG优化策略规划！** 完整的RAG风格学习与创作优化系统设计。
+
+#### ✨ 新功能
+
+##### 🔍 RAG风格学习与创作优化系统规划
+- **完整RAG系统设计**：创建详细的RAG风格学习和Token优化技术方案文档
+- **双用例架构**：支持风格学习RAG（索引文章库）和创作流程RAG（索引大纲/故事线/人物设定）
+- **Token优化**：创作流程RAG预计可节省40-80% Token消耗
+- **混合Embedding架构**：支持本地/云端/Zenmux网关多种配置
+
+##### 📋 优化策略文档重组
+- **文档精简**：从15个优化方案精简为7个核心方案
+- **RAG优先**：将RAG设为首选核心方案（01号），其他方案调整为RAG完成后再考虑
+- **删除8个冗余方案**：智能上下文压缩、语义缓存、MCP集成、技能Agent、链式思考、推理模型、多轮Agent、混合架构
+
+#### 🔧 系统稳定性
+
+- **缓存清理**：清理项目`__pycache__`目录
+- **测试脚本整理**：移动根目录测试脚本到test文件夹
+- **安全检查通过**：项目通过gitleaks安全扫描
+
+---
+
+### 📚 上一版本：v3.9.0 (2026-01-14)
 
 **功能优化！** 精简模式提示词结构增强。
 
@@ -681,39 +701,9 @@ Made with ❤️ by AI Novel Generator Team
 - **写手与润色增强**：改进了writer和embellisher提示词的组织方式
 - **适用所有风格**：优化应用于40+写作风格的所有提示词文件
 
-#### 🔧 系统稳定性
-
-- **安全检查通过**：项目通过gitleaks安全扫描，无敏感数据泄露风险
-- **文档更新**：更新版本信息和相关文档至2026-01-14
-
 ---
 
 ### 📚 上一版本：v3.8.0 (2025-12-19)
-
-**功能更新！** 剧情紧凑度控制与Token限制优化。
-
-#### ✨ 新功能
-
-##### 📉 剧情紧凑度控制
-- **自定义节奏**：新增"剧情节奏"和"高潮数量"调节滑块
-- **直接控制**：用户可以微调故事节奏，使其更快或更慢
-- **灵活结构**：支持生成紧凑的3-5章剧情或宽松的6-10章剧情
-
-##### 🚀 Token能力升级
-- **40K Token限制**：默认最大Token数从2.5万提升至4万
-- **更长内容**：更好地支持生成超长章节内容而不被截断
-- **模型适配**：针对DeepSeek V3、Claude 3.5 Sonnet等大窗口模型优化
-
-#### 🔧 功能改进
-
-##### 🛠️ 系统增强
-- **故事线修复**：增强的进度追踪，支持实时状态更新
-- **Lambda AI**：改进超时处理和错误恢复机制
-- **调试输出**：简化终端日志输出，提高可读性
-
----
-
-### 📚 上一版本：v3.7.0 (2025-12-17)
 
 **重大功能更新！** 新增AI提供商与增强故事结构。
 

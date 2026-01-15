@@ -1,5 +1,56 @@
 # 更新日志 | Changelog
 
+## [3.10.0] - 2026-01-14 📚 RAG优化策略规划 | RAG Optimization Strategy Planning
+
+### ✨ 新功能与优化 | New Features & Optimizations
+
+#### 🔍 RAG风格学习与创作优化系统规划 | RAG Style Learning & Creation Optimization Planning
+- **完整RAG系统设计**：创建详细的RAG风格学习和创作优化系统技术方案文档
+- **Complete RAG System Design**: Created comprehensive technical documentation for RAG style learning and creation optimization
+- **双用例架构**：支持风格学习RAG（索引文章库）和创作流程RAG（索引大纲/故事线/人物设定）
+- **Dual Use Case Architecture**: Supports style learning RAG (indexing article library) and creative workflow RAG (indexing outlines/storylines/character settings)
+- **Token优化**：创作流程RAG预计可节省40-80% Token消耗
+- **Token Optimization**: Creative workflow RAG expected to save 40-80% Token consumption
+- **混合Embedding架构**：支持本地/云端/Zenmux网关多种Embedding配置
+- **Hybrid Embedding Architecture**: Supports local/cloud/Zenmux gateway multiple embedding configurations
+
+#### 📋 优化策略文档重组 | Optimization Strategy Documentation Reorganization
+- **文档精简**：从15个优化方案精简为7个核心方案，删除8个冗余/重复方案
+- **Documentation Streamlining**: Reduced from 15 optimization strategies to 7 core strategies, deleted 8 redundant strategies
+- **RAG优先**：将RAG设为首选核心方案（01号），其他方案调整为RAG完成后再考虑
+- **RAG First**: Set RAG as the primary core strategy (#01), other strategies adjusted to be considered after RAG completion
+- **重新编号**：保留的7个方案重新编号（01-07），文件结构更清晰
+- **Renumbered**: Retained 7 strategies renumbered (01-07), clearer file structure
+
+### 🗑️ 删除的优化方案 | Removed Optimization Strategies
+- 智能上下文压缩（RAG已覆盖）| Smart Context Compression (covered by RAG)
+- 语义缓存系统（RAG已覆盖）| Semantic Caching (covered by RAG)
+- MCP集成（复杂度高）| MCP Integration (high complexity)
+- 技能Agent系统（复杂度高）| Skill-Based Agents (high complexity)
+- 链式思考优化（模型限制）| Chain of Thought (model limitations)
+- 推理模型优化（特定模型限制）| Reasoning Models (specific model limitations)
+- 多轮Agent对话（与RAG重叠）| Multi-Turn Agent (overlaps with RAG)
+- 混合架构（与RAG方案重叠）| Hybrid Architecture (overlaps with RAG)
+
+### 📄 保留的7个核心方案 | Retained 7 Core Strategies
+1. **RAG风格学习与创作优化** - 核心首选方案 | Core Primary Strategy
+2. **提示词精简优化** - Token节省20-30% | Token saving 20-30%
+3. **增量式记忆摘要** - 与RAG互补 | Complementary to RAG
+4. **智能Agent协调器** - 优化调用流程 | Optimize call flow
+5. **原生Function Calling** - 增强RAG能力 | Enhance RAG capabilities
+6. **Structured Output** - 解析可靠性 | Parsing reliability
+7. **并行弧生成** - 速度优化 | Speed optimization
+
+### 🔧 系统稳定性 | System Stability
+- **安全检查通过**：项目通过gitleaks安全扫描
+- **Security Check Passed**: Project passed gitleaks security scan
+- **缓存清理**：清理项目__pycache__目录
+- **Cache Cleanup**: Cleaned project __pycache__ directories
+- **测试脚本整理**：移动根目录测试脚本到test文件夹
+- **Test Script Organization**: Moved root directory test scripts to test folder
+
+---
+
 ## [3.9.0] - 2026-01-14 🚀 功能优化 | Feature Optimization
 
 ### ✨ 新功能与优化 | New Features & Optimizations
