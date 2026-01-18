@@ -1,10 +1,34 @@
-﻿# 🤖 AI Novel Generator v3.10.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.11.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.10.0 (2026-01-14)
+## 🎉 What's New in v3.11.0 (2026-01-18)
+
+**Major Feature Update!** NVIDIA AI Provider Support & Enhanced Non-Compact Mode.
+
+### ✨ New Features | 新功能
+
+#### 🌐 NVIDIA AI Provider Support
+- **New Provider**: Added NVIDIA as a supported AI provider.
+- **Thinking Mode**: Enabled thinking mode by default for NVIDIA models.
+- **Streaming Support**: Full streaming response support for NVIDIA API.
+
+#### 📝 Enhanced Non-Compact Mode
+- **Context Optimization**: Initial chapters (1-3) now send full text context for better continuity.
+- **Smart Summary**: Subsequent chapters use optimized summaries to maintain context while saving tokens.
+
+#### 📊 SiliconFlow Token Stats
+- **Detailed Tracking**: Added breakdown of cached vs. non-cached tokens.
+- **Reasoning Tokens**: Separate tracking for reasoning tokens in compatible models.
+
+### 🔧 Improvements | 功能改进
+- **Bug Fixes**: Fixed chapter loading issue and embellisher output parsing.
+
+---
+
+## 📚 Previous Version: v3.10.0 (2026-01-14)
 
 **RAG Optimization Strategy Planning!** Complete RAG style learning and creation optimization system design.
 
@@ -665,7 +689,31 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.10.0 版本更新 (2026-01-14)
+### 🎉 v3.11.0 版本更新 (2026-01-18)
+
+**重大功能更新！** NVIDIA AI提供商支持与非精简模式增强。
+
+#### ✨ 新功能
+
+##### 🌐 NVIDIA AI提供商支持
+- **新增提供商**：添加NVIDIA作为支持的AI提供商。
+- **思考模式**：默认启用NVIDIA模型的思考模式。
+- **流式支持**：全面支持NVIDIA API的流式响应。
+
+##### 📝 非精简模式增强
+- **上下文优化**：前3章现在发送全文上下文以获得更好的连贯性。
+- **智能摘要**：后续章节使用优化摘要以节省Token。
+
+##### 📊 SiliconFlow Token统计
+- **详细追踪**：添加缓存与非缓存Token的分类统计。
+- **推理Token**：兼容模型单独追踪推理Token消耗。
+
+#### 🔧 功能改进
+- **Bug修复**：修复章节加载问题和润色输出解析问题。
+
+---
+
+### 📚 上一版本：v3.10.0 (2026-01-14)
 
 **RAG优化策略规划！** 完整的RAG风格学习与创作优化系统设计。
 

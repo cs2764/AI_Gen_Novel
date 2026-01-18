@@ -17,3 +17,4 @@ except ImportError:
 from .grokAI import grokChatLLM
 from .lambdaAI import lambdaChatLLM
 from .siliconflowAI import siliconflowChatLLM
+from .nvidiaAI import nvidiaChatLLM

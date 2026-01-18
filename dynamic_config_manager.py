@@ -47,7 +47,8 @@ PROVIDER_DISPLAY_NAMES = {
     "fireworks": "Fireworks",
     "lambda": "OpenAI兼容模式",  # Lambda 显示为 OpenAI兼容模式
     "lambda2": "OpenAI兼容模式2",  # Lambda2 显示为 OpenAI兼容模式2
-    "siliconflow": "SiliconFlow"
+    "siliconflow": "SiliconFlow",
+    "nvidia": "NVIDIA"
 }
 
 class DynamicConfigManager:
@@ -218,6 +219,19 @@ class DynamicConfigManager:
                     "meta-llama/Llama-3.3-70B-Instruct",
                     "Pro/deepseek-ai/DeepSeek-V3",
                     "Pro/deepseek-ai/DeepSeek-R1"
+                ]
+            ),
+            # NVIDIA - NVIDIA AI API with thinking mode enabled by default
+            "nvidia": ProviderConfig(
+                name="nvidia",
+                api_key="your-nvidia-api-key-here",
+                model_name="deepseek-ai/deepseek-v3.2",
+                base_url="https://integrate.api.nvidia.com/v1",
+                models=[
+                    "deepseek-ai/deepseek-v3.2",
+                    "meta/llama-3.3-70b-instruct",
+                    "qwen/qwen3-235b-instruct",
+                    "nvidia/llama-3.1-nemotron-70b-instruct"
                 ]
             )
         }
@@ -565,6 +579,14 @@ class DynamicConfigManager:
         elif provider_name == "siliconflow":
             from uniai.siliconflowAI import siliconflowChatLLM
             return siliconflowChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                base_url=current_config.base_url,
+                system_prompt=current_config.system_prompt
+            )
+        elif provider_name == "nvidia":
+            from uniai.nvidiaAI import nvidiaChatLLM
+            return nvidiaChatLLM(
                 model_name=current_config.model_name,
                 api_key=current_config.api_key,
                 base_url=current_config.base_url,

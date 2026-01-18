@@ -228,6 +228,16 @@ class AIGN:
             "output_price_per_million": 2.00,  # 输出Token价格(美元/百万Token)，默认$2.00/M
         }
         
+        # SiliconFlow缓存统计（专门追踪SiliconFlow API的缓存命中信息）
+        self.siliconflow_cache_stats = {
+            "enabled": False,  # 统计开关，仅在使用SiliconFlow时启用
+            "total_prompt_cache_hit": 0,  # 累计缓存命中Token数
+            "total_prompt_cache_miss": 0,  # 累计缓存未命中Token数
+            "total_prompt_tokens": 0,  # 累计输入Token数（用于计算命中率）
+            "total_reasoning_tokens": 0,  # 累计推理Token数
+            "api_calls_with_cache": 0,  # 有缓存信息的API调用次数
+        }
+        
         # 故事线和人物列表相关属性
         self.character_list = ""
         self.storyline = {}
@@ -3175,6 +3185,63 @@ class AIGN:
                 
         return context
 
+    def getEnhancedContextWithFirstThreeChapters(self, chapter_number):
+        """获取增强上下文：前三章完整原文 + 其余章节总结
+        
+        非精简模式专用：发送前3章原文，第4章及以后的章节使用故事线总结
+        
+        Args:
+            chapter_number: 当前正在生成的章节号
+            
+        Returns:
+            dict: 包含以下键的字典
+                - first_three_chapters_content: 前三章完整原文
+                - chapter_summaries: 第4章起的章节总结
+                - prev_storyline: 前2章故事线（与精简模式一致）
+                - next_storyline: 后2章故事线（与精简模式一致）
+        """
+        context = {
+            "first_three_chapters_content": "",  # 前三章完整原文
+            "chapter_summaries": "",              # 第4章起的章节总结
+            "prev_storyline": "",                 # 前2章故事线
+            "next_storyline": ""                  # 后2章故事线
+        }
+        
+        # 1. 获取前三章完整原文
+        first_three_content = []
+        for i in range(1, min(4, chapter_number)):  # 最多获取前3章
+            for paragraph in self.paragraph_list:
+                if f"第{i}章" in paragraph:
+                    first_three_content.append(paragraph)
+                    break
+        if first_three_content:
+            context["first_three_chapters_content"] = "\n\n---\n\n".join(first_three_content)
+            print(f"📖 非精简模式：已获取前{len(first_three_content)}章完整原文（共{len(context['first_three_chapters_content'])}字符）")
+        
+        # 2. 获取第4章到当前章节-1的总结
+        summaries = []
+        for i in range(4, chapter_number):  # 从第4章开始获取总结
+            for ch in self.storyline.get("chapters", []):
+                if ch.get("chapter_number") == i:
+                    title = ch.get("title", "")
+                    plot_summary = ch.get("plot_summary", "无梗概")
+                    if title:
+                        summary = f"第{i}章《{title}》：{plot_summary}"
+                    else:
+                        summary = f"第{i}章：{plot_summary}"
+                    summaries.append(summary)
+                    break
+        if summaries:
+            context["chapter_summaries"] = "\n".join(summaries)
+            print(f"📋 非精简模式：已获取第4-{chapter_number-1}章的总结（{len(summaries)}章）")
+        
+        # 3. 获取前2章/后2章故事线（与精简模式一致的格式）
+        prev_storyline, next_storyline = self.getCompactStorylines(chapter_number)
+        context["prev_storyline"] = prev_storyline
+        context["next_storyline"] = next_storyline
+        
+        return context
+
     def _execute_with_retry(self, operation_name, operation_func, max_retries=2):
         """
         执行操作并在失败时自动重试
@@ -3606,12 +3673,13 @@ class AIGN:
             print(f"   • 润色想法: {'✅' if self.embellishment_idea else '❌'}")
             
             # 根据精简模式选择使用的writer
+            # 注意：非精简模式现在也使用精简版生成器（相同提示词），区别在于上下文内容
             if getattr(self, 'compact_mode', False):
-                print("📦 使用精简版正文生成器")
+                print("📦 使用精简版正文生成器（精简模式）")
                 writer = self.novel_writer_compact
             else:
-                print("📝 使用标准版正文生成器")
-                writer = self.novel_writer
+                print("📦 使用精简版正文生成器（非精简模式：前三章原文+章节总结）")
+                writer = self.novel_writer_compact  # 非精简模式也使用相同提示词
             
             # 获取当前章节和前后章节的故事线
             current_chapter_storyline = self.getCurrentChapterStoryline(self.chapter_count + 1)
@@ -3675,73 +3743,34 @@ class AIGN:
                     else:
                         print(f"   • 后2章故事线：无")
             else:
-                # 标准模式：获取完整上下文信息
-                enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
+                # 非精简模式：使用前三章原文 + 章节总结
+                enhanced_context_v2 = self.getEnhancedContextWithFirstThreeChapters(self.chapter_count + 1)
                 
-                # 显示完整上下文信息
+                # 显示非精简模式上下文信息
                 if debug_level >= 2:
-                    # 详细模式：显示完整信息
-                    print(f"📖 故事线上下文信息：")
-                    if current_chapter_storyline:
-                        if isinstance(current_chapter_storyline, dict):
-                            ch_title = current_chapter_storyline.get("title", "无标题")
-                            ch_summary = current_chapter_storyline.get("plot_summary", "无梗概")
-                            print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
-                            print(f"   • 章节梗概：{ch_summary}")
-                        else:
-                            print(f"   • 当前章节故事线：{str(current_chapter_storyline)}")
-                    else:
-                        print(f"   • 当前章节故事线：无")
-                    
-                    if enhanced_context["prev_chapters_summary"]:
-                        prev_lines = enhanced_context["prev_chapters_summary"].split('\n')
-                        print(f"   • 前五章总结：{len(prev_lines)}章")
-                        if prev_lines:
-                            print(f"     - 最近章节：{prev_lines[-1][:80]}{'...' if len(prev_lines[-1]) > 80 else ''}")
-                    else:
-                        print(f"   • 前五章总结：无")
-                    
-                    if enhanced_context["next_chapters_outline"]:
-                        next_lines = enhanced_context["next_chapters_outline"].split('\n')
-                        print(f"   • 后五章梗概：{len(next_lines)}章")
-                        if next_lines:
-                            print(f"     - 下一章节：{next_lines[0][:80]}{'...' if len(next_lines[0]) > 80 else ''}")
-                    else:
-                        print(f"   • 后五章梗概：无")
-                    
-                    if enhanced_context["last_chapter_content"]:
-                        last_ch_preview = enhanced_context["last_chapter_content"]
-                        print(f"   • 上一章原文：{last_ch_preview}")
-                    else:
-                        print(f"   • 上一章原文：无")
-                else:
-                    # 简化模式：只显示摘要信息
-                    print(f"📖 故事线上下文信息 (简化显示)：")
+                    print(f"📖 上下文信息（非精简模式：前三章原文+章节总结）：")
                     if current_chapter_storyline:
                         if isinstance(current_chapter_storyline, dict):
                             ch_title = current_chapter_storyline.get("title", "无标题")
                             print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
                         else:
                             print(f"   • 当前章节：第{self.chapter_count + 1}章")
-                    else:
-                        print(f"   • 当前章节：第{self.chapter_count + 1}章 (无故事线)")
-                    
-                    if enhanced_context["prev_chapters_summary"]:
-                        prev_lines = enhanced_context["prev_chapters_summary"].split('\n')
-                        print(f"   • 前五章总结：{len(prev_lines)}章")
-                    else:
-                        print(f"   • 前五章总结：无")
-                    
-                    if enhanced_context["next_chapters_outline"]:
-                        next_lines = enhanced_context["next_chapters_outline"].split('\n')
-                        print(f"   • 后五章梗概：{len(next_lines)}章")
-                    else:
-                        print(f"   • 后五章梗概：无")
-                    
-                    if enhanced_context["last_chapter_content"]:
-                        print(f"   • 上一章原文：第{self.chapter_count}章")
-                    else:
-                        print(f"   • 上一章原文：无")
+                    if enhanced_context_v2["first_three_chapters_content"]:
+                        print(f"   • 前三章原文：{len(enhanced_context_v2['first_three_chapters_content'])}字符")
+                    if enhanced_context_v2["chapter_summaries"]:
+                        print(f"   • 第4章起总结：{len(enhanced_context_v2['chapter_summaries'])}字符")
+                else:
+                    print(f"📖 上下文信息（非精简模式）：")
+                    if current_chapter_storyline:
+                        if isinstance(current_chapter_storyline, dict):
+                            ch_title = current_chapter_storyline.get("title", "无标题")
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章 - {ch_title}")
+                        else:
+                            print(f"   • 当前章节：第{self.chapter_count + 1}章")
+                    if enhanced_context_v2["first_three_chapters_content"]:
+                        print(f"   • 前三章原文：已加载")
+                    if enhanced_context_v2["chapter_summaries"]:
+                        print(f"   • 第4章起总结：已加载")
             
             # 根据精简模式决定输入参数
             if getattr(self, 'compact_mode', False):
@@ -3763,22 +3792,24 @@ class AIGN:
                     "后2章故事线": compact_next_storyline,
                 }
             else:
-                # 标准模式：包含全部信息
-                print("📝 使用标准模式生成正文...")
+                # 非精简模式：使用与精简模式相同的输入结构，但添加前三章原文
+                print("📦 使用非精简模式生成正文（前三章原文+章节总结）...")
+                segment_count = getattr(self, 'long_chapter_mode', 0)
+                if segment_count > 0:
+                    mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}）：传递前三章原文+章节总结")
                 inputs = {
-                    "用户想法": self.user_idea,
                     "大纲": self.getCurrentOutline(),
-                    "人物列表": self.character_list,
+                    "写作要求": self.user_requirements,
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
                     "计划": self.writing_plan,
-                    "写作要求": self.user_requirements,
-                    "润色想法": self.embellishment_idea,
-                    "上文内容": self.getLastParagraph(),
                     "本章故事线": str(current_chapter_storyline),
-                    "前五章总结": enhanced_context["prev_chapters_summary"],
-                    "后五章梗概": enhanced_context["next_chapters_outline"],
-                    "上一章原文": enhanced_context["last_chapter_content"],
+                    "前2章故事线": enhanced_context_v2["prev_storyline"],
+                    "后2章故事线": enhanced_context_v2["next_storyline"],
+                    # 非精简模式额外上下文：前三章原文 + 章节总结
+                    "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                    "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
                 }
             
             # 调试信息：显示即将发送给大模型的关键输入参数，仅在调试级别>=2时显示
@@ -3879,26 +3910,31 @@ class AIGN:
                         "后2章故事线": compact_next_storyline,
                     }
                 else:
+                    # 非精简模式分段：使用精简模式agent，但添加前三章原文
                     if is_ending_phase or is_final_chapter:
                         writer_agent = getattr(self, f"ending_writer_seg{seg_index}", self.ending_writer)
                     else:
-                        writer_agent = getattr(self, f"novel_writer_seg{seg_index}", self.novel_writer)
+                        writer_agent = getattr(self, f"novel_writer_compact_seg{seg_index}", self.novel_writer_compact)  # 使用精简模式agent
+                    # 获取非精简模式特有的上下文
+                    enhanced_context_v2 = self.getEnhancedContextWithFirstThreeChapters(self.chapter_count + 1)
+                    segment_count_val = getattr(self, 'long_chapter_mode', 0)
+                    if segment_count_val > 0:
+                        mode_desc = {2: "2段", 3: "3段", 4: "4段"}
+                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段{seg_index}）：传递前三章原文+章节总结")
                     seg_inputs = {
-                        "用户想法": self.user_idea,
                         "大纲": self.getCurrentOutline(),
-                        "人物列表": self.character_list,
+                        "写作要求": self.user_requirements,
                         "前文记忆": self.writing_memory,
                         "临时设定": self.temp_setting,
                         "计划": self.writing_plan,
-                        "写作要求": self.user_requirements,
-                        "润色想法": self.embellishment_idea,
-                        "上文内容": self.getLastParagraph(),
                         "本章故事线": str(current_story),
                         "本章分段（参考）": refs_text,
                         "当前分段": current_seg_text,
-                        "前五章总结": enhanced_context["prev_chapters_summary"] if not getattr(self, 'compact_mode', False) else "",
-                        "后五章梗概": enhanced_context["next_chapters_outline"] if not getattr(self, 'compact_mode', False) else "",
-                        "上一章原文": enhanced_context["last_chapter_content"] if not getattr(self, 'compact_mode', False) else "",
+                        "前2章故事线": enhanced_context_v2["prev_storyline"],
+                        "后2章故事线": enhanced_context_v2["next_storyline"],
+                        # 非精简模式额外上下文
+                        "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                        "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
                     }
                 # 写作
                 seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定"])
@@ -3934,21 +3970,33 @@ class AIGN:
                             emb_inputs["上一段原文"] = prev_seg
                             print(f"   📎 已添加上一段原文({len(prev_seg)}字符)以确保段落衔接")
                 else:
-                    emb_agent = getattr(self, f"novel_embellisher_seg{seg_index}", self.novel_embellisher)
+                    # 非精简模式分段润色：使用精简模式agent，但添加前三章原文
+                    emb_agent = getattr(self, f"novel_embellisher_compact_seg{seg_index}", self.novel_embellisher_compact)  # 使用精简模式agent
+                    segment_count_val = getattr(self, 'long_chapter_mode', 0)
+                    if segment_count_val > 0:
+                        mode_desc = {2: "2段", 3: "3段", 4: "4段"}
+                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段润色{seg_index}）：传递前三章原文+章节总结")
                     emb_inputs = {
                         "大纲": self.getCurrentOutline(),
-                        "人物列表": self.character_list,
-                        "临时设定": last_setting,
-                        "计划": last_plan,
                         "润色要求": self.embellishment_idea,
-                        "上文": self.getLastParagraph(),
                         "要润色的内容": seg_text,
-                        "前五章总结": enhanced_context["prev_chapters_summary"] if not getattr(self, 'compact_mode', False) else "",
-                        "后五章梗概": enhanced_context["next_chapters_outline"] if not getattr(self, 'compact_mode', False) else "",
-                        "上一章原文": enhanced_context["last_chapter_content"] if not getattr(self, 'compact_mode', False) else "",
+                        "前2章故事线": enhanced_context_v2["prev_storyline"],
+                        "后2章故事线": enhanced_context_v2["next_storyline"],
                         "本章故事线": str(current_story),
                         "当前分段": current_seg_text,
+                        # 非精简模式额外上下文
+                        "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                        "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
                     }
+                    # 为非首段添加上一段润色后的原文
+                    if seg_index > 1 and len(parts) > 0:
+                        prev_seg = parts[-1]
+                        if len(prev_seg) > 2000:
+                            emb_inputs["上一段原文"] = prev_seg[-2000:]
+                            print(f"   📎 已添加上一段原文（截取2000/{len(prev_seg)}字符）以确保段落衔接")
+                        else:
+                            emb_inputs["上一段原文"] = prev_seg
+                            print(f"   📎 已添加上一段原文({len(prev_seg)}字符)以确保段落衔接")
                 emb_resp = emb_agent.invoke(inputs=emb_inputs, output_keys=["润色结果"])
                 final_seg = emb_resp["润色结果"]
                 parts.append(final_seg)
@@ -3997,21 +4045,32 @@ class AIGN:
                     embellish_inputs["上一段原文"] = last_para
                     print(f"   📎 已添加上一段原文({len(last_para)}字符)以确保段落衔接")
             else:
-                # 标准模式：包含全部信息
-                print("📝 使用标准模式润色...")
+                # 非精简模式：使用与精简模式相同的输入结构，但添加前三章原文
+                print("📦 使用非精简模式润色（前三章原文+章节总结）...")
+                segment_count = getattr(self, 'long_chapter_mode', 0)
+                if segment_count > 0:
+                    mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
+                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}润色）：传递前三章原文+章节总结")
+                
+                # 获取上一段落的原文（用于确保段落衔接）
+                last_para = self.getLastParagraph()
+                
                 embellish_inputs = {
                     "大纲": self.getCurrentOutline(),
-                    "人物列表": self.character_list,
-                    "临时设定": next_temp_setting,
-                    "计划": next_writing_plan,
                     "润色要求": self.embellishment_idea,
-                    "上文": self.getLastParagraph(),
                     "要润色的内容": next_paragraph,
-                    "前五章总结": enhanced_context["prev_chapters_summary"],
-                    "后五章梗概": enhanced_context["next_chapters_outline"],
-                    "上一章原文": enhanced_context["last_chapter_content"],
+                    "前2章故事线": enhanced_context_v2["prev_storyline"],
+                    "后2章故事线": enhanced_context_v2["next_storyline"],
                     "本章故事线": str(current_chapter_storyline),
+                    # 非精简模式额外上下文
+                    "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                    "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
                 }
+                
+                # 添加上一段原文（如果存在），用于确保段落衔接流畅
+                if last_para:
+                    embellish_inputs["上一段原文"] = last_para
+                    print(f"   📎 已添加上一段原文({len(last_para)}字符)以确保段落衔接")
             
             # 调试信息：显示润色阶段的关键输入参数
             try:
@@ -4060,18 +4119,19 @@ class AIGN:
                     embellish_inputs["基础大纲"] = self.novel_outline
                     print(f"📋 润色阶段已加入基础大纲上下文")
                 
-            # 根据章节类型和精简模式选择使用的润色器
+            # 根据章节类型选择使用的润色器
+            # 注意：非精简模式现在也使用精简版润色器（相同提示词），区别在于上下文内容
             if is_final_chapter:
                 print("🎭 使用结尾润色器")
                 embellisher = self.ending_embellisher
                 # 为结尾润色器添加特殊参数
                 embellish_inputs["是否最终章"] = "是"
             elif getattr(self, 'compact_mode', False):
-                print("📦 使用精简版润色器")
+                print("📦 使用精简版润色器（精简模式）")
                 embellisher = self.novel_embellisher_compact
             else:
-                print("📝 使用标准版润色器")
-                embellisher = self.novel_embellisher
+                print("📦 使用精简版润色器（非精简模式：前三章原文+章节总结）")
+                embellisher = self.novel_embellisher_compact  # 非精简模式也使用相同提示词
             
             resp = embellisher.invoke(
                 inputs=embellish_inputs,
@@ -4892,6 +4952,12 @@ class AIGN:
                 self.start_api_time_tracking()
                 print("✅ 时间统计已启用")
                 
+                # 启用SiliconFlow缓存统计系统
+                print("🔄 启用SiliconFlow缓存统计...")
+                self.reset_siliconflow_cache_stats()
+                self.siliconflow_cache_stats["enabled"] = True
+                print("✅ SiliconFlow缓存统计已启用")
+                
                 # 在自动生成开始时，更新ChatLLM实例以使用当前配置的提供商
                 self._refresh_chatllm_for_auto_generation()
                 
@@ -5290,15 +5356,32 @@ class AIGN:
         self.stream_start_time = time.time()
         self.stream_update_logged = False  # 用于跟踪是否已经记录了初始状态
         self.current_stream_content = ""  # 清空实时流内容（包括之前的非流式内容）
+        self._in_reasoning_block = False  # 重置思维链状态
         self.log_message(f"🔄 开始{operation_name}...")
         print(f"🔧 流式模式: 已清空流式输出窗口，开始显示 {operation_name} 的实时进度")
 
-    def update_stream_progress(self, new_content):
-        """更新流式输出进度"""
+    def update_stream_progress(self, new_content, is_reasoning=False):
+        """更新流式输出进度
+        
+        Args:
+            new_content: 新增的内容
+            is_reasoning: 是否为思维链内容（True=思维过程，False=正文内容）
+        """
         if new_content:
             self.current_stream_chars += len(new_content)
-            # 更新实时流内容
-            self.current_stream_content += new_content
+            # 更新实时流内容（区分思维链和正文）
+            if is_reasoning:
+                # 思维链内容使用特殊标记，便于在WebUI中区分显示
+                if not hasattr(self, '_in_reasoning_block') or not self._in_reasoning_block:
+                    self.current_stream_content += "\n🧠 [思维过程]\n"
+                    self._in_reasoning_block = True
+                self.current_stream_content += new_content
+            else:
+                # 正文内容
+                if hasattr(self, '_in_reasoning_block') and self._in_reasoning_block:
+                    self.current_stream_content += "\n📝 [正文内容]\n"
+                    self._in_reasoning_block = False
+                self.current_stream_content += new_content
             # 静默更新字符计数，不输出进度日志
 
     def end_stream_tracking(self, final_content=""):
@@ -5673,6 +5756,91 @@ class AIGN:
         
         lines.append("━" * 60)
         lines.append("")
+        
+        return "\n".join(lines)
+    
+    # ========== SiliconFlow缓存统计方法 ==========
+    
+    def reset_siliconflow_cache_stats(self):
+        """重置SiliconFlow缓存统计数据
+        
+        在autoGenerate开始时调用
+        """
+        self.siliconflow_cache_stats = {
+            "enabled": False,
+            "total_prompt_cache_hit": 0,
+            "total_prompt_cache_miss": 0,
+            "total_prompt_tokens": 0,
+            "total_reasoning_tokens": 0,
+            "api_calls_with_cache": 0,
+        }
+        print("🔄 SiliconFlow缓存统计已重置")
+    
+    def enable_siliconflow_cache_stats(self):
+        """启用SiliconFlow缓存统计"""
+        self.siliconflow_cache_stats["enabled"] = True
+        print("📊 SiliconFlow缓存统计已启用")
+    
+    def record_siliconflow_cache_info(self, api_response: dict):
+        """记录SiliconFlow API响应中的缓存信息
+        
+        Args:
+            api_response: API响应字典，包含prompt_cache_hit_tokens等字段
+        """
+        if not self.siliconflow_cache_stats.get("enabled", False):
+            return
+        
+        # 提取缓存信息
+        prompt_cache_hit = api_response.get("prompt_cache_hit_tokens", 0) or 0
+        prompt_cache_miss = api_response.get("prompt_cache_miss_tokens", 0) or 0
+        prompt_tokens = api_response.get("prompt_tokens", 0) or 0
+        reasoning_tokens = api_response.get("reasoning_tokens", 0) or 0
+        
+        # 累加统计
+        if prompt_cache_hit > 0 or prompt_cache_miss > 0:
+            self.siliconflow_cache_stats["total_prompt_cache_hit"] += prompt_cache_hit
+            self.siliconflow_cache_stats["total_prompt_cache_miss"] += prompt_cache_miss
+            self.siliconflow_cache_stats["total_prompt_tokens"] += prompt_tokens
+            self.siliconflow_cache_stats["api_calls_with_cache"] += 1
+        
+        if reasoning_tokens > 0:
+            self.siliconflow_cache_stats["total_reasoning_tokens"] += reasoning_tokens
+    
+    def get_siliconflow_cache_display(self):
+        """生成SiliconFlow缓存统计显示文本
+        
+        Returns:
+            str: 格式化的缓存统计信息，如果没有数据则返回空字符串
+        """
+        if not self.siliconflow_cache_stats.get("enabled", False):
+            return ""
+        
+        stats = self.siliconflow_cache_stats
+        total_cache_hit = stats.get("total_prompt_cache_hit", 0)
+        total_cache_miss = stats.get("total_prompt_cache_miss", 0)
+        total_prompt = stats.get("total_prompt_tokens", 0)
+        total_reasoning = stats.get("total_reasoning_tokens", 0)
+        api_calls = stats.get("api_calls_with_cache", 0)
+        
+        # 如果没有缓存数据，返回空
+        if total_cache_hit == 0 and total_cache_miss == 0:
+            return ""
+        
+        # 计算缓存命中率
+        cache_hit_rate = 0
+        if total_prompt > 0:
+            cache_hit_rate = (total_cache_hit / total_prompt) * 100
+        
+        # 构建显示文本
+        lines = []
+        lines.append("")
+        lines.append("🔄 SiliconFlow缓存统计:")
+        lines.append(f"  • 缓存命中: {total_cache_hit:,} ({cache_hit_rate:.1f}%)")
+        lines.append(f"  • 缓存未命中: {total_cache_miss:,}")
+        lines.append(f"  • 节省Token: {total_cache_hit:,}")
+        if total_reasoning > 0:
+            lines.append(f"  • 推理Token: {total_reasoning:,}")
+        lines.append(f"  • 统计调用数: {api_calls}")
         
         return "\n".join(lines)
     

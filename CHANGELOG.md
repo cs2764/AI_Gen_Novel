@@ -1,5 +1,37 @@
 # 更新日志 | Changelog
 
+## [3.11.0] - 2026-01-18 🚀 NVIDIA支持与模式增强 | NVIDIA Support & Mode Enhancements
+
+### ✨ 新功能与优化 | New Features & Optimizations
+
+#### 🌐 NVIDIA AI提供商支持 | NVIDIA AI Provider Support
+- **新增提供商**：添加NVIDIA作为支持的AI提供商
+- **New Provider**: Added NVIDIA as a supported AI provider
+- **思考模式**：默认启用NVIDIA模型的思考模式
+- **Thinking Mode**: Enabled thinking mode by default for NVIDIA models
+- **流式支持**：全面支持NVIDIA API的流式响应
+- **Streaming Support**: Full streaming response support for NVIDIA API
+
+#### 📝 非精简模式增强 | Enhanced Non-Compact Mode
+- **上下文优化**：前3章现在发送全文上下文以获得更好的连贯性
+- **Context Optimization**: Initial chapters (1-3) now send full text context for better continuity
+- **智能摘要**：后续章节使用优化摘要以保持上下文同时节省Token
+- **Smart Summary**: Subsequent chapters use optimized summaries to maintain context while saving tokens
+
+#### 📊 SiliconFlow Token统计 | SiliconFlow Token Stats
+- **详细追踪**：添加缓存与非缓存Token的分类统计
+- **Detailed Tracking**: Added breakdown of cached vs. non-cached tokens
+- **推理Token**：兼容模型单独追踪推理Token消耗
+- **Reasoning Tokens**: Separate tracking for reasoning tokens in compatible models
+
+### 🔧 Bug修复 | Bug Fixes
+- **章节加载**：修复加载功能中目标章节数未正确加载的问题
+- **Chapter Loading**: Fixed issue where target chapter count was not loaded correctly
+- **润色解析**：修复润色输出解析器对标记格式的兼容性问题
+- **Embellisher Parsing**: Fixed embellisher output parser compatibility with marker formats
+
+---
+
 ## [3.10.0] - 2026-01-14 📚 RAG优化策略规划 | RAG Optimization Strategy Planning
 
 ### ✨ 新功能与优化 | New Features & Optimizations

@@ -553,6 +553,7 @@ class MarkdownAgent:
             
             chunk_count = 0  # 记录接收到的数据块数量
             last_chunk_time = time.time()  # 记录最后接收数据块的时间
+            accumulated_reasoning = ""  # 跟踪思维链内容（用于显示，不保存到正文）
 
             # 开始流式跟踪（如果有父AIGN实例）
             if hasattr(self, 'parent_aign') and self.parent_aign:
@@ -564,14 +565,23 @@ class MarkdownAgent:
                     chunk_count += 1
                     last_chunk_time = time.time()
                     
-                    # 跟踪新增内容
+                    # 跟踪思维链内容（如果有，用于WebUI显示）
+                    if chunk and 'reasoning_content' in chunk and chunk['reasoning_content']:
+                        new_reasoning = chunk['reasoning_content'][len(accumulated_reasoning):]
+                        if new_reasoning:
+                            accumulated_reasoning = chunk['reasoning_content']
+                            # 更新流式进度，显示思维链（使用标记区分）
+                            if hasattr(self, 'parent_aign') and self.parent_aign:
+                                self.parent_aign.update_stream_progress(new_reasoning, is_reasoning=True)
+                    
+                    # 跟踪新增内容（正文内容，用于保存）
                     if chunk and 'content' in chunk:
                         new_content = chunk['content'][len(accumulated_content):]
                         accumulated_content = chunk['content']
 
                         # 更新流式进度（如果有父AIGN实例）
                         if hasattr(self, 'parent_aign') and self.parent_aign and new_content:
-                            self.parent_aign.update_stream_progress(new_content)
+                            self.parent_aign.update_stream_progress(new_content, is_reasoning=False)
                         
                         # 检查是否长时间没有新内容（超时检测）
                         if time.time() - last_chunk_time > 30:  # 30秒超时
@@ -803,6 +813,10 @@ class MarkdownAgent:
                 time_stats = self.parent_aign.get_api_time_display()
                 if time_stats:
                     print(time_stats)
+            
+            # 📊 记录SiliconFlow缓存信息（如果API响应包含缓存数据）
+            if hasattr(self.parent_aign, 'record_siliconflow_cache_info'):
+                self.parent_aign.record_siliconflow_cache_info(resp)
         
         # 注意：use_memory逻辑已经移动到 query() 方法中
         return resp

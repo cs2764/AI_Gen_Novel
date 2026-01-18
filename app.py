@@ -1085,10 +1085,22 @@ def create_gradio5_original_app():
                             label="精简模式", value=True, interactive=True,
                             info="🎯 优化提示词和参数，预计减少40-50%的API成本，同时保持高质量输出"
                         )
-                        compact_mode_help = gr.HTML(
-                            value="<span style='cursor: pointer; color: #666; font-size: 16px; margin-left: 5px;' title='精简模式详细说明'>❓</span>"
-                        )
                     
+                    # 精简模式与非精简模式的区别说明
+                    with gr.Accordion("📋 精简模式说明", open=False):
+                        gr.Markdown("""
+**✅ 勾选精简模式**：
+- 发送**前2章/后2章故事线**（总结）给大模型
+- Token消耗较少，成本更低
+- 适合章节较多的长篇小说
+
+**❌ 不勾选精简模式**：
+- 发送**前三章完整原文** + 剩余章节总结给大模型
+- Token消耗较多，但上下文更丰富
+- 适合需要更强连贯性的写作
+
+> 💡 两种模式使用相同的提示词，区别仅在于发送的上下文内容量
+                        """)
                     
                     with gr.Row():
                         auto_generate_button = gr.Button("开始自动生成", variant="primary", interactive=True)
@@ -2454,6 +2466,13 @@ def create_gradio5_original_app():
                                 if time_stats:
                                     time_display = f"{time_stats}"
                             
+                            # 获取SiliconFlow缓存统计信息
+                            cache_display = ""
+                            if hasattr(aign_instance, 'get_siliconflow_cache_display'):
+                                cache_stats = aign_instance.get_siliconflow_cache_display()
+                                if cache_stats:
+                                    cache_display = f"{cache_stats}"
+                            
                             # 计算预计总字数（基于实际平均值）
                             target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
                             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
@@ -2481,7 +2500,7 @@ def create_gradio5_original_app():
 • 人物: {format_size(content_stats.get('character_list_chars', 0))}
 • 详细大纲: {format_size(content_stats.get('detailed_outline_chars', 0))}
 • 正文内容: {format_size(content_stats.get('total_chars', 0))}
-• 预计总字数: {format_size(estimated_total_chars)}{token_display}{time_display}
+• 预计总字数: {format_size(estimated_total_chars)}{token_display}{cache_display}{time_display}
 
 📖 故事线统计:
 • 章节数: {storyline_stats.get('chapters_count', 0)} 章

@@ -86,33 +86,134 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
             params["max_tokens"] = max_tokens  # 保留原始参数
             params["max_completion_tokens"] = max_tokens  # 添加API参数，限制模型生成内容长度（包括推理过程）
         
+        def _log_siliconflow_token_usage(usage):
+            """显示SiliconFlow API详细Token使用信息"""
+            if not usage:
+                return
+            
+            prompt_tokens = getattr(usage, 'prompt_tokens', 0) or 0
+            completion_tokens = getattr(usage, 'completion_tokens', 0) or 0
+            total_tokens = getattr(usage, 'total_tokens', 0) or 0
+            
+            # SiliconFlow特有的缓存信息
+            prompt_cache_hit = getattr(usage, 'prompt_cache_hit_tokens', 0) or 0
+            prompt_cache_miss = getattr(usage, 'prompt_cache_miss_tokens', 0) or 0
+            
+            # 推理Token详情 (如果有)
+            reasoning_tokens = 0
+            if hasattr(usage, 'completion_tokens_details') and usage.completion_tokens_details:
+                reasoning_tokens = getattr(usage.completion_tokens_details, 'reasoning_tokens', 0) or 0
+            
+            # 缓存Token详情 (如果有)
+            cached_tokens = 0
+            if hasattr(usage, 'prompt_tokens_details') and usage.prompt_tokens_details:
+                cached_tokens = getattr(usage.prompt_tokens_details, 'cached_tokens', 0) or 0
+            
+            # 计算缓存命中率
+            cache_hit_rate = 0
+            if prompt_tokens > 0:
+                cache_hit_rate = (prompt_cache_hit / prompt_tokens) * 100
+            
+            # 构建显示信息
+            print("\n" + "="*60)
+            print("🔢 SiliconFlow Token使用统计:")
+            print("-"*60)
+            print(f"📥 输入Token: {prompt_tokens:,}")
+            if prompt_cache_hit > 0 or prompt_cache_miss > 0:
+                print(f"  ├─ 缓存命中: {prompt_cache_hit:,} ({cache_hit_rate:.1f}%)")
+                print(f"  └─ 缓存未命中: {prompt_cache_miss:,}")
+            if cached_tokens > 0:
+                print(f"  └─ cached_tokens: {cached_tokens:,}")
+            print(f"📤 输出Token: {completion_tokens:,}")
+            if reasoning_tokens > 0:
+                print(f"  └─ 推理Token: {reasoning_tokens:,}")
+            print(f"📊 总Token: {total_tokens:,}")
+            if prompt_cache_hit > 0:
+                print(f"💰 节省Token: {prompt_cache_hit:,} (缓存命中)")
+            print("="*60 + "\n")
+
+        def _extract_usage_dict(usage):
+            """从usage对象提取详细Token信息字典"""
+            if not usage:
+                return {}
+            
+            result = {
+                "prompt_tokens": getattr(usage, 'prompt_tokens', 0) or 0,
+                "completion_tokens": getattr(usage, 'completion_tokens', 0) or 0,
+                "total_tokens": getattr(usage, 'total_tokens', 0) or 0,
+                "prompt_cache_hit_tokens": getattr(usage, 'prompt_cache_hit_tokens', 0) or 0,
+                "prompt_cache_miss_tokens": getattr(usage, 'prompt_cache_miss_tokens', 0) or 0,
+            }
+            
+            # 推理Token详情
+            if hasattr(usage, 'completion_tokens_details') and usage.completion_tokens_details:
+                result["reasoning_tokens"] = getattr(usage.completion_tokens_details, 'reasoning_tokens', 0) or 0
+            
+            # 缓存Token详情
+            if hasattr(usage, 'prompt_tokens_details') and usage.prompt_tokens_details:
+                result["cached_tokens"] = getattr(usage.prompt_tokens_details, 'cached_tokens', 0) or 0
+            
+            return result
+
         try:
             if not stream:
                 response = client.chat.completions.create(**params)
-                return {
+                
+                # 提取详细Token使用信息
+                usage_dict = _extract_usage_dict(response.usage)
+                
+                # 在控制台显示详细Token统计
+                _log_siliconflow_token_usage(response.usage)
+                
+                # 返回包含详细Token信息的响应
+                result = {
                     "content": response.choices[0].message.content,
                     "total_tokens": response.usage.total_tokens if response.usage else 0,
                 }
+                # 添加详细Token信息
+                result.update(usage_dict)
+                return result
             else:
                 params["stream"] = True
+                # 启用流式返回中的usage信息
+                params["stream_options"] = {"include_usage": True}
                 responses = client.chat.completions.create(**params)
 
                 def respGenerator():
                     content = ""
                     total_tokens = 0
+                    final_usage = None
                     
                     for response in responses:
-                        if response.choices and response.choices[0].delta.content:
-                            delta = response.choices[0].delta.content
-                            content += delta
-                            
-                            # 估算token数量
-                            total_tokens = len(content.split()) * 1.3
-                            
-                            yield {
-                                "content": content,
-                                "total_tokens": int(total_tokens),
-                            }
+                        # 检查是否有usage信息（流式模式最后一个chunk会包含）
+                        if hasattr(response, 'usage') and response.usage:
+                            final_usage = response.usage
+                        
+                        if response.choices and len(response.choices) > 0:
+                            delta = response.choices[0].delta
+                            if hasattr(delta, 'content') and delta.content:
+                                content += delta.content
+                                
+                                # 估算token数量（在最终usage返回前使用估算值）
+                                total_tokens = len(content.split()) * 1.3
+                                
+                                yield {
+                                    "content": content,
+                                    "total_tokens": int(total_tokens),
+                                }
+                    
+                    # 流结束后，如果有usage信息，显示详细统计
+                    if final_usage:
+                        _log_siliconflow_token_usage(final_usage)
+                        usage_dict = _extract_usage_dict(final_usage)
+                        
+                        # 生成最终的包含详细Token信息的结果
+                        final_result = {
+                            "content": content,
+                            "total_tokens": final_usage.total_tokens if final_usage else int(total_tokens),
+                        }
+                        final_result.update(usage_dict)
+                        yield final_result
 
                 return respGenerator()
                 

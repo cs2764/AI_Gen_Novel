@@ -174,7 +174,8 @@ NETWORK_SETTINGS = {
             'GROK_CONFIG',
             'LAMBDA_CONFIG',
             'LAMBDA2_CONFIG',
-            'SILICONFLOW_CONFIG'
+            'SILICONFLOW_CONFIG',
+            'NVIDIA_CONFIG'
         ]
         
         for config_name in required_configs:
@@ -190,7 +191,7 @@ NETWORK_SETTINGS = {
         # 验证当前提供商设置
         # lambda: OpenAI兼容模式
         provider = config_module.CURRENT_PROVIDER
-        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda", "lambda2", "siliconflow"]
+        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda", "lambda2", "siliconflow", "nvidia"]
         
         if provider not in valid_providers:
             if allow_incomplete:
@@ -214,7 +215,8 @@ NETWORK_SETTINGS = {
             "grok": config_module.GROK_CONFIG,
             "lambda": config_module.LAMBDA_CONFIG,
             "lambda2": config_module.LAMBDA2_CONFIG,
-            "siliconflow": config_module.SILICONFLOW_CONFIG
+            "siliconflow": config_module.SILICONFLOW_CONFIG,
+            "nvidia": config_module.NVIDIA_CONFIG
         }
         
         current_config = provider_configs[provider]
@@ -467,6 +469,14 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
         elif provider == "siliconflow":
             from uniai.siliconflowAI import siliconflowChatLLM
             return siliconflowChatLLM(
+                model_name=provider_config['model_name'],
+                api_key=provider_config['api_key'],
+                base_url=provider_config.get('base_url'),
+                system_prompt=provider_config.get('system_prompt', '')
+            )
+        elif provider == "nvidia":
+            from uniai.nvidiaAI import nvidiaChatLLM
+            return nvidiaChatLLM(
                 model_name=provider_config['model_name'],
                 api_key=provider_config['api_key'],
                 base_url=provider_config.get('base_url'),

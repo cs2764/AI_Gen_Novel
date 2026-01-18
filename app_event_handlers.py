@@ -1966,6 +1966,32 @@ def bind_main_events(
             )
             print("✅ 高潮数量滑块事件绑定成功")
         
+        # 绑定目标章节数滑块事件
+        if components.get('target_chapters_slider'):
+            def _wrap_update_target_chapters(aign_state, target_chapters):
+                """更新目标章节数并自动保存"""
+                try:
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    a.target_chapter_count = int(target_chapters)
+                    
+                    # 保存用户设置
+                    from aign_local_storage import LocalStorageManager
+                    storage_manager = LocalStorageManager(a)
+                    storage_manager.save_user_settings()
+                    
+                    print(f"✅ 目标章节数已更新并保存: {a.target_chapter_count}")
+                    return f"已更新章节数: {a.target_chapter_count}"
+                except Exception as e:
+                    print(f"⚠️ 更新目标章节数失败: {e}")
+                    return f"更新失败: {e}"
+
+            components['target_chapters_slider'].change(
+                fn=_wrap_update_target_chapters,
+                inputs=[aign, components['target_chapters_slider']],
+                outputs=None  # 不需要输出到UI组件，只更新状态
+            )
+            print("✅ 目标章节数滑块事件绑定成功")
+        
         print("✅ 所有事件处理函数绑定成功")
         return True
         

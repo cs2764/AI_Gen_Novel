@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 模型获取器 - 从各个AI提供商API获取实时模型列表
-支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Lambda2, Grok, SiliconFlow
+支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Lambda2, Grok, SiliconFlow, NVIDIA
 """
 
 import requests
@@ -51,7 +51,7 @@ class ModelFetcher:
         从指定提供商获取模型列表
         
         Args:
-            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, lambda2, grok, siliconflow)
+            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, lambda2, grok, siliconflow, nvidia)
             api_key: API密钥
             **kwargs: 其他参数
             
@@ -87,6 +87,8 @@ class ModelFetcher:
                 return self._fetch_grok_models(api_key, **kwargs)
             elif provider == 'siliconflow':
                 return self._fetch_siliconflow_models(api_key, **kwargs)
+            elif provider == 'nvidia':
+                return self._fetch_nvidia_models(api_key, **kwargs)
             else:
                 logger.warning(f"不支持的提供商: {provider}")
                 return []
@@ -643,6 +645,61 @@ class ModelFetcher:
                 provider='siliconflow',
                 owned_by='siliconflow',
                 description='SiliconFlow模型'
+            ))
+        
+        return models
+    
+    def _fetch_nvidia_models(self, api_key: str, base_url: str = "https://integrate.api.nvidia.com/v1") -> List[ModelInfo]:
+        """获取NVIDIA模型列表"""
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            response = self.session.get(f"{base_url}/models", headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            for model_data in data.get('data', []):
+                models.append(ModelInfo(
+                    id=model_data.get('id', ''),
+                    name=model_data.get('id', ''),
+                    provider='nvidia',
+                    created_at=str(model_data.get('created', '')),
+                    owned_by=model_data.get('owned_by', 'nvidia'),
+                    description='NVIDIA模型'
+                ))
+            
+            if models:
+                return models
+            else:
+                # 如果API返回空列表，使用默认模型列表
+                return self._get_default_nvidia_models()
+                
+        except Exception as e:
+            logger.warning(f"获取NVIDIA模型列表失败: {e}，使用默认列表")
+            return self._get_default_nvidia_models()
+    
+    def _get_default_nvidia_models(self) -> List[ModelInfo]:
+        """获取NVIDIA默认模型列表（当API请求失败时使用）"""
+        known_models = [
+            "deepseek-ai/deepseek-v3.2",
+            "meta/llama-3.3-70b-instruct",
+            "qwen/qwen3-235b-instruct",
+            "nvidia/llama-3.1-nemotron-70b-instruct"
+        ]
+        
+        models = []
+        for model_id in known_models:
+            models.append(ModelInfo(
+                id=model_id,
+                name=model_id,
+                provider='nvidia',
+                owned_by='nvidia',
+                description='NVIDIA模型'
             ))
         
         return models
