@@ -59,11 +59,31 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
                 # 如果没有用户消息，创建一个包含系统提示词的用户消息
                 messages.append({"role": "user", "content": system_prompt})
         
+        # 支持enable_thinking参数的模型列表（根据SiliconFlow文档）
+        # https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions
+        thinking_supported_models = [
+            "zai-org/GLM-4.6",
+            "Qwen/Qwen3-8B",
+            "Qwen/Qwen3-14B",
+            "Qwen/Qwen3-32B",
+            "Qwen/Qwen3-30B-A3B",
+            "Qwen/Qwen3-235B-A22B",
+            "tencent/Hunyuan-A13B-Instruct",
+            "zai-org/GLM-4.5V",
+            "deepseek-ai/DeepSeek-V3.1-Terminus",
+            "Pro/deepseek-ai/DeepSeek-V3.1-Terminus",
+        ]
+        
         # 构建请求参数
         params = {
             "model": model_name,
             "messages": messages,
         }
+        
+        # 只对支持的模型添加enable_thinking参数
+        if any(model_name.startswith(m) or model_name == m for m in thinking_supported_models):
+            params["enable_thinking"] = True
+            print(f"🧠 已为模型 {model_name} 启用思考模式 (enable_thinking=True)")
         
         # SiliconFlow API支持temperature参数,但需要确保在有效范围内
         # 根据文档,通常范围是0-2,但某些模型(如Claude)范围是0-1
@@ -181,6 +201,7 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
 
                 def respGenerator():
                     content = ""
+                    reasoning_content = ""  # 用于累积思考内容
                     total_tokens = 0
                     final_usage = None
                     
@@ -191,14 +212,29 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
                         
                         if response.choices and len(response.choices) > 0:
                             delta = response.choices[0].delta
+                            
+                            # 处理思考内容（reasoning_content）
+                            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                new_reasoning = delta.reasoning_content
+                                reasoning_content += new_reasoning
+                                # 实时yield思考内容（由aign_agents.py负责打印到console）
+                                yield {
+                                    "content": content,
+                                    "reasoning_content": reasoning_content,
+                                    "total_tokens": int(total_tokens),
+                                }
+                            
+                            # 处理正文内容
                             if hasattr(delta, 'content') and delta.content:
-                                content += delta.content
+                                new_content = delta.content
+                                content += new_content
                                 
                                 # 估算token数量（在最终usage返回前使用估算值）
                                 total_tokens = len(content.split()) * 1.3
                                 
                                 yield {
                                     "content": content,
+                                    "reasoning_content": reasoning_content,
                                     "total_tokens": int(total_tokens),
                                 }
                     
@@ -210,6 +246,7 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
                         # 生成最终的包含详细Token信息的结果
                         final_result = {
                             "content": content,
+                            "reasoning_content": reasoning_content,
                             "total_tokens": final_usage.total_tokens if final_usage else int(total_tokens),
                         }
                         final_result.update(usage_dict)

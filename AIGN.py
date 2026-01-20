@@ -259,6 +259,7 @@ class AIGN:
         self.current_stream_operation = ""
         self.stream_start_time = 0
         self.current_stream_content = ""  # 存储当前实时流内容
+        self.enable_webui_stream = False  # 控制是否将流式输出发送到WebUI（仅故事线和正文生成时启用）
         
         # 生成控制标志
         self.stop_generation = False
@@ -3185,24 +3186,26 @@ class AIGN:
                 
         return context
 
-    def getEnhancedContextWithFirstThreeChapters(self, chapter_number):
-        """获取增强上下文：前三章完整原文 + 其余章节总结
+    def getEnhancedContextWithFirstThreeChapters(self, chapter_number, max_summary_chapters=15):
+        """获取增强上下文：前三章完整原文 + 最近若干章节总结
         
-        非精简模式专用：发送前3章原文，第4章及以后的章节使用故事线总结
+        非精简模式专用：发送前3章原文，加上最近若干章的故事线总结（默认15章），
+        避免随着章节增加导致token过度膨胀。
         
         Args:
             chapter_number: 当前正在生成的章节号
+            max_summary_chapters: 最多获取最近多少章的总结（默认15章）
             
         Returns:
             dict: 包含以下键的字典
                 - first_three_chapters_content: 前三章完整原文
-                - chapter_summaries: 第4章起的章节总结
+                - chapter_summaries: 最近若干章的总结（从第4章起最多max_summary_chapters章）
                 - prev_storyline: 前2章故事线（与精简模式一致）
                 - next_storyline: 后2章故事线（与精简模式一致）
         """
         context = {
             "first_three_chapters_content": "",  # 前三章完整原文
-            "chapter_summaries": "",              # 第4章起的章节总结
+            "chapter_summaries": "",              # 最近若干章的总结
             "prev_storyline": "",                 # 前2章故事线
             "next_storyline": ""                  # 后2章故事线
         }
@@ -3218,9 +3221,13 @@ class AIGN:
             context["first_three_chapters_content"] = "\n\n---\n\n".join(first_three_content)
             print(f"📖 非精简模式：已获取前{len(first_three_content)}章完整原文（共{len(context['first_three_chapters_content'])}字符）")
         
-        # 2. 获取第4章到当前章节-1的总结
+        # 2. 获取最近若干章的总结（从第4章起，但限制最多max_summary_chapters章）
+        # 计算总结范围：从 max(4, chapter_number - max_summary_chapters) 到 chapter_number - 1
+        summary_start = max(4, chapter_number - max_summary_chapters)
+        summary_end = chapter_number  # range不包含结束值
+        
         summaries = []
-        for i in range(4, chapter_number):  # 从第4章开始获取总结
+        for i in range(summary_start, summary_end):
             for ch in self.storyline.get("chapters", []):
                 if ch.get("chapter_number") == i:
                     title = ch.get("title", "")
@@ -3233,7 +3240,10 @@ class AIGN:
                     break
         if summaries:
             context["chapter_summaries"] = "\n".join(summaries)
-            print(f"📋 非精简模式：已获取第4-{chapter_number-1}章的总结（{len(summaries)}章）")
+            if summary_start > 4:
+                print(f"📋 非精简模式：已获取第{summary_start}-{chapter_number-1}章的总结（最近{len(summaries)}章，限制了早期章节以控制token）")
+            else:
+                print(f"📋 非精简模式：已获取第{summary_start}-{chapter_number-1}章的总结（{len(summaries)}章）")
         
         # 3. 获取前2章/后2章故事线（与精简模式一致的格式）
         prev_storyline, next_storyline = self.getCompactStorylines(chapter_number)
@@ -3758,7 +3768,7 @@ class AIGN:
                     if enhanced_context_v2["first_three_chapters_content"]:
                         print(f"   • 前三章原文：{len(enhanced_context_v2['first_three_chapters_content'])}字符")
                     if enhanced_context_v2["chapter_summaries"]:
-                        print(f"   • 第4章起总结：{len(enhanced_context_v2['chapter_summaries'])}字符")
+                        print(f"   • 最近章节总结：{len(enhanced_context_v2['chapter_summaries'])}字符")
                 else:
                     print(f"📖 上下文信息（非精简模式）：")
                     if current_chapter_storyline:
@@ -3770,7 +3780,7 @@ class AIGN:
                     if enhanced_context_v2["first_three_chapters_content"]:
                         print(f"   • 前三章原文：已加载")
                     if enhanced_context_v2["chapter_summaries"]:
-                        print(f"   • 第4章起总结：已加载")
+                        print(f"   • 最近章节总结：已加载")
             
             # 根据精简模式决定输入参数
             if getattr(self, 'compact_mode', False):
@@ -3793,11 +3803,11 @@ class AIGN:
                 }
             else:
                 # 非精简模式：使用与精简模式相同的输入结构，但添加前三章原文
-                print("📦 使用非精简模式生成正文（前三章原文+章节总结）...")
+                print("📦 使用非精简模式生成正文（前三章原文+最近15章总结）...")
                 segment_count = getattr(self, 'long_chapter_mode', 0)
                 if segment_count > 0:
                     mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
-                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}）：传递前三章原文+章节总结")
+                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}）：传递前三章原文+最近章节总结")
                 inputs = {
                     "大纲": self.getCurrentOutline(),
                     "写作要求": self.user_requirements,
@@ -3807,9 +3817,9 @@ class AIGN:
                     "本章故事线": str(current_chapter_storyline),
                     "前2章故事线": enhanced_context_v2["prev_storyline"],
                     "后2章故事线": enhanced_context_v2["next_storyline"],
-                    # 非精简模式额外上下文：前三章原文 + 章节总结
+                    # 非精简模式额外上下文：前三章原文 + 最近章节总结（限制最多15章）
                     "前三章原文": enhanced_context_v2["first_three_chapters_content"],
-                    "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
+                    "最近章节总结": enhanced_context_v2["chapter_summaries"],
                 }
             
             # 调试信息：显示即将发送给大模型的关键输入参数，仅在调试级别>=2时显示
@@ -3920,7 +3930,7 @@ class AIGN:
                     segment_count_val = getattr(self, 'long_chapter_mode', 0)
                     if segment_count_val > 0:
                         mode_desc = {2: "2段", 3: "3段", 4: "4段"}
-                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段{seg_index}）：传递前三章原文+章节总结")
+                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段{seg_index}）：传递前三章原文+最近章节总结")
                     seg_inputs = {
                         "大纲": self.getCurrentOutline(),
                         "写作要求": self.user_requirements,
@@ -3934,7 +3944,7 @@ class AIGN:
                         "后2章故事线": enhanced_context_v2["next_storyline"],
                         # 非精简模式额外上下文
                         "前三章原文": enhanced_context_v2["first_three_chapters_content"],
-                        "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
+                        "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
                 # 写作
                 seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定"])
@@ -3975,7 +3985,7 @@ class AIGN:
                     segment_count_val = getattr(self, 'long_chapter_mode', 0)
                     if segment_count_val > 0:
                         mode_desc = {2: "2段", 3: "3段", 4: "4段"}
-                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段润色{seg_index}）：传递前三章原文+章节总结")
+                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段润色{seg_index}）：传递前三章原文+最近章节总结")
                     emb_inputs = {
                         "大纲": self.getCurrentOutline(),
                         "润色要求": self.embellishment_idea,
@@ -3986,7 +3996,7 @@ class AIGN:
                         "当前分段": current_seg_text,
                         # 非精简模式额外上下文
                         "前三章原文": enhanced_context_v2["first_three_chapters_content"],
-                        "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
+                        "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
                     # 为非首段添加上一段润色后的原文
                     if seg_index > 1 and len(parts) > 0:
@@ -4050,7 +4060,7 @@ class AIGN:
                 segment_count = getattr(self, 'long_chapter_mode', 0)
                 if segment_count > 0:
                     mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
-                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}润色）：传递前三章原文+章节总结")
+                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}润色）：传递前三章原文+最近章节总结")
                 
                 # 获取上一段落的原文（用于确保段落衔接）
                 last_para = self.getLastParagraph()
@@ -4064,7 +4074,7 @@ class AIGN:
                     "本章故事线": str(current_chapter_storyline),
                     # 非精简模式额外上下文
                     "前三章原文": enhanced_context_v2["first_three_chapters_content"],
-                    "章节总结（第4章起）": enhanced_context_v2["chapter_summaries"],
+                    "最近章节总结": enhanced_context_v2["chapter_summaries"],
                 }
                 
                 # 添加上一段原文（如果存在），用于确保段落衔接流畅
@@ -4935,6 +4945,9 @@ class AIGN:
             
         self.auto_generation_running = True
         
+        # 启用WebUI流式输出（正文生成时启用）
+        self.enable_webui_stream = True
+        
         def auto_gen_worker():
             try:
                 start_time = time.time()
@@ -5151,6 +5164,9 @@ class AIGN:
                 # 关闭API时间统计系统
                 if self.api_time_stats.get("enabled", False):
                     self.stop_api_time_tracking()
+                
+                # 关闭WebUI流式输出
+                self.enable_webui_stream = False
                 
                 self.auto_generation_running = False
         
@@ -5369,19 +5385,21 @@ class AIGN:
         """
         if new_content:
             self.current_stream_chars += len(new_content)
-            # 更新实时流内容（区分思维链和正文）
-            if is_reasoning:
-                # 思维链内容使用特殊标记，便于在WebUI中区分显示
-                if not hasattr(self, '_in_reasoning_block') or not self._in_reasoning_block:
-                    self.current_stream_content += "\n🧠 [思维过程]\n"
-                    self._in_reasoning_block = True
-                self.current_stream_content += new_content
-            else:
-                # 正文内容
-                if hasattr(self, '_in_reasoning_block') and self._in_reasoning_block:
-                    self.current_stream_content += "\n📝 [正文内容]\n"
-                    self._in_reasoning_block = False
-                self.current_stream_content += new_content
+            # 只在启用WebUI流模式时更新current_stream_content（故事线和正文生成时）
+            if self.enable_webui_stream:
+                # 更新实时流内容（区分思维链和正文）
+                if is_reasoning:
+                    # 思维链内容使用特殊标记，便于在WebUI中区分显示
+                    if not hasattr(self, '_in_reasoning_block') or not self._in_reasoning_block:
+                        self.current_stream_content += "\n🧠 [思维过程]\n"
+                        self._in_reasoning_block = True
+                    self.current_stream_content += new_content
+                else:
+                    # 正文内容
+                    if hasattr(self, '_in_reasoning_block') and self._in_reasoning_block:
+                        self.current_stream_content += "\n📝 [正文内容]\n"
+                        self._in_reasoning_block = False
+                    self.current_stream_content += new_content
             # 静默更新字符计数，不输出进度日志
 
     def end_stream_tracking(self, final_content=""):
@@ -5472,12 +5490,10 @@ class AIGN:
     def check_and_handle_overlength_content(self, content, content_type, agent_name="", direction="received"):
         """检测并处理过长内容
         direction: "sent" (发送的提示词) 或 "received" (接收的响应内容)
+        只在console中提示，不保存内容到文件
         """
         if not content or len(content) <= self.overlength_threshold:
             return content
-            
-        import os
-        import datetime
         
         # 选择对应的统计字典
         if direction == "sent":
@@ -5491,35 +5507,11 @@ class AIGN:
         else:
             stats_dict["其他"] += 1
         
-        # 生成文件名（包含方向信息）
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 方向标签
         direction_label = "发送" if direction == "sent" else "接收"
-        filename = f"{direction_label}_{content_type}_{agent_name}_{timestamp}_{len(content)}chars.txt"
-        filepath = os.path.join("metadata", "overlength", filename)
         
-        # 确保目录存在
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        
-        # 保存过长内容到文件
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(f"方向: {direction_label}\n")
-                f.write(f"类型: {content_type}\n")
-                f.write(f"智能体: {agent_name}\n")
-                f.write(f"长度: {len(content)} 字符\n")
-                f.write(f"时间: {timestamp}\n")
-                f.write(f"阈值: {self.overlength_threshold} 字符\n")
-                f.write("=" * 50 + "\n")
-                f.write(content)
-                
-            print(f"⚠️ 检测到过长{direction_label}内容: {content_type} ({len(content)}字符)")
-            print(f"📁 已保存到: {filepath}")
-            
-            # 记录到日志
-            self.log_message(f"⚠️ {content_type}{direction_label}内容过长({len(content)}字符)，已保存至metadata")
-            
-        except Exception as e:
-            print(f"❌ 保存过长内容失败: {e}")
+        # 只在console中输出警告信息
+        print(f"⚠️ 检测到过长{direction_label}内容: {content_type} ({len(content)}字符) [智能体: {agent_name}]")
             
         return content
     

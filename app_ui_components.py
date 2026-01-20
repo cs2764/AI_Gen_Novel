@@ -505,19 +505,19 @@ def create_auto_generation_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             components['auto_refresh_enabled'] = gr.Checkbox(
                 label="启用自动刷新",
                 value=True,
-                info="每5秒自动更新生成进度和状态信息"
+                info="每2秒自动更新生成进度和状态信息"
             )
             components['refresh_interval'] = gr.Slider(
                 label="刷新间隔 (秒)",
                 minimum=2,
                 maximum=30,
-                value=5,
+                value=2,
                 step=1,
                 info="设置自动刷新的时间间隔"
             )
         
         # Timer组件
-        components['progress_timer'] = gr.Timer(value=5, active=True)
+        components['progress_timer'] = gr.Timer(value=2, active=True)
         
         gr.Markdown("💡 **提示**: 可启用自动刷新或手动点击刷新按钮查看最新状态")
         

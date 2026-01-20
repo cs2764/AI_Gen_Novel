@@ -1,10 +1,33 @@
-﻿# 🤖 AI Novel Generator v3.11.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v3.12.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.11.0 (2026-01-18)
+## 🎉 What's New in v3.12.0 (2026-01-20)
+
+**Streaming Output & Console Optimization!** Comprehensive fix for streaming display and auto-generation mode enhancements.
+
+### ✨ New Features | 新功能
+
+#### 🌊 Comprehensive Streaming Output Fix
+- **All Providers Supported**: Fixed streaming output display issues for all 12 API providers (NVIDIA, SiliconFlow, DeepSeek, etc.).
+- **Real-time Console**: Eliminated duplicate characters in console output, ensuring correct real-time display.
+- **Storyline Streaming**: Storyline generation phase now supports streaming preview for better user experience.
+
+#### 💻 Auto-Generation Mode Enhancement
+- **Smart Console Mute**: Disabled redundant console printing during auto-generation, keeping only WebUI real-time data stream.
+- **WebUI Sync**: Ensured WebUI real-time data stream panel accurately syncs all output during auto-generation.
+
+#### ⚡ Response Speed Optimization
+- **Auto-Refresh Optimization**: Optimized WebUI auto-refresh interval default from 5s to 2s for better status update real-time capability.
+
+### 🔧 Bug Fixes | 问题修复
+- **JSON Parsing Optimization**: Fixed JSON parsing timing during storyline generation.
+
+---
+
+## 📚 Previous Version: v3.11.0 (2026-01-18)
 
 **Major Feature Update!** NVIDIA AI Provider Support & Enhanced Non-Compact Mode.
 
@@ -689,7 +712,30 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.11.0 版本更新 (2026-01-18)
+### 🎉 v3.12.0 版本更新 (2026-01-20)
+
+**流式输出与控制台优化！** 全面修复流式显示问题并增强自动生成模式体验。
+
+#### ✨ 新功能
+
+##### 🌊 全面流式输出修复
+- **所有提供商支持**：修复了所有12个API提供商（包括NVIDIA, SiliconFlow, DeepSeek等）的流式输出显示问题。
+- **实时控制台**：消除了控制台输出中的重复字符，确保证确的实时显示。
+- **故事线流式预览**：故事线生成阶段现在支持流式预览，提升等待体验。
+
+##### 💻 自动生成模式增强
+- **智能控制台静音**：自动生成模式下禁用冗余的控制台打印，仅保留WebUI实时数据流。
+- **WebUI同步**：确保WebUI实时数据流面板在自动生成时准确同步所有输出。
+
+##### ⚡ 响应速度优化
+- **自动刷新优化**：将WebUI自动刷新间隔默认值从5秒优化为2秒，提升状态更新实时性。
+
+#### 🔧 Bug修复
+- **JSON解析优化**：修复了故事线生成时的JSON解析时机。
+
+---
+
+### 📚 上一版本：v3.11.0 (2026-01-18)
 
 **重大功能更新！** NVIDIA AI提供商支持与非精简模式增强。
 

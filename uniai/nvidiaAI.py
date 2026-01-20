@@ -49,13 +49,18 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
         temperature=None,
         top_p=None,
         max_tokens=None,
-        stream=False,
+        stream=True,  # NVIDIA API默认使用流式模式
     ) -> dict:
 
         
         # NVIDIA AI默认max_tokens设置为8192
         if max_tokens is None:
             max_tokens = 8192
+        
+        # NVIDIA API 强制使用流式模式
+        if not stream:
+            print(f"⚠️ NVIDIA API 不支持非流式模式，已自动切换为流式模式")
+            stream = True
         
         # 如果设置了系统提示词，合并到第一个用户消息的开头
         if system_prompt and messages:
@@ -171,8 +176,12 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
                         reasoning = getattr(response.choices[0].delta, "reasoning_content", None)
                         if reasoning:
                             reasoning_content += reasoning
-                            # 在终端显示推理过程
-                            print(reasoning, end="", flush=True)
+                            # 实时yield思考内容（由aign_agents.py负责打印到console）
+                            yield {
+                                "content": content,
+                                "total_tokens": int(total_tokens),
+                                "reasoning_content": reasoning_content,
+                            }
                         
                         # 处理常规content
                         if response.choices and response.choices[0].delta.content is not None:

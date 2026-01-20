@@ -565,12 +565,21 @@ class MarkdownAgent:
                     chunk_count += 1
                     last_chunk_time = time.time()
                     
-                    # 跟踪思维链内容（如果有，用于WebUI显示）
+                    # 检查是否应该打印到console（如果父AIGN启用了WebUI流模式，则不打印到console）
+                    should_print_to_console = True
+                    if hasattr(self, 'parent_aign') and self.parent_aign:
+                        if getattr(self.parent_aign, 'enable_webui_stream', False):
+                            should_print_to_console = False
+                    
+                    # 跟踪思维链内容（如果有，用于显示）
                     if chunk and 'reasoning_content' in chunk and chunk['reasoning_content']:
                         new_reasoning = chunk['reasoning_content'][len(accumulated_reasoning):]
                         if new_reasoning:
                             accumulated_reasoning = chunk['reasoning_content']
-                            # 更新流式进度，显示思维链（使用标记区分）
+                            # 如果未启用WebUI流模式，输出到console
+                            if should_print_to_console:
+                                print(new_reasoning, end='', flush=True)
+                            # 如果启用WebUI流模式，更新WebUI
                             if hasattr(self, 'parent_aign') and self.parent_aign:
                                 self.parent_aign.update_stream_progress(new_reasoning, is_reasoning=True)
                     
@@ -579,9 +588,13 @@ class MarkdownAgent:
                         new_content = chunk['content'][len(accumulated_content):]
                         accumulated_content = chunk['content']
 
-                        # 更新流式进度（如果有父AIGN实例）
-                        if hasattr(self, 'parent_aign') and self.parent_aign and new_content:
-                            self.parent_aign.update_stream_progress(new_content, is_reasoning=False)
+                        if new_content:
+                            # 如果未启用WebUI流模式，输出到console
+                            if should_print_to_console:
+                                print(new_content, end='', flush=True)
+                            # 如果启用WebUI流模式，更新WebUI
+                            if hasattr(self, 'parent_aign') and self.parent_aign:
+                                self.parent_aign.update_stream_progress(new_content, is_reasoning=False)
                         
                         # 检查是否长时间没有新内容（超时检测）
                         if time.time() - last_chunk_time > 30:  # 30秒超时

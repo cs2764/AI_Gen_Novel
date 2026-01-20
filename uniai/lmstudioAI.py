@@ -375,6 +375,7 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
 
                     def respGenerator():
                         raw_content = ""
+                        last_content_len = 0
                         for response in responses:
                             delta_text = ""
                             try:

@@ -39,6 +39,9 @@ class StorylineManager:
         if hasattr(self.aign, 'refresh_chatllm'):
             self.aign.refresh_chatllm()
         
+        # 启用WebUI流式输出（故事线生成时启用）
+        self.aign.enable_webui_stream = True
+        
         # 根据长章节功能动态调整批次大小
         try:
             segment_count_raw = getattr(self.aign, 'long_chapter_mode', 0)
@@ -337,6 +340,9 @@ class StorylineManager:
                 "generated_chapters": generated_chapters,
                 "completion_rate": (generated_chapters / self.aign.target_chapter_count * 100) if self.aign.target_chapter_count > 0 else 100
             })
+        
+        # 关闭WebUI流式输出（故事线生成完成）
+        self.aign.enable_webui_stream = False
         
         return self.aign.storyline
     

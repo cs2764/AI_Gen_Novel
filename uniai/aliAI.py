@@ -77,10 +77,13 @@ def aliChatLLM(model_name, api_key=None, system_prompt=""):
             )
 
             def respGenerator():
+                last_content = ""
                 for response in responses:
                     if response.status_code == HTTPStatus.OK:
+                        current_content = response.output.choices[0]["message"]["content"]
+                        last_content = current_content
                         yield {
-                            "content": response.output.choices[0]["message"]["content"],
+                            "content": current_content,
                             "total_tokens": response.usage.input_tokens
                             + response.usage.output_tokens,
                         }

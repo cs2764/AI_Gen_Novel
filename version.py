@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "3.11.0"
+__version__ = "3.12.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-01-18)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-01-20)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -48,7 +48,8 @@ VERSION_INFO = {
         "优化策略文档重组与精简",
         "NVIDIA AI提供商支持",
         "非精简模式上下文优化",
-        "SiliconFlow详细Token统计"
+        "SiliconFlow详细Token统计",
+        "流式输出与控制台显示优化"
     ],
     "ai_providers": [
         "OpenRouter",

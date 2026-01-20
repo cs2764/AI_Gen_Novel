@@ -57,7 +57,8 @@ def zhipuChatLLM(model_name, api_key=None, system_prompt=""):
                 content = ""
                 for response in responses:
                     delta = response.choices[0].delta.content
-                    content += delta
+                    if delta:
+                        content += delta
 
                     if response.usage:
                         total_tokens = response.usage.total_tokens

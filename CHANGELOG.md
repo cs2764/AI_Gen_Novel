@@ -1,5 +1,33 @@
 # 更新日志 | Changelog
 
+## [3.12.0] - 2026-01-20 🚀 流式输出与控制台优化 | Streaming Output & Console Optimization
+
+### ✨ 新功能与优化 | New Features & Optimizations
+
+#### 🌊 全面流式输出修复 | Comprehensive Streaming Output Fix
+- **所有提供商支持**：修复了所有12个API提供商（包括NVIDIA, SiliconFlow, DeepSeek等）的流式输出显示问题
+- **All Providers Supported**: Fixed streaming output display issues for all 12 API providers
+- **实时控制台**：消除了控制台输出中的重复字符，确保证确的实时显示
+- **Real-time Console**: Eliminated duplicate characters in console output, ensuring correct real-time display
+- **故事线流式预览**：故事线生成阶段现在支持流式预览，提升等待体验
+- **Storyline Streaming**: Storyline generation phase now supports streaming preview for better user experience
+
+#### 💻 自动生成模式增强 | Auto-Generation Mode Enhancement
+- **智能控制台静音**：自动生成模式下禁用冗余的控制台打印，仅保留WebUI实时数据流
+- **Smart Console Mute**: Disabled redundant console printing during auto-generation, keeping only WebUI real-time data stream
+- **WebUI同步**：确保WebUI实时数据流面板在自动生成时准确同步所有输出
+- **WebUI Sync**: Ensured WebUI real-time data stream panel accurately syncs all output during auto-generation
+
+#### ⚡ 响应速度优化 | Response Speed Optimization
+- **自动刷新优化**：将WebUI自动刷新间隔默认值从5秒优化为2秒，提升状态更新实时性
+- **Auto-Refresh Optimization**: Optimized WebUI auto-refresh interval default from 5s to 2s for better status update real-time capability
+
+### 🔧 Bug修复 | Bug Fixes
+- **JSON解析优化**：修复了故事线生成时的JSON解析时机，先接收完整流式内容再解析
+- **JSON Parsing Optimization**: Fixed JSON parsing timing during storyline generation, parsing only after receiving full streaming content
+
+---
+
 ## [3.11.0] - 2026-01-18 🚀 NVIDIA支持与模式增强 | NVIDIA Support & Mode Enhancements
 
 ### ✨ 新功能与优化 | New Features & Optimizations

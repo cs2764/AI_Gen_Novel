@@ -926,8 +926,29 @@ class EnhancedStorylineGenerator:
                 response = self.chatLLM(
                     messages=current_messages,
                     temperature=max(0.3, temperature - retry * 0.1),  # 重试时降低温度
-                    stream=False  # 需要完整响应以便解析JSON
+                    stream=True  # 使用流式输出，实时显示生成内容
                 )
+                
+                # 处理流式响应：收集所有内容后再解析JSON
+                if hasattr(response, '__next__'):
+                    print(f"🔧 故事线生成: 检测到流式响应，开始接收数据...")
+                    final_result = None
+                    accumulated_content = ""
+                    chunk_count = 0
+                    
+                    for chunk in response:
+                        chunk_count += 1
+                        final_result = chunk
+                        if chunk and 'content' in chunk:
+                            accumulated_content = chunk['content']
+                    
+                    print(f"\n✅ 流式接收完成: {len(accumulated_content)} 字符, {chunk_count} 个数据块")
+                    
+                    # 使用累积的内容构建响应
+                    response = {
+                        "content": accumulated_content,
+                        "total_tokens": final_result.get("total_tokens", 0) if final_result else 0
+                    }
                 
                 # 显示token使用信息
                 self._log_token_usage(f"传统方法(第{retry+1}次尝试)", current_messages, response)

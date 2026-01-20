@@ -172,7 +172,7 @@ def lambdaChatLLM(model_name="llama-4-maverick-17b-128e-instruct-fp8", api_key=N
                             
                             if elapsed_since_progress >= 30 or content_increase >= 1000:
                                 total_elapsed = current_time - stream_start_time
-                                print(f"⏳ Lambda 流式生成进度: {len(content)} 字符, "
+                                print(f"\n⏳ Lambda 流式生成进度: {len(content)} 字符, "
                                       f"{chunk_count} 个数据块, 已耗时 {total_elapsed:.1f} 秒")
                                 last_progress_time = current_time
                                 last_content_length = len(content)
