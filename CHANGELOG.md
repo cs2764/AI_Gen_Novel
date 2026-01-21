@@ -1,5 +1,51 @@
 # 更新日志 | Changelog
 
+## [4.0.0] - 2026-01-21 🚀 重大版本升级 | Major Version Upgrade
+
+### ✨ 核心新功能 | Core New Features
+
+#### 🔍 RAG风格学习与智能参考系统 | RAG Style Learning & Intelligent Reference System
+- **Style RAG服务集成**：与 [AI_Gen_Novel_Style_RAG](https://github.com/cs2764/AI_Gen_Novel_Style_RAG) 服务无缝集成
+- **Style RAG Service Integration**: Seamlessly integrates with AI_Gen_Novel_Style_RAG service for style learning
+- **语义检索**：在小说生成过程中检索相似的写作示例，保持风格一致性
+- **Semantic Search**: Retrieve similar writing examples during novel generation for style consistency
+- **场景匹配**：根据场景描述、情感和写作类型查找相关参考
+- **Scene-based Matching**: Find relevant references based on scene description, emotion, and writing type
+- **WebUI配置**：可在Web界面中直接启用/禁用RAG并配置API地址
+- **WebUI Configuration**: Enable/disable RAG and configure API URL directly in the web interface
+- **优雅降级**：RAG服务问题不会中断小说生成流程
+- **Graceful Fallback**: RAG service issues won't interrupt novel generation workflow
+
+#### ✨ Humanizer-zh去AI味功能 | Humanizer-zh AI Trace Removal
+- **AI写作模式检测**：识别并去除24种常见AI写作模式
+- **AI Writing Pattern Detection**: Identifies and removes 24 common AI writing patterns
+- **自然语言增强**：将AI生成的文本转化为更自然、更人性化的表达
+- **Natural Language Enhancement**: Transforms AI-generated text to sound more human and natural
+- **集成润色器**：Humanizer规则自动应用于文本润色阶段
+- **Integrated Embellisher**: Humanizer rules automatically applied during text embellishment phase
+- **基于WikiProject AI Cleanup**：来自维基百科AI清理指南的全面模式
+- **Based on WikiProject AI Cleanup**: Comprehensive patterns from Wikipedia's AI cleanup guidelines
+
+### 🙏 致谢 | Acknowledgments
+- **RAG服务**：[AI_Gen_Novel_Style_RAG](https://github.com/cs2764/AI_Gen_Novel_Style_RAG)
+- **Humanizer-zh**：改编自 [Humanizer-zh](https://github.com/op7418/Humanizer-zh) 项目（作者：op7418）
+- **Humanizer-zh**: Adapted from [Humanizer-zh](https://github.com/op7418/Humanizer-zh) by op7418
+
+### 🔧 功能改进 | Improvements
+- **Token统计增强**：Humanizer Token消耗独立追踪
+- **Token Statistics Enhancement**: Separate tracking for Humanizer token consumption
+- **提示词集成**：Humanizer规则无缝集成到润色提示词中
+- **Prompt Integration**: Humanizer rules seamlessly integrated into embellisher prompts
+- **文档完善**：新增RAG使用指南文档
+- **Documentation**: Added comprehensive RAG usage guide
+
+### 📄 新增文件 | New Files
+- `RAG_USAGE_GUIDE.md`: RAG服务使用指南 | RAG service usage guide
+- `rag_client.py`: RAG HTTP客户端实现 | RAG HTTP client implementation
+- `prompts/common/humanizer_rules.py`: Humanizer规则模块 | Humanizer rules module
+
+---
+
 ## [3.12.0] - 2026-01-20 🚀 流式输出与控制台优化 | Streaming Output & Console Optimization
 
 ### ✨ 新功能与优化 | New Features & Optimizations

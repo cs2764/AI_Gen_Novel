@@ -88,6 +88,13 @@ EMBELLISHER_BASE_TEMPLATE = """# Role:
 
 ## 语言:简体中文
 
+"""
+
+from prompts.common.humanizer_rules import HUMANIZER_RULES
+
+EMBELLISHER_BASE_TEMPLATE += f"\n\n{HUMANIZER_RULES}\n\n"
+
+EMBELLISHER_BASE_TEMPLATE += """
 ## init:
 我会提供相关内容,请理解后进行润色。
 你如果明白的话,就回复我明白了。

@@ -1,10 +1,39 @@
-﻿# 🤖 AI Novel Generator v3.12.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.0.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v3.12.0 (2026-01-20)
+## 🎉 What's New in v4.0.0 (2026-01-21)
+
+**🚀 Major Version Upgrade!** RAG-powered Style Learning & AI Trace Removal (Humanizer-zh)!
+
+### ✨ New Features | 新功能
+
+#### 🔍 RAG Style Learning & Intelligent Reference System
+- **Style RAG Service Integration**: Seamlessly integrates with [AI_Gen_Novel_Style_RAG](https://github.com/cs2764/AI_Gen_Novel_Style_RAG) service for style learning
+- **Semantic Search**: Retrieve similar writing examples during novel generation for style consistency
+- **Scene-based Matching**: Find relevant references based on scene description, emotion, and writing type
+- **WebUI Configuration**: Enable/disable RAG and configure API URL directly in the web interface
+- **Graceful Fallback**: RAG service issues won't interrupt novel generation workflow
+- **📖 Detailed Guide**: See [RAG Usage Guide](RAG_USAGE_GUIDE.md) for setup and configuration
+
+#### ✨ Humanizer-zh: AI Trace Removal
+- **AI Writing Pattern Detection**: Identifies and removes 24 common AI writing patterns
+- **Natural Language Enhancement**: Transforms AI-generated text to sound more human and natural
+- **Integrated Embellisher**: Humanizer rules automatically applied during text embellishment phase
+- **Based on WikiProject AI Cleanup**: Comprehensive patterns from Wikipedia's AI cleanup guidelines
+- **🙏 Credits**: Adapted from [Humanizer-zh](https://github.com/op7418/Humanizer-zh) by op7418
+
+### 🔧 Improvements | 功能改进
+
+- **Token Statistics Enhancement**: Separate tracking for Humanizer token consumption
+- **Prompt Integration**: Humanizer rules seamlessly integrated into embellisher prompts
+- **Documentation**: Comprehensive bilingual documentation for new features
+
+---
+
+## 📚 Previous Version: v3.12.0 (2026-01-20)
 
 **Streaming Output & Console Optimization!** Comprehensive fix for streaming display and auto-generation mode enhancements.
 
@@ -55,37 +84,7 @@
 
 **RAG Optimization Strategy Planning!** Complete RAG style learning and creation optimization system design.
 
-### ✨ New Features | 新功能
-
-#### 🔍 RAG Style Learning & Creation Optimization Planning
-- **Complete RAG System Design**: Comprehensive technical documentation for RAG-based style learning and token optimization
-- **Dual Use Case Architecture**: Supports style learning RAG (indexing articles) and creative workflow RAG (indexing outlines/storylines/characters)
-- **Token Optimization**: Creative workflow RAG expected to save 40-80% token consumption
-- **Hybrid Embedding Architecture**: Supports local/cloud/Zenmux gateway configurations
-
-#### 📋 Optimization Strategy Reorganization
-- **Documentation Streamlining**: Reduced from 15 to 7 core optimization strategies
-- **RAG First Priority**: RAG set as primary core strategy (#01), other strategies adjusted for post-RAG implementation
-- **Deleted 8 Redundant Strategies**: Smart context compression, semantic caching, MCP integration, skill-based agents, chain of thought, reasoning models, multi-turn agent, hybrid architecture
-
-### 🔧 Stability | 系统稳定性
-
-- **Cache Cleanup**: Cleaned project `__pycache__` directories
-- **Test Script Organization**: Moved root directory test scripts to test folder
-- **Security Verified**: Project passed gitleaks security scan
-
----
-
-## 📚 Previous Version: v3.9.0 (2026-01-14)
-
-**Feature Optimization!** Compact Mode Prompt Structure Enhancement.
-
-### ✨ New Features | 新功能
-
-#### 🎨 Compact Mode Prompt Optimization
-- **Template Restructure**: Optimized prompt template structure in compact mode for better consistency
-- **Writer & Embellisher Enhancement**: Improved organization with clearer instruction hierarchy
-- **Applied to All Styles**: Optimization applied to all 40+ writing style prompt files
+(See CHANGELOG.md for full history)
 
 ---
 
@@ -712,7 +711,35 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v3.12.0 版本更新 (2026-01-20)
+### 🎉 v4.0.0 版本更新 (2026-01-21)
+
+**🚀 重大版本升级！** RAG驱动的风格学习与Humanizer-zh去AI味功能！
+
+#### ✨ 新功能
+
+##### 🔍 RAG风格学习与智能参考系统
+- **Style RAG服务集成**：与 [AI_Gen_Novel_Style_RAG](https://github.com/cs2764/AI_Gen_Novel_Style_RAG) 服务无缝集成
+- **语义检索**：在小说生成过程中检索相似的写作示例，保持风格一致性
+- **场景匹配**：根据场景描述、情感和写作类型查找相关参考
+- **WebUI配置**：可在Web界面中直接启用/禁用RAG并配置API地址
+- **优雅降级**：RAG服务问题不会中断小说生成流程
+- **📖 详细指南**：查看 [RAG使用指南](RAG_USAGE_GUIDE.md) 了解设置和配置
+
+##### ✨ Humanizer-zh: 去AI味功能
+- **AI写作模式检测**：识别并去除24种常见AI写作模式
+- **自然语言增强**：将AI生成的文本转化为更自然、更人性化的表达
+- **集成润色器**：Humanizer规则自动应用于文本润色阶段
+- **基于WikiProject AI Cleanup**：来自维基百科AI清理指南的全面模式
+- **🙏 致谢**：改编自 [Humanizer-zh](https://github.com/op7418/Humanizer-zh) 项目（作者：op7418）
+
+#### 🔧 功能改进
+- **Token统计增强**：Humanizer Token消耗独立追踪
+- **提示词集成**：Humanizer规则无缝集成到润色提示词中
+- **文档完善**：新功能的完整双语文档
+
+---
+
+### 📚 上一版本：v3.12.0 (2026-01-20)
 
 **流式输出与控制台优化！** 全面修复流式显示问题并增强自动生成模式体验。
 

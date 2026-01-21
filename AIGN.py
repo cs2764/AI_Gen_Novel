@@ -170,6 +170,7 @@ class AIGN:
                 "人物生成": {"tokens": 0, "calls": 0},
                 "故事线生成": {"tokens": 0, "calls": 0},
                 "正文生成": {"tokens": 0, "calls": 0},
+                "Humanizer": {"tokens": 0, "calls": 0},
                 "其他": {"tokens": 0, "calls": 0}
             },
             "received": {  # 从API接收的Token统计
@@ -180,6 +181,7 @@ class AIGN:
                 "人物生成": {"tokens": 0, "calls": 0},
                 "故事线生成": {"tokens": 0, "calls": 0},
                 "正文生成": {"tokens": 0, "calls": 0},
+                "Humanizer": {"tokens": 0, "calls": 0},
                 "其他": {"tokens": 0, "calls": 0}
             }
         }
@@ -236,6 +238,19 @@ class AIGN:
             "total_prompt_tokens": 0,  # 累计输入Token数（用于计算命中率）
             "total_reasoning_tokens": 0,  # 累计推理Token数
             "api_calls_with_cache": 0,  # 有缓存信息的API调用次数
+        }
+        
+        # RAG风格学习相关状态（用于存储跨阶段的提炼内容）
+        self.last_rag_key_elements = ""  # 上次正文生成后提炼的关键元素，供润色阶段使用
+        self.rag_usage_stats = {
+            "total_references": 0,
+            "total_chars": 0, 
+            "usage_by_stage": {
+                "正文生成": {"refs": 0, "chars": 0},
+                "润色": {"refs": 0, "chars": 0}, 
+                "开头生成": {"refs": 0, "chars": 0}, 
+                "其他": {"refs": 0, "chars": 0}
+            }
         }
         
         # 故事线和人物列表相关属性
@@ -2707,6 +2722,18 @@ class AIGN:
         
         print(f"📖 开头生成使用的故事线：{len(storyline_for_beginning)}字符")
         print(f"   故事线内容预览：{storyline_for_beginning[:200]}{'...' if len(storyline_for_beginning) > 200 else ''}")
+
+        # RAG: 获取风格参考 (正文生成)
+        rag_references = ""
+        if self._is_rag_enabled():
+            print("📚 RAG (开头生成): 正在检索风格参考...")
+            # 构建查询：故事线 + 写作要求（精简版）
+            rag_query = f"{storyline_for_beginning} {self.user_requirements}"
+            rag_references = self._get_rag_references(rag_query, top_k=5, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+            else:
+                print("📚 RAG: 未检索到相关参考")
         
         # 详细的输入统计信息
         print(f"📝 构建的输入内容（基础信息）:")
@@ -2779,6 +2806,7 @@ class AIGN:
                     seg_inputs = {
                         "大纲": self.getCurrentOutline(),
                         "写作要求": self.user_requirements,
+                        "风格参考": rag_references,
                         "前文记忆": self.writing_memory,
                         "临时设定": self.temp_setting,
                         "计划": self.writing_plan,
@@ -2806,6 +2834,7 @@ class AIGN:
                         "前五章总结": enhanced_context["prev_chapters_summary"] if not getattr(self, 'compact_mode', False) else "",
                         "后五章梗概": enhanced_context["next_chapters_outline"] if not getattr(self, 'compact_mode', False) else "",
                         "上一章原文": enhanced_context["last_chapter_content"] if not getattr(self, 'compact_mode', False) else "",
+                        "风格参考": rag_references,
                     }
                 seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定"])
                 seg_text = seg_resp["段落"]
@@ -2823,6 +2852,7 @@ class AIGN:
                         "后2章故事线": compact_next_storyline,
                         "本章故事线": str(first_chapter_storyline),
                         "当前分段": current_seg_text,
+                        "风格参考": rag_references,  # 润色也可以暂时共用同一批参考，或者不加
                     }
                     # 为非首段添加上一段润色后的原文，确保段落衔接流畅
                     if seg_index > 1 and len(parts) > 0:
@@ -2860,26 +2890,51 @@ class AIGN:
                     "小说大纲": current_outline,
                     "写作要求": self.user_requirements,
                     "人物列表": self.character_list if self.character_list else "暂无人物列表",
+                    "人物列表": self.character_list if self.character_list else "暂无人物列表",
                     "故事线": storyline_for_beginning,
+                    "风格参考": rag_references,
                 },
-                output_keys=["开头", "计划", "临时设定"],
+                output_keys=["开头", "计划", "临时设定", "关键元素"],
             )
             beginning = resp["开头"]
             self.writing_plan = resp["计划"]
             self.temp_setting = resp["临时设定"]
+            key_elements = resp.get("关键元素", "")
             print(f"✅ 初始开头生成完成，长度：{len(beginning)}字符")
+            
+            # RAG: 更新关键元素状态
+            if self._is_rag_enabled():
+                if key_elements and len(key_elements) > 10:
+                     self.last_rag_key_elements = key_elements
+                     print(f"📝 开头生成: 已捕获关键元素 ({len(key_elements)}字符)")
+                else:
+                     self.last_rag_key_elements = self._extract_key_elements_from_content(beginning)
+                     print(f"📝 开头生成: 自动提炼关键元素 ({len(self.last_rag_key_elements)}字符)")
+            
             print(f"📝 生成计划：{self.writing_plan}")
             print(f"⚙️  临时设定：{self.temp_setting}")
 
             print(f"✨ 正在润色开头...")
+            emb_inputs = {
+                "大纲": current_outline,
+                "临时设定": self.temp_setting,
+                "计划": self.writing_plan,
+                "润色要求": self.embellishment_idea,
+                "要润色的内容": beginning,
+                "风格参考": rag_references,
+            }
+            
+            # RAG: (开头润色) 获取基于关键元素的风格参考
+            if self._is_rag_enabled():
+                # 构建查询：关键元素 + 润色要求（精简版）
+                rag_query_emb = f"{self.last_rag_key_elements} {self.embellishment_idea}"
+                rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                if rag_refs_emb:
+                    emb_inputs["风格参考"] = rag_refs_emb
+                    print(f"   📚 RAG(开头润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
+            
             resp = self.novel_embellisher.invoke(
-                inputs={
-                    "大纲": current_outline,
-                    "临时设定": self.temp_setting,
-                    "计划": self.writing_plan,
-                    "润色要求": self.embellishment_idea,
-                    "要润色的内容": beginning,
-                },
+                inputs=emb_inputs,
                 output_keys=["润色结果"],
             )
             beginning = resp["润色结果"]
@@ -2933,6 +2988,10 @@ class AIGN:
         print(f"📖 开始生成正文，保存小说文件...")
         self.saveNovelFileOnly()
 
+        # RAG: 从正文提炼关键元素，供后续润色阶段检索使用
+        if self._is_rag_enabled():
+            self.last_rag_key_elements = self._extract_key_elements_from_content(beginning)
+            
         return beginning
 
     def getLastParagraph(self, max_length=2000):
@@ -3851,6 +3910,25 @@ class AIGN:
                 if self.novel_outline and self.novel_outline != self.getCurrentOutline():
                     inputs["基础大纲"] = self.novel_outline
                     print(f"📋 已加入基础大纲上下文")
+            
+            # RAG 风格参考检索（正文生成阶段）
+            # RAG 风格参考检索（正文生成阶段）
+            if self._is_rag_enabled():
+                # 构建检索查询：本章故事线 + 写作要求（精简版）
+                query_parts = []
+                if current_chapter_storyline:
+                    storyline_text = str(current_chapter_storyline)
+                    if isinstance(current_chapter_storyline, dict):
+                        storyline_text = current_chapter_storyline.get("plot_summary", storyline_text)
+                    query_parts.append(storyline_text)
+                if self.user_requirements:
+                    query_parts.append(self.user_requirements)
+                
+                if query_parts:
+                    rag_query = " ".join(query_parts)
+                    rag_references = self._get_rag_references(rag_query, top_k=10, for_embellishment=False)
+                    if rag_references:
+                        inputs["风格参考"] = rag_references
 
         # 分段生成模式：根据long_chapter_mode的值决定分段数量
         # 0=关闭，2=2段合并，3=3段合并，4=4段合并
@@ -3947,8 +4025,9 @@ class AIGN:
                         "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
                 # 写作
-                seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定"])
+                seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定", "关键元素"])
                 seg_text = seg_resp["段落"]
+                seg_key_elements = seg_resp.get("关键元素", "")
                 last_plan = seg_resp.get("计划", last_plan)
                 last_setting = seg_resp.get("临时设定", last_setting)
 
@@ -3968,6 +4047,15 @@ class AIGN:
                         "本章故事线": str(current_story),
                         "当前分段": current_seg_text,
                     }
+
+                    # RAG: (分段润色) 获取风格参考
+                    if self._is_rag_enabled():
+                        # 构建查询: 关键元素 + 润色要求（精简版）
+                        rag_query_emb = f"{seg_key_elements} {self.embellishment_idea}"
+                        rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                        if rag_refs_emb:
+                            emb_inputs["风格参考"] = rag_refs_emb
+                            print(f"   📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
                     # 为非首段添加上一段润色后的原文，确保段落衔接流畅
                     if seg_index > 1 and len(parts) > 0:
                         # 只取上一段的最后2000字符，避免传入过多内容
@@ -3998,6 +4086,15 @@ class AIGN:
                         "前三章原文": enhanced_context_v2["first_three_chapters_content"],
                         "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
+
+                    # RAG: (分段润色) 获取风格参考
+                    if self._is_rag_enabled():
+                        # 构建查询: 关键元素 + 润色要求（精简版）
+                        rag_query_emb = f"{seg_key_elements} {self.embellishment_idea}"
+                        rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                        if rag_refs_emb:
+                            emb_inputs["风格参考"] = rag_refs_emb
+                            print(f"   📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
                     # 为非首段添加上一段润色后的原文
                     if seg_index > 1 and len(parts) > 0:
                         prev_seg = parts[-1]
@@ -4018,12 +4115,22 @@ class AIGN:
         else:
             resp = writer.invoke(
                 inputs=inputs,
-                output_keys=["段落", "计划", "临时设定"],
+                output_keys=["段落", "计划", "临时设定", "关键元素"],
             )
             next_paragraph = resp["段落"]
             next_writing_plan = resp["计划"]
             next_temp_setting = resp["临时设定"]
+            key_elements = resp.get("关键元素", "")
             print(f"✅ 初始段落生成完成，长度：{len(next_paragraph)}字符")
+            
+            # RAG: 更新关键元素状态 (如果模型未返回，则尝试正则提取)
+            if self._is_rag_enabled():
+                if key_elements and len(key_elements) > 10:
+                     self.last_rag_key_elements = key_elements
+                     print(f"📝 已捕获生成时的关键元素 ({len(key_elements)}字符)")
+                else:
+                     self.last_rag_key_elements = self._extract_key_elements_from_content(next_paragraph)
+                     print(f"📝 自动提炼关键元素 ({len(self.last_rag_key_elements)}字符)")
         
         # 润色（分段模式已单独完成，这里仅在非分段模式下执行）
         if not skip_generic:
@@ -4049,6 +4156,15 @@ class AIGN:
                     "后2章故事线": compact_next_storyline,
                     "本章故事线": str(current_chapter_storyline),
                 }
+
+                # RAG: (润色) 获取风格参考
+                if self._is_rag_enabled():
+                    # 构建查询: 关键元素 + 润色要求（精简版）
+                    rag_query_emb = f"{self.last_rag_key_elements} {self.embellishment_idea}"
+                    rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=5, for_embellishment=True)
+                    if rag_refs_emb:
+                        embellish_inputs["风格参考"] = rag_refs_emb
+                        print(f"📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
                 
                 # 添加上一段原文（如果存在），用于确保段落衔接流畅
                 if last_para:
@@ -4076,6 +4192,15 @@ class AIGN:
                     "前三章原文": enhanced_context_v2["first_three_chapters_content"],
                     "最近章节总结": enhanced_context_v2["chapter_summaries"],
                 }
+
+                # RAG: (润色) 获取风格参考
+                if self._is_rag_enabled():
+                    # 构建查询: 关键元素 + 润色要求（精简版）
+                    rag_query_emb = f"{self.last_rag_key_elements} {self.embellishment_idea}"
+                    rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                    if rag_refs_emb:
+                        embellish_inputs["风格参考"] = rag_refs_emb
+                        print(f"📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
                 
                 # 添加上一段原文（如果存在），用于确保段落衔接流畅
                 if last_para:
@@ -4128,6 +4253,21 @@ class AIGN:
                 if self.novel_outline and self.novel_outline != self.getCurrentOutline():
                     embellish_inputs["基础大纲"] = self.novel_outline
                     print(f"📋 润色阶段已加入基础大纲上下文")
+            
+            # RAG 风格参考检索（润色阶段）
+            if self._is_rag_enabled():
+                # 构建检索查询：关键元素 + 润色要求（精简版）
+                query_parts = []
+                if self.last_rag_key_elements:
+                    query_parts.append(self.last_rag_key_elements)
+                if self.embellishment_idea:
+                    query_parts.append(self.embellishment_idea)
+                
+                if query_parts:
+                    rag_query = " ".join(query_parts)
+                    rag_references = self._get_rag_references(rag_query, top_k=10, for_embellishment=True)
+                    if rag_references:
+                        embellish_inputs["风格参考"] = rag_references
                 
             # 根据章节类型选择使用的润色器
             # 注意：非精简模式现在也使用精简版润色器（相同提示词），区别在于上下文内容
@@ -5680,6 +5820,13 @@ class AIGN:
         lines.append("")
         lines.append(f"💰 总Token消耗: {total_tokens:,} tokens")
         lines.append("─" * 60)
+        
+        # 添加RAG统计
+        rag_stats = self.get_rag_usage_display()
+        if rag_stats:
+            lines.append(rag_stats)
+            lines.append("─" * 60)
+            
         lines.append("")
         
         return "\n".join(lines)
@@ -5744,12 +5891,18 @@ class AIGN:
         lines.append(f"📞 API调用总数: {total_calls}次")
         if total_calls > 0:
             avg_tokens_per_call = total_tokens / total_calls
-            lines.append(f"📊 平均每次调用: {avg_tokens_per_call:.0f} tokens")
+            lines.append(f"⚡ 平均每次调用: {int(avg_tokens_per_call):,} tokens")
+            
+        # 添加RAG统计
+        rag_stats = self.get_rag_usage_display()
+        if rag_stats:
+             lines.append(rag_stats)
         
         lines.append("━" * 60)
         lines.append("")
         
         return "\n".join(lines)
+
     
     # ========== SiliconFlow缓存统计方法 ==========
     
@@ -6239,3 +6392,134 @@ class AIGN:
         has_quality_issue = any(issue in error_content for issue in content_quality_issues)
         
         return has_retry_keyword or has_quality_issue
+    
+    # ==================== RAG 风格学习辅助方法 ====================
+    
+    def _is_rag_enabled(self) -> bool:
+        """
+        检查 RAG 风格学习是否启用
+        
+        Returns:
+            bool: RAG 是否启用且 API 地址已配置
+        """
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            enabled = config_manager.get_rag_enabled()
+            api_url = config_manager.get_rag_api_url()
+            return enabled and bool(api_url)
+        except Exception as e:
+            print(f"⚠️ 检查RAG配置失败: {e}")
+            return False
+    
+    def _get_rag_references(self, query: str, top_k: int = 10, for_embellishment: bool = False) -> str:
+        """
+        从 RAG 获取风格参考，失败时返回空字符串（不影响生成流程）
+        
+        Args:
+            query: 检索查询文本
+            top_k: 返回结果数量，默认10
+            for_embellishment: 是否用于润色阶段
+            
+        Returns:
+            str: 格式化的参考文本，失败返回空字符串
+        """
+        try:
+            from rag_client import RAGClient
+            from dynamic_config_manager import get_config_manager
+            
+            config_manager = get_config_manager()
+            api_url = config_manager.get_rag_api_url()
+            
+            if not api_url:
+                return ""
+            
+            client = RAGClient(api_url, timeout=30)
+            
+            # 检查服务是否可用
+            if not client.is_available():
+                print(f"⚠️ RAG 服务不可用 ({api_url})，跳过风格参考")
+                return ""
+            
+            # 执行检索
+            results = client.search(query, top_k=top_k, min_similarity=0.3)
+            
+            if not results:
+                print(f"📚 RAG 检索未找到匹配结果")
+                return ""
+            
+            # 格式化结果
+            formatted = client.format_references(results, max_length=3000)
+            
+            stage = "润色" if for_embellishment else "正文生成"
+            # 特殊判断开头生成
+            import inspect
+            curframe = inspect.currentframe()
+            calframe = inspect.getouterframes(curframe, 2)
+            for f in calframe:
+                if f.function == "genBeginning":
+                    stage = "开头生成"
+                    break
+            
+            print(f"📚 RAG ({stage}): 检索到 {len(results)} 条参考，共 {len(formatted)} 字符")
+            
+            # 记录RAG使用统计
+            self.record_rag_usage(stage, len(results), len(formatted))
+            
+            return formatted
+            
+        except Exception as e:
+            print(f"⚠️ RAG 检索失败: {e}，跳过风格参考")
+            return ""
+    
+    def _extract_key_elements_from_content(self, content: str) -> str:
+        """
+        从正文提炼关键剧情和修辞手法，供润色阶段使用
+        
+        Args:
+            content: 正文内容
+            
+        Returns:
+            str: 提炼的关键元素文本
+        """
+        try:
+            from rag_client import extract_key_elements
+            
+            # 使用 rag_client 模块中的提炼函数
+            elements = extract_key_elements(content, max_length=500)
+            
+            if elements:
+                print(f"📝 RAG: 已提炼 {len(elements)} 字符的关键元素")
+            
+            return elements
+            
+        except Exception as e:
+            print(f"⚠️ RAG 关键元素提炼失败: {e}")
+            return ""
+
+    def record_rag_usage(self, stage: str, ref_count: int, char_count: int):
+        """记录RAG使用统计"""
+        if stage not in self.rag_usage_stats["usage_by_stage"]:
+            stage = "其他"
+            
+        self.rag_usage_stats["total_references"] += ref_count
+        self.rag_usage_stats["total_chars"] += char_count
+        self.rag_usage_stats["usage_by_stage"][stage]["refs"] += ref_count
+        self.rag_usage_stats["usage_by_stage"][stage]["chars"] += char_count
+
+    def get_rag_usage_display(self) -> str:
+        """获取RAG使用统计显示文本"""
+        if self.rag_usage_stats["total_references"] == 0:
+            return ""
+            
+        lines = []
+        lines.append("")
+        lines.append("📚 RAG使用统计")
+        lines.append(f"  • 总计: {self.rag_usage_stats['total_references']}引用 / {self.rag_usage_stats['total_chars']}字符")
+        
+        for stage, stats in self.rag_usage_stats["usage_by_stage"].items():
+            if stats["refs"] > 0:
+                lines.append(f"  • {stage}: {stats['refs']}引用 / {stats['chars']}字符")
+        
+        return "\n".join(lines)
+

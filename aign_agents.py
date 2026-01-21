@@ -456,12 +456,16 @@ class MarkdownAgent:
                     separator = ':' if ':' in stripped_line else '：'
                     parts = stripped_line.split(separator, 1)
                     field_name = parts[0].replace('##', '').strip()
+                    if field_name == '润色内容':
+                        field_name = '润色结果'
                     field_value_start = parts[1].strip() if len(parts) > 1 else ''
                     is_new_field = True
                 elif stripped_line.startswith('**') and ('**:' in stripped_line or '**：' in stripped_line):
                     separator = '**:' if '**:' in stripped_line else '**：'
                     parts = stripped_line.split(separator, 1)
                     field_name = parts[0].replace('**', '').strip()
+                    if field_name == '润色内容':
+                        field_name = '润色结果'
                     field_value_start = parts[1].strip() if len(parts) > 1 else ''
                     is_new_field = True
                 
@@ -487,7 +491,7 @@ class MarkdownAgent:
             for key, value in input_parts.items():
                 part_len = len(value)
                 part_tokens = self.count_tokens(value)
-                if part_len > 50 or key in ['大纲', '写作要求', '润色要求', '要润色的内容', '前文记忆', '临时设定', '计划', '人物列表', '详细大纲', '基础大纲', '前2章故事线', '后2章故事线', '前五章总结', '后五章梗概', '上一章原文', '本章故事线', '上一段原文']:
+                if part_len > 50 or key in ['大纲', '写作要求', '润色要求', '要润色的内容', '前文记忆', '临时设定', '计划', '人物列表', '详细大纲', '基础大纲', '前2章故事线', '后2章故事线', '前五章总结', '后五章梗概', '上一章原文', '本章故事线', '上一段原文', '润色结果']:
                     input_parts_summary.append(f"{key}:{part_len}字/{part_tokens}tk")
             
             # 输出紧凑格式
@@ -782,7 +786,23 @@ class MarkdownAgent:
                 
                 # 记录发送的Token数
                 if sent_tokens > 0:
-                    self.parent_aign.record_sent_tokens(category, sent_tokens)
+                    # 检查是否包含Humanizer规则，如果包含则单独统计
+                    humanizer_tokens = 0
+                    try:
+                        from prompts.common.humanizer_rules import HUMANIZER_RULES
+                        if HUMANIZER_RULES in self.sys_prompt:
+                            humanizer_tokens = self.count_tokens(HUMANIZER_RULES)
+                            # 记录Humanizer消耗
+                            self.parent_aign.record_sent_tokens("Humanizer", humanizer_tokens)
+                            # 剩余部分记录到原类别
+                            remaining_tokens = max(0, sent_tokens - humanizer_tokens)
+                            self.parent_aign.record_sent_tokens(category, remaining_tokens)
+                        else:
+                            # 不包含规则，全部记录到原类别
+                            self.parent_aign.record_sent_tokens(category, sent_tokens)
+                    except Exception as e:
+                        print(f"⚠️ Humanizer统计出错: {e}")
+                        self.parent_aign.record_sent_tokens(category, sent_tokens)
                 
                 # 计算并记录接收的Token数
                 response_content = resp.get("content", "")

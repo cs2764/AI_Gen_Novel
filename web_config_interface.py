@@ -590,6 +590,60 @@ class WebConfigInterface:
         except Exception as e:
             return f"❌ 保存CosyVoice2配置失败: {str(e)}", self.get_cosyvoice_info()
     
+    def get_rag_info(self):
+        """获取RAG风格学习配置信息"""
+        try:
+            # 从动态配置管理器获取RAG配置
+            rag_enabled = self.config_manager.get_rag_enabled()
+            rag_api_url = self.config_manager.get_rag_api_url()
+            
+            status_display = "📚 已启用" if rag_enabled else "🔇 已关闭"
+            url_display = rag_api_url if rag_api_url else "未设置"
+            
+            info = f"""⚙️ RAG 风格学习配置:
+📊 当前状态: {status_display}
+🌐 API地址: {url_display}
+
+📋 功能说明:
+• 启用后，正文生成和润色阶段会从RAG索引中检索相似的写作片段作为风格参考
+• 正文生成：使用用户想法+故事线+写作要求检索前10条参考
+• 润色阶段：使用用户想法+润色要求+提炼的关键元素检索参考
+• 需要先启动RAG服务并完成索引构建，详见 DEVELOPER_INTEGRATION.md
+
+💡 使用建议:
+• 建议在RAG索引中包含高质量的文章片段作为风格参考
+• RAG服务不可用时会自动跳过，不影响正常生成流程
+• API地址示例: http://192.168.1.211:8086/
+
+💾 配置已保存到 runtime_config.json 文件，重启应用后自动加载"""
+            
+            return info
+            
+        except Exception as e:
+            return f"❌ 获取RAG配置失败: {str(e)}"
+    
+    def save_rag_config(self, enabled, api_url):
+        """保存RAG风格学习配置"""
+        try:
+            # 使用动态配置管理器保存RAG配置
+            success = self.config_manager.set_rag_config(enabled, api_url)
+            
+            status_text = "启用" if enabled else "关闭"
+            url_info = api_url if api_url else "未设置"
+            
+            if success:
+                status = f"✅ RAG风格学习已{status_text}，API地址: {url_info}"
+            else:
+                status = f"⚠️ RAG风格学习已{status_text}，但保存到配置文件失败"
+            
+            # 重新获取配置信息
+            updated_info = self.get_rag_info()
+            
+            return status, updated_info
+            
+        except Exception as e:
+            return f"❌ 保存RAG配置失败: {str(e)}", self.get_rag_info()
+    
     def save_tts_config(self, tts_provider, tts_model, tts_api_key, tts_base_url):
         """保存TTS模型配置"""
         try:
@@ -967,6 +1021,46 @@ class WebConfigInterface:
                         interactive=False
                     )
                 
+                with gr.TabItem("📚 RAG风格学习"):
+                    gr.Markdown("### 📚 RAG风格学习配置")
+                    
+                    # RAG配置信息
+                    rag_info = gr.Textbox(
+                        label="当前RAG配置",
+                        value=self.get_rag_info(),
+                        lines=10,
+                        interactive=False
+                    )
+                    
+                    # RAG开关
+                    rag_enabled_checkbox = gr.Checkbox(
+                        label="启用RAG风格学习",
+                        value=self.config_manager.get_rag_enabled(),
+                        interactive=True,
+                        info="📚 启用后，正文生成和润色阶段会从RAG索引检索风格参考"
+                    )
+                    
+                    # RAG API地址
+                    rag_api_url_input = gr.Textbox(
+                        label="RAG API地址",
+                        value=self.config_manager.get_rag_api_url(),
+                        placeholder="例如: http://192.168.1.211:8086/",
+                        interactive=True,
+                        info="RAG服务的HTTP API地址，需要先启动RAG服务"
+                    )
+                    
+                    # 操作按钮
+                    with gr.Row():
+                        rag_save_btn = gr.Button("💾 应用RAG设置", variant="primary")
+                        rag_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
+                    
+                    # 状态信息
+                    rag_status_output = gr.Textbox(
+                        label="状态",
+                        lines=2,
+                        interactive=False
+                    )
+                
                 with gr.TabItem("🔧 JSON自动修复"):
                     gr.Markdown("### 🔧 JSON自动修复配置")
                     
@@ -1155,6 +1249,18 @@ class WebConfigInterface:
                 fn=self.refresh_models,
                 inputs=[tts_provider_dropdown, tts_api_key_input, tts_base_url_input],
                 outputs=[tts_model_dropdown, tts_status_output]
+            )
+            
+            # RAG风格学习相关事件绑定
+            rag_save_btn.click(
+                fn=self.save_rag_config,
+                inputs=[rag_enabled_checkbox, rag_api_url_input],
+                outputs=[rag_status_output, rag_info]
+            )
+            
+            rag_refresh_btn.click(
+                fn=self.get_rag_info,
+                outputs=[rag_info]
             )
             
             # JSON自动修复相关事件绑定

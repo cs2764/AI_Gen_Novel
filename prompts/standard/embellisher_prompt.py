@@ -234,6 +234,13 @@ novel_embellisher_prompt = """
 ===END===
 ```
 
+"""
+
+from prompts.common.humanizer_rules import HUMANIZER_RULES
+
+novel_embellisher_prompt += f"\n\n{HUMANIZER_RULES}\n\n"
+
+novel_embellisher_prompt += """
 ## init:
 接下来，我会提供给你相关内容，我希望你可以完全的理解之后再写小说。
 你如果明白的话，就回复我明白了。

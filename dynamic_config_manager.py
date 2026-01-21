@@ -65,6 +65,8 @@ class DynamicConfigManager:
         self._tts_model = ""  # TTS处理专用模型，空表示使用当前模型
         self._tts_api_key = ""  # TTS处理专用API密钥，空表示使用当前API密钥
         self._tts_base_url = ""  # TTS处理专用基础URL，空表示使用当前基础URL
+        self._rag_enabled = False  # RAG风格学习开关
+        self._rag_api_url = ""  # RAG API服务地址
         self._load_default_configs()
         # 尝试从文件加载配置
         self.load_config_from_file()
@@ -387,6 +389,8 @@ class DynamicConfigManager:
                 config_data["tts_model"] = self._tts_model
                 config_data["tts_api_key"] = self._tts_api_key
                 config_data["tts_base_url"] = self._tts_base_url
+                config_data["rag_enabled"] = self._rag_enabled
+                config_data["rag_api_url"] = self._rag_api_url
                 config_data["providers"] = {}
                 
                 for name, provider_config in self._providers.items():
@@ -421,6 +425,8 @@ class DynamicConfigManager:
                 self._tts_model = config_data.get("tts_model", "")
                 self._tts_api_key = config_data.get("tts_api_key", "")
                 self._tts_base_url = config_data.get("tts_base_url", "")
+                self._rag_enabled = config_data.get("rag_enabled", False)
+                self._rag_api_url = config_data.get("rag_api_url", "")
                 
                 # 不再设置环境变量，统一从配置文件读取
                 
@@ -734,6 +740,68 @@ class DynamicConfigManager:
                 model = current_config.model_name if current_config else ""
             
             return provider, model
+    
+    def get_rag_enabled(self) -> bool:
+        """获取RAG风格学习开关状态"""
+        with self._config_lock:
+            return self._rag_enabled
+    
+    def set_rag_enabled(self, enabled: bool) -> bool:
+        """设置RAG风格学习开关并保存到配置文件"""
+        try:
+            with self._config_lock:
+                old_state = self._rag_enabled
+                self._rag_enabled = enabled
+                
+                print(f"RAG风格学习已{'开启' if enabled else '关闭'} (原状态: {'开启' if old_state else '关闭'})")
+            
+            # 保存到配置文件
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置RAG风格学习失败: {e}")
+            return False
+    
+    def get_rag_api_url(self) -> str:
+        """获取RAG API服务地址"""
+        with self._config_lock:
+            return self._rag_api_url
+    
+    def set_rag_api_url(self, url: str) -> bool:
+        """设置RAG API服务地址并保存到配置文件"""
+        try:
+            with self._config_lock:
+                old_url = self._rag_api_url
+                self._rag_api_url = url.strip()
+                
+                if url:
+                    print(f"RAG API地址已设置: {url}")
+                else:
+                    print("RAG API地址已清空")
+            
+            # 保存到配置文件
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置RAG API地址失败: {e}")
+            return False
+    
+    def set_rag_config(self, enabled: bool, api_url: str) -> bool:
+        """同时设置RAG开关和API地址"""
+        try:
+            with self._config_lock:
+                self._rag_enabled = enabled
+                self._rag_api_url = api_url.strip()
+                
+                status = "启用" if enabled else "禁用"
+                url_info = api_url if api_url else "未设置"
+                print(f"RAG配置已更新: {status}, API地址: {url_info}")
+            
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置RAG配置失败: {e}")
+            return False
 
 # 全局配置管理器实例
 _config_manager = None
