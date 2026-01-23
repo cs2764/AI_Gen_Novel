@@ -25,6 +25,24 @@
 
 ---
 
+## [4.1.2] - 2026-01-22 🔧 NVIDIA非流式修复 | NVIDIA Non-Streaming Fix
+
+### 🔧 Bug修复 | Bug Fixes
+
+#### 🛠️ NVIDIA API稳定性增强 | NVIDIA API Stability Enhancement
+- **非流式强制模式**：针对NVIDIA API流式输出不稳定的问题，自动切换为非流式输出模式
+- **Non-Streaming Enforcement**: Automatically switches to non-streaming mode for NVIDIA API to resolve streaming instability
+- **空内容回退处理**：当API返回的主内容为空但包含思考过程时，自动使用思考过程作为回复
+- **Empty Content Fallback**: Automatically uses reasoning content as reply when main content is empty but reasoning exists
+- **详细Token统计**：在非流式模式下提供精确的提问和回复Token消耗统计
+- **Detailed Token Stats**: Provides precise prompt and completion token usage statistics in non-streaming mode
+
+### 📝 修改文件 | Modified Files
+- `aign_agents.py`: 添加NVIDIA提供商检测和非流式模式切换逻辑 | Added NVIDIA provider detection and non-streaming switch logic
+- `uniai/nvidiaAI.py`: 实现非流式响应处理、空内容回退和Token统计 | Implemented non-streaming response handling, empty content fallback, and token stats
+
+---
+
 ## [4.1.0] - 2026-01-22 💾 断点续传功能 | Checkpoint & Resume Feature
 
 ### ✨ 核心新功能 | Core New Features

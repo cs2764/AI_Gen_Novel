@@ -568,6 +568,22 @@ class MarkdownAgent:
                 full_prompt_content, content_type, self.name, direction="sent"
             )
         
+        # 根据提供商类型决定是否使用流式输出
+        # NVIDIA API使用非流式模式以避免流式输出问题
+        use_stream = True  # 默认使用流式输出
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            current_config = config_manager.get_current_config()
+            
+            if current_config and hasattr(current_config, 'name'):
+                provider_name = current_config.name.lower()
+                if 'nvidia' in provider_name:
+                    use_stream = False
+                    print(f"🔧 [Debug] 检测到NVIDIA提供商，已切换为非流式输出模式")
+        except Exception:
+            pass  # 获取失败时使用默认的流式模式
+        
         # ⏱️ 开始API调用计时
         api_start_time = time.time()
         
@@ -575,8 +591,8 @@ class MarkdownAgent:
             messages=full_messages,
             temperature=self.temperature,
             top_p=self.top_p,
-            max_tokens=self.max_tokens,  # 传递max_tokens参数，防止输出被截断
-            stream=True,  # 启用流式输出，支持实时显示生成内容
+            max_tokens=self.max_tokens,
+            stream=use_stream,  # 根据提供商类型动态决定是否使用流式输出
         )
         
         # 处理流式和非流式响应

@@ -5,7 +5,7 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "4.1.1"
+__version__ = "4.1.2"
 __author__ = "AI Novel Generator Team"
 __description__ = "AI 网络小说生成器 - GitHub发布版 (2026-01-22)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"

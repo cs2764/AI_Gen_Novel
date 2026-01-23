@@ -49,18 +49,13 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
         temperature=None,
         top_p=None,
         max_tokens=None,
-        stream=True,  # NVIDIA API默认使用流式模式
+        stream=False,  # NVIDIA API默认使用非流式模式以避免流式输出问题
     ) -> dict:
 
         
         # NVIDIA AI默认max_tokens设置为8192
         if max_tokens is None:
             max_tokens = 8192
-        
-        # NVIDIA API 强制使用流式模式
-        if not stream:
-            print(f"⚠️ NVIDIA API 不支持非流式模式，已自动切换为流式模式")
-            stream = True
         
         # 如果设置了系统提示词，合并到第一个用户消息的开头
         if system_prompt and messages:
@@ -127,16 +122,41 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
                 elapsed_minutes = api_elapsed / 60
                 
                 # 获取响应内容
-                content = response.choices[0].message.content if response.choices else ""
-                total_tokens = response.usage.total_tokens if response.usage else 0
+                
+                content = ""
+                reasoning_content = None
+                
+                if response.choices:
+                    message = response.choices[0].message
+                    content = message.content if message.content else ""
+                    # 尝试获取 reasoning_content (如果存在)
+                    if hasattr(message, 'reasoning_content'):
+                        reasoning_content = message.reasoning_content
+                        
+                    # 特殊处理：如果content为空但有reasoning_content，且看起来像正文（不是纯思考过程）
+                    # 某些NVIDIA模型会将生成的正文放在reasoning字段中
+                    if not content and reasoning_content:
+                        print(f"⚠️ [NVIDIA] Content为空，使用reasoning_content作为主要内容")
+                        content = reasoning_content
+                        # 清空reasoning_content以避免重复显示（可选，取决于是否想保留原始结构）
+                        # reasoning_content = None 
+                    
+                total_tokens = 0
+                prompt_tokens = 0
+                completion_tokens = 0
+                
+                if response.usage:
+                    total_tokens = response.usage.total_tokens
+                    prompt_tokens = response.usage.prompt_tokens
+                    completion_tokens = response.usage.completion_tokens
                 
                 # 记录API调用完成日志
                 if elapsed_minutes > 1:
                     print(f"⏱️ NVIDIA API 调用完成: 耗时 {elapsed_minutes:.1f} 分钟, "
-                          f"响应长度 {len(content)} 字符, Token消耗 {total_tokens}")
+                          f"响应长度 {len(content)} 字符, Token消耗 {total_tokens} (提问:{prompt_tokens}, 回复:{completion_tokens})")
                 else:
                     print(f"⏱️ NVIDIA API 调用完成: 耗时 {api_elapsed:.1f} 秒, "
-                          f"响应长度 {len(content)} 字符, Token消耗 {total_tokens}")
+                          f"响应长度 {len(content)} 字符, Token消耗 {total_tokens} (提问:{prompt_tokens}, 回复:{completion_tokens})")
                 
                 # 如果调用时间超过10分钟，发出警告
                 if elapsed_minutes > 10:
@@ -146,7 +166,10 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
                 return {
                     "content": content,
                     "total_tokens": total_tokens,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
                     "generation_time_ms": int(api_elapsed * 1000),  # 返回生成时间供上层统计
+                    "reasoning_content": reasoning_content,
                 }
             else:
                 params["stream"] = True
