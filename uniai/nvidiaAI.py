@@ -4,7 +4,7 @@ import httpx
 from openai import OpenAI
 
 
-def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_prompt="", base_url=None, thinking_enabled=True):
+def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_prompt="", base_url=None, thinking_enabled=False):
     """
     NVIDIA AI Chat LLM using OpenAI-compatible API
     
@@ -109,8 +109,9 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
             params["max_tokens"] = max_tokens
         
         # 启用思考模式 (thinking_enabled=True 时启用)
+        # 显式设置思考模式
+        params["extra_body"] = {"chat_template_kwargs": {"thinking": thinking_enabled}}
         if thinking_enabled:
-            params["extra_body"] = {"chat_template_kwargs": {"thinking": True}}
             print(f"🧠 NVIDIA API: 思考模式已启用")
         
         try:
@@ -173,15 +174,17 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
                             continue
                         
                         # 处理reasoning_content (思考过程)
-                        reasoning = getattr(response.choices[0].delta, "reasoning_content", None)
-                        if reasoning:
-                            reasoning_content += reasoning
-                            # 实时yield思考内容（由aign_agents.py负责打印到console）
-                            yield {
-                                "content": content,
-                                "total_tokens": int(total_tokens),
-                                "reasoning_content": reasoning_content,
-                            }
+                        # 仅在启用思考模式时处理
+                        if thinking_enabled:
+                            reasoning = getattr(response.choices[0].delta, "reasoning_content", None)
+                            if reasoning:
+                                reasoning_content += reasoning
+                                # 实时yield思考内容（由aign_agents.py负责打印到console）
+                                yield {
+                                    "content": content,
+                                    "total_tokens": int(total_tokens),
+                                    "reasoning_content": reasoning_content,
+                                }
                         
                         # 处理常规content
                         if response.choices and response.choices[0].delta.content is not None:
@@ -220,6 +223,14 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
                     
                     if reasoning_content:
                         print(f"🧠 思考过程总长度: {len(reasoning_content)} 字符")
+                    
+                    # 重要：在流结束后yield最终的完整结果
+                    # 这确保调用方能获取到完整的内容，即使最后一个chunk没有包含所有信息
+                    yield {
+                        "content": content,
+                        "total_tokens": int(total_tokens),
+                        "reasoning_content": reasoning_content,
+                    }
 
                 return respGenerator()
                 

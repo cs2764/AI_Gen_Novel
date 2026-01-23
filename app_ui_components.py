@@ -519,6 +519,30 @@ def create_auto_generation_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
         # Timer组件
         components['progress_timer'] = gr.Timer(value=2, active=True)
         
+        # 存档管理 - 断点续传功能
+        with gr.Accordion("💾 存档管理 - 断点续传", open=False):
+            gr.Markdown("""
+**功能说明**：从已保存的存档恢复，继续之前的小说生成。
+- 📂 **选择存档文件** - 选择 `.novel_save` 文件
+- 📥 **载入存档** - 恢复所有内容和进度，可继续自动生成
+
+💡 存档文件保存在 `output/` 目录，文件名格式：`小说标题.novel_save`
+            """)
+            components['save_file_upload'] = gr.File(
+                label="📂 选择存档文件",
+                file_types=[".novel_save"],
+                file_count="single",
+                interactive=True
+            )
+            with gr.Row():
+                components['load_save_btn'] = gr.Button("📥 载入存档", variant="primary")
+            components['save_status_display'] = gr.Textbox(
+                label="存档状态",
+                lines=4,
+                interactive=False,
+                value="请选择 .novel_save 存档文件后点击'载入存档'"
+            )
+        
         gr.Markdown("💡 **提示**: 可启用自动刷新或手动点击刷新按钮查看最新状态")
         
         components['progress_text'] = gr.Textbox(

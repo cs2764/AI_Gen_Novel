@@ -72,6 +72,11 @@ class AIGN:
         self.auto_save_manager = get_auto_save_manager()
         print("💾 本地自动保存管理器已初始化")
         
+        # 初始化小说存档管理器
+        from novel_save_manager import get_novel_save_manager
+        self.novel_save_manager = get_novel_save_manager()
+        print("🎮 小说存档管理器已初始化")
+        
         # 全局状态历史，用于保留所有生成步骤的状态信息
         self.global_status_history = []
         
@@ -81,6 +86,12 @@ class AIGN:
             config_manager = get_config_manager()
             self.cosyvoice_mode = config_manager.get_cosyvoice_mode()
             print(f"🎙️ CosyVoice2模式: {'已启用' if self.cosyvoice_mode else '未启用'}")
+            # 读取RAG top_k配置
+            try:
+                self.rag_top_k = config_manager.get_rag_top_k()
+                print(f"📚 RAG检索数量: {self.rag_top_k}")
+            except Exception:
+                pass  # 如果配置管理器没有该方法，保持默认值
         except Exception as e:
             print(f"⚠️ 读取CosyVoice2配置失败: {e}，使用默认值(关闭)")
             self.cosyvoice_mode = False
@@ -119,6 +130,8 @@ class AIGN:
         # 剧情紧凑度设置：控制剧情节奏和高潮分布
         self.chapters_per_plot = 5  # 每个剧情单元的章节数，默认5章
         self.num_climaxes = 5       # 故事高潮总数，默认5个
+        # RAG设置：检索结果数量
+        self.rag_top_k = 10  # RAG检索返回结果数量，默认10，范围5-30
 
         
         # 详细大纲相关属性
@@ -278,6 +291,10 @@ class AIGN:
         
         # 生成控制标志
         self.stop_generation = False
+        
+        # API连续解析失败检测
+        self.consecutive_parse_failures = 0  # 连续解析失败次数
+        self.max_consecutive_failures = 3  # 最大允许连续失败次数
         
         # 调试信息说明 - 从配置文件读取
         debug_level = '1'  # 默认值
@@ -2729,7 +2746,7 @@ class AIGN:
             print("📚 RAG (开头生成): 正在检索风格参考...")
             # 构建查询：故事线 + 写作要求（精简版）
             rag_query = f"{storyline_for_beginning} {self.user_requirements}"
-            rag_references = self._get_rag_references(rag_query, top_k=5, for_embellishment=False)
+            rag_references = self._get_rag_references(rag_query, top_k=self.rag_top_k, for_embellishment=False)
             if rag_references:
                 print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
             else:
@@ -2928,7 +2945,7 @@ class AIGN:
             if self._is_rag_enabled():
                 # 构建查询：关键元素 + 润色要求（精简版）
                 rag_query_emb = f"{self.last_rag_key_elements} {self.embellishment_idea}"
-                rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=self.rag_top_k, for_embellishment=True)
                 if rag_refs_emb:
                     emb_inputs["风格参考"] = rag_refs_emb
                     print(f"   📚 RAG(开头润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
@@ -3926,7 +3943,7 @@ class AIGN:
                 
                 if query_parts:
                     rag_query = " ".join(query_parts)
-                    rag_references = self._get_rag_references(rag_query, top_k=10, for_embellishment=False)
+                    rag_references = self._get_rag_references(rag_query, top_k=self.rag_top_k, for_embellishment=False)
                     if rag_references:
                         inputs["风格参考"] = rag_references
 
@@ -4052,7 +4069,7 @@ class AIGN:
                     if self._is_rag_enabled():
                         # 构建查询: 关键元素 + 润色要求（精简版）
                         rag_query_emb = f"{seg_key_elements} {self.embellishment_idea}"
-                        rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                        rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=self.rag_top_k, for_embellishment=True)
                         if rag_refs_emb:
                             emb_inputs["风格参考"] = rag_refs_emb
                             print(f"   📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
@@ -4091,7 +4108,7 @@ class AIGN:
                     if self._is_rag_enabled():
                         # 构建查询: 关键元素 + 润色要求（精简版）
                         rag_query_emb = f"{seg_key_elements} {self.embellishment_idea}"
-                        rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                        rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=self.rag_top_k, for_embellishment=True)
                         if rag_refs_emb:
                             emb_inputs["风格参考"] = rag_refs_emb
                             print(f"   📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
@@ -4161,7 +4178,7 @@ class AIGN:
                 if self._is_rag_enabled():
                     # 构建查询: 关键元素 + 润色要求（精简版）
                     rag_query_emb = f"{self.last_rag_key_elements} {self.embellishment_idea}"
-                    rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=5, for_embellishment=True)
+                    rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=self.rag_top_k, for_embellishment=True)
                     if rag_refs_emb:
                         embellish_inputs["风格参考"] = rag_refs_emb
                         print(f"📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
@@ -4197,7 +4214,7 @@ class AIGN:
                 if self._is_rag_enabled():
                     # 构建查询: 关键元素 + 润色要求（精简版）
                     rag_query_emb = f"{self.last_rag_key_elements} {self.embellishment_idea}"
-                    rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=10, for_embellishment=True)
+                    rag_refs_emb = self._get_rag_references(rag_query_emb, top_k=self.rag_top_k, for_embellishment=True)
                     if rag_refs_emb:
                         embellish_inputs["风格参考"] = rag_refs_emb
                         print(f"📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
@@ -4265,7 +4282,7 @@ class AIGN:
                 
                 if query_parts:
                     rag_query = " ".join(query_parts)
-                    rag_references = self._get_rag_references(rag_query, top_k=10, for_embellishment=True)
+                    rag_references = self._get_rag_references(rag_query, top_k=self.rag_top_k, for_embellishment=True)
                     if rag_references:
                         embellish_inputs["风格参考"] = rag_references
                 
@@ -5085,13 +5102,45 @@ class AIGN:
             
         self.auto_generation_running = True
         
+        # 🔧 重置停止标志，确保干净启动
+        self.stop_generation = False
+        if hasattr(self, 'stop_auto_generate'):
+            self.stop_auto_generate = False
+        
+        # 🔧 清空之前的流内容，确保不混入旧数据
+        self.current_stream_content = ""
+        self.current_stream_chars = 0
+        self.current_stream_operation = ""
+        
+        # 增加生成会话ID（如果存在），用于标识这次生成会话
+        if not hasattr(self, 'generation_session_id'):
+            self.generation_session_id = 0
+        self.generation_session_id += 1
+        current_session = self.generation_session_id
+        print(f"🚀 开始新的生成会话 #{current_session}")
+        
         # 启用WebUI流式输出（正文生成时启用）
         self.enable_webui_stream = True
         
         def auto_gen_worker():
             try:
                 start_time = time.time()
-                print(f"🚀 开始自动生成小说，目标章节数: {self.target_chapter_count}")
+                
+                # 检查是否从中断点继续
+                is_resume = self.chapter_count > 0
+                
+                if is_resume:
+                    resume_msg = f"🔄 检测到现有进度，将从第{self.chapter_count + 1}章继续生成"
+                    print("=" * 60)
+                    print(resume_msg)
+                    print(f"📚 当前进度: {self.chapter_count}/{self.target_chapter_count}章")
+                    print(f"🎯 剩余章节: {self.target_chapter_count - self.chapter_count}章")
+                    print("=" * 60)
+                    self._sync_to_webui(resume_msg)
+                    print(f"🚀 开始继续生成，目标章节数: {self.target_chapter_count}")
+                else:
+                    print(f"🚀 开始自动生成小说，目标章节数: {self.target_chapter_count}")
+                
                 print(f"📦 精简模式: {'✅ 启用' if getattr(self, 'compact_mode', False) else '❌ 禁用'}")
                 
                 # 启用Token累积统计系统
@@ -5219,6 +5268,17 @@ class AIGN:
                         chapter_time = time.time() - chapter_start_time
                         success_msg = f"✅ 第{self.chapter_count}章生成完成，耗时: {self.format_time_duration(chapter_time, include_seconds=True)}"
                         print(success_msg)
+                        
+                        # 生成成功，重置连续失败计数器
+                        self.consecutive_parse_failures = 0
+
+                        # 生成后自动保存存档（每章）
+                        try:
+                            save_path = self.save_novel_progress()
+                            if save_path:
+                                print(f"💾 存档已更新: {save_path}")
+                        except Exception as e:
+                            print(f"⚠️ 自动保存存档失败: {e}")
 
                         # 同步生成结果到WebUI
                         self._sync_to_webui(success_msg)
@@ -5231,6 +5291,35 @@ class AIGN:
                     except Exception as e:
                         error_msg = f"❌ 生成第{next_chapter_num}章时出错: {e}"
                         print(error_msg)
+                        
+                        # 增加连续失败计数
+                        self.consecutive_parse_failures += 1
+                        print(f"⚠️ 连续失败次数: {self.consecutive_parse_failures}/{self.max_consecutive_failures}")
+                        
+                        # 检查是否达到最大失败次数
+                        if self.consecutive_parse_failures >= self.max_consecutive_failures:
+                            critical_msg = f"❌❌❌ 检测到API提供商问题！"
+                            print("\n" + "=" * 60)
+                            print(critical_msg)
+                            print(f"🚫 连续{self.consecutive_parse_failures}次API调用无法解析返回值")
+                            print(f"🚨 建议操作：")
+                            print("   1. 检查API提供商服务状态")
+                            print("   2. 切换到其他AI提供商")
+                            print("   3. 点击'开始自动生成'继续")
+                            print("")
+                            print(f"📚 当前进度: {self.chapter_count}/{self.target_chapter_count}章")
+                            print(f"💾 进度已自动保存")
+                            print("=" * 60 + "\n")
+                            
+                            # 同步到WebUI
+                            self._sync_to_webui(critical_msg + f" 连续{self.consecutive_parse_failures}次失败，已停止生成")
+                            
+                            # 停止生成并重置计数器
+                            self.stop_generation = True
+                            self.auto_generation_running = False
+                            self.consecutive_parse_failures = 0  # 重置以便下次继续
+                            break
+                        
                         # 如果出错，尝试刷新ChatLLM后重试
                         print("🔄 尝试刷新ChatLLM配置后重试...")
                         self._refresh_chatllm_for_auto_generation()
@@ -5249,6 +5338,18 @@ class AIGN:
                     # 生成EPUB格式文件
                     self.saveToEpub()
                     
+                    # 更新存档状态为completed并清理（完成后不再需要断点续传）
+                    try:
+                        if hasattr(self, 'current_output_file') and self.current_output_file:
+                            from pathlib import Path
+                            save_path = str(Path(self.current_output_file).with_suffix('.novel_save'))
+                            import os
+                            if os.path.exists(save_path):
+                                os.remove(save_path)
+                                print(f"🗑️ 生成已完成，已清理存档文件")
+                    except Exception as e:
+                        print(f"⚠️ 清理存档文件失败: {e}")
+                    
                     # 在EPUB保存后显示Token累积统计最终报告
                     if self.token_accumulation_stats.get("enabled", False):
                         token_summary = self.get_token_accumulation_final_summary()
@@ -5263,8 +5364,18 @@ class AIGN:
                             print(time_summary)
                             self._sync_to_webui("⏱️ 时间和费用统计已生成，请查看终端输出")
                 else:
-                    stop_msg = f"⏹️  自动生成已停止，当前进度: {self.chapter_count}/{self.target_chapter_count}"
+                    # 生成被停止
+                    print("=" * 60)
+                    stop_msg = f"⏹️  自动生成已停止"
                     print(stop_msg)
+                    print(f"📚 当前进度: {self.chapter_count}/{self.target_chapter_count}章")
+                    print(f"💾 进度已自动保存")
+                    print("")
+                    print("💡 如何继续生成：")
+                    print("   1. （可选）在配置页面切换AI提供商/模型")
+                    print("   2. 再次点击“开始自动生成”按钮")
+                    print(f"   3. 将从第{self.chapter_count + 1}章自动继续生成")
+                    print("=" * 60)
                     self._sync_to_webui(stop_msg)
                     
                     # 也显示当前Token统计
@@ -5556,10 +5667,31 @@ class AIGN:
         self.stream_start_time = 0
     
     def stopAutoGeneration(self):
-        """停止自动生成"""
+        """停止自动生成并清理API流状态
+        
+        关键：停止时必须清空当前流内容，防止旧API响应与新请求混合
+        """
         if self.auto_generation_running:
             self.auto_generation_running = False
             print("⏹️  正在停止自动生成...")
+            
+            # 🔧 关键修复：清空当前流内容，防止旧API响应混合
+            self.current_stream_content = ""
+            self.current_stream_chars = 0
+            self.current_stream_operation = ""
+            self.stream_start_time = 0
+            self.enable_webui_stream = False
+            
+            # 设置停止标志（用于其他可能检查这些标志的代码）
+            self.stop_generation = True
+            
+            # 增加生成会话ID，用于区分新旧API请求
+            if not hasattr(self, 'generation_session_id'):
+                self.generation_session_id = 0
+            self.generation_session_id += 1
+            print(f"🔄 生成会话已更新到 #{self.generation_session_id}")
+            
+            print("✅ 已停止自动生成并清空流内容")
         else:
             print("ℹ️  自动生成未在运行")
     
@@ -6523,3 +6655,35 @@ class AIGN:
         
         return "\n".join(lines)
 
+
+    # ========== 小说存档管理方法 ==========
+    
+    def save_novel_progress(self, save_path: str = None):
+        """保存当前小说生成进度到存档文件"""
+        return self.novel_save_manager.save_to_file(self, save_path)
+    
+    def load_novel_progress(self, save_path: str) -> bool:
+        """从存档文件恢复小说生成进度"""
+        return self.novel_save_manager.load_from_file(self, save_path)
+    
+    def get_available_saves(self, directory: str = "output") -> list:
+        """获取可用的存档文件列表"""
+        return self.novel_save_manager.list_available_saves(directory)
+    
+    def get_save_info(self, save_path: str):
+        """获取存档文件信息"""
+        return self.novel_save_manager.get_save_info(save_path)
+    
+    def resume_from_save(self, save_path: str) -> bool:
+        """从存档继续生成（加载存档并准备继续）"""
+        if self.load_novel_progress(save_path):
+            if self.novel_title and not self.current_output_file:
+                self.initOutputFile()
+            print(f"✅ 已从存档恢复，可以继续生成")
+            print(f"📊 当前进度: {self.chapter_count}/{self.target_chapter_count}章")
+            if hasattr(self, 'updateWriterPromptsForLongChapter'):
+                self.updateWriterPromptsForLongChapter()
+            if hasattr(self, 'updateEmbellishersForCosyVoice'):
+                self.updateEmbellishersForCosyVoice()
+            return True
+        return False

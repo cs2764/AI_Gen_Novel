@@ -28,6 +28,7 @@ class ProviderConfig:
     system_prompt: str = ""
     provider_routing: Optional[Dict[str, Any]] = None  # OpenRouter provider routing配置
     temperature: float = 0.7  # 默认温度值
+    thinking_enabled: bool = True  # 是否启用思考模式 (默认True)
     
     def __post_init__(self):
         if self.models is None:
@@ -67,6 +68,7 @@ class DynamicConfigManager:
         self._tts_base_url = ""  # TTS处理专用基础URL，空表示使用当前基础URL
         self._rag_enabled = False  # RAG风格学习开关
         self._rag_api_url = ""  # RAG API服务地址
+        self._rag_top_k = 10  # RAG检索返回数量，默认10，范围5-30
         self._load_default_configs()
         # 尝试从文件加载配置
         self.load_config_from_file()
@@ -365,6 +367,26 @@ class DynamicConfigManager:
                 config.base_url = base_url
             if temperature is not None:
                 config.temperature = temperature
+            # 更新思考模式 (如果提供了thinking_enabled参数)
+            # 注意：web_config_interface可能通过kwargs传递或者我们需要修改此方法签名
+            return True
+
+    def update_provider_config_full(self, provider_name: str, api_key: str, model_name: str, system_prompt: str = "", base_url: str = None, temperature: float = None, thinking_enabled: bool = None) -> bool:
+        """更新提供商配置(完整版，包含thinking_enabled)"""
+        with self._config_lock:
+            if provider_name not in self._providers:
+                return False
+            
+            config = self._providers[provider_name]
+            config.api_key = api_key
+            config.model_name = model_name
+            config.system_prompt = system_prompt
+            if base_url is not None:
+                config.base_url = base_url
+            if temperature is not None:
+                config.temperature = temperature
+            if thinking_enabled is not None:
+                config.thinking_enabled = thinking_enabled
             return True
     
     def set_current_provider(self, provider_name: str) -> bool:
@@ -391,6 +413,7 @@ class DynamicConfigManager:
                 config_data["tts_base_url"] = self._tts_base_url
                 config_data["rag_enabled"] = self._rag_enabled
                 config_data["rag_api_url"] = self._rag_api_url
+                config_data["rag_top_k"] = self._rag_top_k
                 config_data["providers"] = {}
                 
                 for name, provider_config in self._providers.items():
@@ -427,6 +450,7 @@ class DynamicConfigManager:
                 self._tts_base_url = config_data.get("tts_base_url", "")
                 self._rag_enabled = config_data.get("rag_enabled", False)
                 self._rag_api_url = config_data.get("rag_api_url", "")
+                self._rag_top_k = config_data.get("rag_top_k", 10)
                 
                 # 不再设置环境变量，统一从配置文件读取
                 
@@ -462,6 +486,14 @@ class DynamicConfigManager:
                         else:
                             # 如果配置文件中没有temperature字段，使用默认值
                             config.temperature = 0.7
+                        
+                        # 加载thinking_enabled设置
+                        if "thinking_enabled" in provider_data:
+                            config.thinking_enabled = provider_data["thinking_enabled"]
+                        else:
+                            # 默认如果没设置，NVIDIA为True(代码中默认)，但为了安全起见这里不强制覆盖
+                            # ProviderConfig默认是True，我们保持该行为
+                            pass
             
             print(f"配置已从 {config_path} 加载")
             return True
@@ -588,7 +620,8 @@ class DynamicConfigManager:
                 model_name=current_config.model_name,
                 api_key=current_config.api_key,
                 base_url=current_config.base_url,
-                system_prompt=current_config.system_prompt
+                system_prompt=current_config.system_prompt,
+                thinking_enabled=current_config.thinking_enabled
             )
         elif provider_name == "nvidia":
             from uniai.nvidiaAI import nvidiaChatLLM
@@ -596,7 +629,8 @@ class DynamicConfigManager:
                 model_name=current_config.model_name,
                 api_key=current_config.api_key,
                 base_url=current_config.base_url,
-                system_prompt=current_config.system_prompt
+                system_prompt=current_config.system_prompt,
+                thinking_enabled=current_config.thinking_enabled
             )
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
@@ -802,6 +836,34 @@ class DynamicConfigManager:
         except Exception as e:
             print(f"设置RAG配置失败: {e}")
             return False
+
+
+    def get_rag_top_k(self) -> int:
+        """获取RAG检索返回数量"""
+        with self._config_lock:
+            return self._rag_top_k
+    
+    def set_rag_top_k(self, top_k: int) -> bool:
+        """设置RAG检索返回数量并保存到配置文件"""
+        try:
+            # 验证范围
+            if top_k < 5 or top_k > 30:
+                print(f"⚠️ RAG top_k值必须在5-30之间，当前值: {top_k}，将使用默认值10")
+                top_k = 10
+            
+            with self._config_lock:
+                old_value = self._rag_top_k
+                self._rag_top_k = top_k
+                
+                print(f"RAG检索数量已从 {old_value} 更改为 {top_k}")
+            
+            # 保存到配置文件
+            return self.save_config_to_file()
+            
+        except Exception as e:
+            print(f"设置RAG检索数量失败: {e}")
+            return False
+
 
 # 全局配置管理器实例
 _config_manager = None

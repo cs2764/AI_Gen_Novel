@@ -2,7 +2,7 @@ import os
 from openai import OpenAI
 
 
-def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, system_prompt="", base_url=None):
+def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, system_prompt="", base_url=None, thinking_enabled=False):
     """
     SiliconFlow AI Chat LLM using OpenAI-compatible API
     
@@ -19,7 +19,11 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
     - Qwen/Qwen2.5-32B-Instruct
     - meta-llama/Llama-3.3-70B-Instruct
     - Pro/deepseek-ai/DeepSeek-V3
+    - Pro/deepseek-ai/DeepSeek-V3
     - Pro/deepseek-ai/DeepSeek-R1
+    
+    Args:
+        thinking_enabled: Enable thinking/reasoning mode (default: False)
     """
     api_key = os.environ.get("SILICONFLOW_API_KEY", api_key)
     
@@ -80,10 +84,13 @@ def siliconflowChatLLM(model_name="deepseek-ai/DeepSeek-V3", api_key=None, syste
             "messages": messages,
         }
         
-        # 只对支持的模型添加enable_thinking参数
-        if any(model_name.startswith(m) or model_name == m for m in thinking_supported_models):
+        # 只对支持的模型添加enable_thinking参数，且仅在thinking_enabled为True时启用
+        if thinking_enabled and any(model_name.startswith(m) or model_name == m for m in thinking_supported_models):
             params["enable_thinking"] = True
             print(f"🧠 已为模型 {model_name} 启用思考模式 (enable_thinking=True)")
+        elif thinking_enabled:
+            # 用户启用了思考模式但模型不支持，打印警告
+             print(f"⚠️ 模型 {model_name} 可能不支持思考模式，但用户已启用。")
         
         # SiliconFlow API支持temperature参数,但需要确保在有效范围内
         # 根据文档,通常范围是0-2,但某些模型(如Claude)范围是0-1

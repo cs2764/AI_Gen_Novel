@@ -1741,7 +1741,6 @@ def bind_main_events(
         else:
             print("⚠️ 自动生成按钮或autoGenerate方法未找到")
         
-        # 绑定停止生成按钮
         if 'stop_generate_button' in components:
             def _wrap_stop_generate(aign_state):
                 """停止生成包装函数"""
@@ -1752,11 +1751,24 @@ def bind_main_events(
                     
                     a = aign_state.value if hasattr(aign_state, 'value') else aign_state
                     
-                    # 设置停止标志
+                    # 设置停止标志 - 关键：设置auto_generation_running为False，这是生成循环检查的标志
+                    if hasattr(a, 'auto_generation_running'):
+                        a.auto_generation_running = False
+                        print("✅ 已设置 auto_generation_running = False")
+                    
+                    # 调用停止方法（如果存在）- 这会清空流内容
+                    if hasattr(a, 'stopAutoGeneration'):
+                        a.stopAutoGeneration()
+                    
+                    # 设置其他停止标志（用于其他可能检查这些标志的代码）
                     if hasattr(a, 'stop_generation'):
                         a.stop_generation = True
                     if hasattr(a, 'stop_auto_generate'):
                         a.stop_auto_generate = True
+                    
+                    # 清空当前流内容（确保UI也清空）
+                    if hasattr(a, 'current_stream_content'):
+                        a.current_stream_content = ""
                     
                     # 初始化状态历史
                     if not hasattr(a, 'global_status_history'):
@@ -1767,15 +1779,17 @@ def bind_main_events(
                     stop_timestamp = datetime.now().strftime("%H:%M:%S")
                     status_history.append(["系统", "⏹️ 用户请求停止生成", stop_timestamp, datetime.now()])
                     
+                    # 返回结果时清空实时流显示
                     return (
                         format_status_output(status_history),
-                        "已发送停止信号",
+                        "已发送停止信号，生成将在当前操作完成后停止",
                         gr.update(visible=True),   # 显示自动生成按钮
-                        gr.update(visible=False)   # 隐藏停止生成按钮
+                        gr.update(visible=False),  # 隐藏停止生成按钮
+                        ""  # 清空实时流显示
                     )
                 except Exception as e:
                     error_msg = f"❌ 停止生成失败: {str(e)}"
-                    return (error_msg, error_msg, gr.update(visible=True), gr.update(visible=False))
+                    return (error_msg, error_msg, gr.update(visible=True), gr.update(visible=False), "")
             
             components['stop_generate_button'].click(
                 fn=_wrap_stop_generate,
@@ -1784,7 +1798,8 @@ def bind_main_events(
                     components.get('status_output'),
                     progress_text,
                     components.get('auto_generate_button'),
-                    components.get('stop_generate_button')
+                    components.get('stop_generate_button'),
+                    components.get('realtime_stream_text')  # 添加：清空实时流显示
                 ]
             )
             print("✅ 停止生成按钮绑定成功")
@@ -1869,6 +1884,111 @@ def bind_main_events(
                 ]
             )
             print("✅ Timer自动刷新功能已启用")
+        
+        # 绑定存档管理功能 - 断点续传（使用文件上传）
+        if 'save_file_upload' in components:
+            # 载入存档（从上传的文件）
+            def _wrap_load_save_from_file(aign_state, uploaded_file):
+                """从上传的文件载入存档"""
+                try:
+                    from app_utils import format_storyline_display
+                    
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    
+                    if not uploaded_file:
+                        return (
+                            gr.update(), gr.update(), gr.update(),  # user fields
+                            gr.update(), gr.update(), gr.update(),  # outline fields
+                            gr.update(), gr.update(), gr.update(),  # detailed/storyline/content
+                            gr.update(),  # novel_content
+                            "❌ 请先选择一个 .novel_save 存档文件"
+                        )
+                    
+                    # 获取文件路径（Gradio File组件返回的是文件对象或路径）
+                    if hasattr(uploaded_file, 'name'):
+                        save_path = uploaded_file.name
+                    elif isinstance(uploaded_file, str):
+                        save_path = uploaded_file
+                    else:
+                        return (
+                            gr.update(), gr.update(), gr.update(),
+                            gr.update(), gr.update(), gr.update(),
+                            gr.update(), gr.update(), gr.update(),
+                            gr.update(),
+                            "❌ 无法获取文件路径"
+                        )
+                    
+                    print(f"📂 尝试载入存档: {save_path}")
+                    
+                    success = a.resume_from_save(save_path) if hasattr(a, 'resume_from_save') else False
+                    
+                    if success:
+                        # 格式化故事线
+                        storyline_display = "暂无故事线内容"
+                        if hasattr(a, 'storyline') and a.storyline:
+                            storyline_display = format_storyline_display(a.storyline)
+                        
+                        # 获取风格和精简模式设置
+                        style_name = getattr(a, 'style_name', '无')
+                        compact_mode = getattr(a, 'compact_mode', True)
+                        
+                        status_msg = f"✅ 存档载入成功！\n\n📚 标题: {getattr(a, 'novel_title', '未知')}\n📊 进度: {getattr(a, 'chapter_count', 0)}/{getattr(a, 'target_chapter_count', 0)}章\n📝 正文: {len(getattr(a, 'novel_content', '') or '')}字符\n📚 风格: {style_name}\n🎯 精简模式: {'开启' if compact_mode else '关闭'}\n\n💡 可点击'开始自动生成'继续生成"
+                        
+                        return (
+                            getattr(a, 'user_idea', '') or '',
+                            getattr(a, 'user_requirements', '') or '',
+                            getattr(a, 'embellishment_idea', '') or '',
+                            getattr(a, 'target_chapter_count', 20),
+                            getattr(a, 'novel_outline', '') or '',
+                            getattr(a, 'novel_title', '') or '',
+                            getattr(a, 'character_list', '') or '',
+                            getattr(a, 'detailed_outline', '') or '',
+                            storyline_display,
+                            getattr(a, 'novel_content', '') or '',
+                            style_name,
+                            compact_mode,
+                            status_msg
+                        )
+                    else:
+                        return (
+                            gr.update(), gr.update(), gr.update(),
+                            gr.update(), gr.update(), gr.update(),
+                            gr.update(), gr.update(), gr.update(),
+                            gr.update(), gr.update(), gr.update(),
+                            "❌ 存档载入失败，请检查文件是否损坏或格式不正确"
+                        )
+                except Exception as e:
+                    print(f"⚠️ 载入存档失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return (
+                        gr.update(), gr.update(), gr.update(),
+                        gr.update(), gr.update(), gr.update(),
+                        gr.update(), gr.update(), gr.update(),
+                        gr.update(), gr.update(), gr.update(),
+                        f"❌ 载入失败: {e}"
+                    )
+            
+            components['load_save_btn'].click(
+                fn=_wrap_load_save_from_file,
+                inputs=[aign, components['save_file_upload']],
+                outputs=[
+                    user_idea_text,
+                    user_requirements_text,
+                    embellishment_idea_text,
+                    components.get('target_chapters_slider'),
+                    novel_outline_text,
+                    novel_title_text,
+                    character_list_text,
+                    detailed_outline_text,
+                    components.get('storyline_text'),
+                    novel_content_text,
+                    components.get('style_dropdown'),
+                    components.get('compact_mode_checkbox'),
+                    components['save_status_display']
+                ]
+            )
+            print("✅ 载入存档按钮绑定成功（文件上传模式）")
         
         # 绑定数据管理界面的手动保存按钮
         data_management_components = components.get('data_management_components')
@@ -1980,10 +2100,8 @@ def bind_main_events(
                     storage_manager.save_user_settings()
                     
                     print(f"✅ 目标章节数已更新并保存: {a.target_chapter_count}")
-                    return f"已更新章节数: {a.target_chapter_count}"
                 except Exception as e:
                     print(f"⚠️ 更新目标章节数失败: {e}")
-                    return f"更新失败: {e}"
 
             components['target_chapters_slider'].change(
                 fn=_wrap_update_target_chapters,
@@ -2095,33 +2213,20 @@ def bind_config_events(
             print("💡 配置界面组件未找到，跳过自动刷新绑定")
             return True
         
-        # 如果配置界面有保存按钮，重新绑定以包含自动刷新
-        if 'save_btn' not in config_components:
-            print("💡 配置保存按钮未找到，跳过自动刷新绑定")
-            return True
-        
-        # 创建配置保存处理函数
-        save_handler = create_config_save_handler(config_components)
-        
-        # 重新绑定保存按钮，添加提供商信息更新
-        config_components['save_btn'].click(
-            fn=save_handler,
-            inputs=[
-                config_components['provider_dropdown'],
-                config_components['api_key_input'],
-                config_components['model_dropdown'],
-                config_components['base_url_input'],
-                config_components['system_prompt_input'],
-                config_components['custom_model_input']
-            ],
-            outputs=[
-                config_components['status_output'],
-                config_components['current_info'],
-                components['provider_info_display']
-            ]
-        )
-        
-        print("✅ 配置界面自动刷新功能已启用")
+        # 【重要】不要在这里重新绑定save_btn！
+        # save_btn 已经在 web_config_interface.py 中正确绑定，包含所有8个输入参数：
+        # [provider_dropdown, api_key_input, model_dropdown, base_url_input, 
+        #  system_prompt_input, temperature_slider, thinking_checkbox, custom_model_input]
+        #
+        # 如果在这里重新绑定，会导致以下问题：
+        # 1. Gradio会为同一个按钮注册两个click事件处理器
+        # 2. 两个处理器会依次执行
+        # 3. 第二个处理器（这里的）只传6个参数，缺少temperature_slider和thinking_checkbox
+        # 4. 缺失的参数会使用默认值（thinking_enabled=True）
+        # 5. 第二次保存会覆盖第一次正确的保存，导致用户的设置被默认值覆盖
+        #
+        # 解决方案：不要在此重新绑定，让web_config_interface.py处理所有配置保存
+        print("💡 save_btn 绑定由 web_config_interface.py 处理，避免重复绑定导致配置覆盖")
         return True
         
     except Exception as e:

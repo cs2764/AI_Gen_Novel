@@ -1,5 +1,67 @@
 # 更新日志 | Changelog
 
+## [4.1.1] - 2026-01-22 🔧 NVIDIA稳定性修复 | NVIDIA Stability Fix
+
+### 🔧 Bug修复 | Bug Fixes
+
+#### 🛠️ NVIDIA思维链内容解析修复 | NVIDIA CoT Parsing Fix
+- **智能内容过滤**：从NVIDIA模型响应中自动移除思维链标签
+- **Smart Content Filtering**: Automatically removes Chain of Thought tags from NVIDIA model responses
+- **移除标签**：`<think>`, `<thinking>`, `<reasoning>`, `<reflection>`
+- **Removed Tags**: `<think>`, `<thinking>`, `<reasoning>`, `<reflection>`
+- **提升稳定性**：修复了NVIDIA模型输出解析失败导致的生成中断问题
+- **Improved Stability**: Fixed generation interruptions caused by NVIDIA model parsing failures
+- **无缝体验**：用户无需手动清理思维过程内容，自动提取纯净正文
+- **Seamless Experience**: Automatically extracts clean content without manual cleanup
+
+### 📝 修改文件 | Modified Files
+- `aign_agents.py`: 添加 `_remove_thinking_content()` 函数用于清理CoT内容 | Added `_remove_thinking_content()` function to clean CoT content
+
+### 🎯 影响范围 | Impact
+- **NVIDIA模型用户**: 使用NVIDIA API（如deepseek-v3.2）时不再出现解析错误
+- **NVIDIA Model Users**: No more parsing errors when using NVIDIA API (e.g., deepseek-v3.2)
+- **思考模式**: 改进了启用思考模式（thinking mode）时的内容处理
+- **Thinking Mode**: Improved content handling when thinking mode is enabled
+
+---
+
+## [4.1.0] - 2026-01-22 💾 断点续传功能 | Checkpoint & Resume Feature
+
+### ✨ 核心新功能 | Core New Features
+
+#### 💾 小说生成断点续传功能 | Novel Generation Checkpoint & Resume
+- **自动保存进度**：生成过程中自动创建断点存档，保护创作成果
+- **Auto-save Progress**: Automatically create checkpoint saves during generation to protect your work
+- **一键恢复**：从断点直接恢复生成进度，无需重新开始
+- **One-click Resume**: Resume generation from checkpoint without starting over
+- **存档管理系统**：完整的存档文件查看、加载、删除功能
+- **Save Management System**: Complete save file viewing, loading, and deletion functionality
+- **防止API失败损失**：API调用失败时，已生成的章节内容得到保护
+- **Protect Against API Failures**: Generated chapters are protected when API calls fail
+
+### 🔧 功能改进 | Improvements
+- **智能存档命名**：基于小说标题自动命名存档文件（.novel_save格式）
+- **Smart Save Naming**: Automatic save file naming based on novel title (.novel_save format)
+- **详细存档信息**：显示保存时间、章节进度、配置信息、风格设置
+- **Detailed Save Info**: Display save time, chapter progress, configuration details, style settings
+- **进度状态追踪**：实时显示已生成章节数和目标章节数
+- **Progress Status Tracking**: Real-time display of generated vs. target chapters
+- **存档版本管理**：支持存档文件格式版本检查和兼容性处理
+- **Save Version Management**: Support for save file format version checking and compatibility handling
+
+### 📄 新增文件 | New Files
+- `novel_save_manager.py`: 完整的存档管理器实现 | Complete checkpoint save/load manager
+
+### 📝 修改文件 | Modified Files
+- `AIGN.py`: 核心断点保存/恢复逻辑 | Core checkpoint save/restore logic
+- `app.py`: 断点功能UI集成 | UI integration for checkpoint feature
+- `app_event_handlers.py`: 保存/恢复操作的事件处理器 | Event handlers for save/resume operations
+- `app_ui_components.py`: 存档管理UI组件 | UI components for checkpoint management
+- `dynamic_config_manager.py`: 断点设置的配置管理 | Config management for checkpoint settings
+- `app_data_handlers.py`: 断点数据处理改进 | Data handling improvements for checkpoints
+
+---
+
 ## [4.0.0] - 2026-01-21 🚀 重大版本升级 | Major Version Upgrade
 
 ### ✨ 核心新功能 | Core New Features

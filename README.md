@@ -1,10 +1,42 @@
-﻿# 🤖 AI Novel Generator v4.0.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.1.1 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.0.0 (2026-01-21)
+## 🎉 What's New in v4.1.1 (2026-01-22)
+
+**🛠️ NVIDIA Model Stability Fix!** Improved Chain of Thought (CoT) content parsing for NVIDIA models!
+
+### ✨ Bug Fixes | 问题修复
+
+#### 🔧 NVIDIA CoT Parsing Fix
+- **智能内容过滤**: 自动从NVIDIA模型响应中移除思维链标签（`<think>`, `<thinking>`, `<reasoning>`, `<reflection>`）
+- **Smart Content Filtering**: Automatically removes Chain of Thought tags from NVIDIA model responses
+- **提升稳定性**: 修复了NVIDIA模型输出解析失败的问题
+- **Improved Stability**: Fixed parsing failures with NVIDIA model outputs
+- **无缝体验**: 用户无需手动清理思维过程内容，自动获得纯净正文
+- **Seamless Experience**: No manual cleanup needed, automatically extracts clean content
+
+---
+
+## 📚 Previous Version: v4.1.0 (2026-01-22)
+
+**💾 Checkpoint & Resume Feature!** Save and resume novel generation progress anytime!
+
+### ✨ New Features | 新功能
+
+#### 💾 Novel Generation Checkpoint & Resume
+- **Auto-save Progress**: Automatically create checkpoint saves during generation to protect your work
+- **One-click Resume**: Resume generation from any checkpoint without restarting
+- **Save Management System**: Complete save file viewing, loading, and deletion functionality
+- **API Failure Protection**: Protect generated chapters when API calls fail
+- **Smart Save Naming**: Automatic save file naming based on novel title (.novel_save format)
+- **Detailed Save Info**: View save time, chapter progress, configuration details, and style settings
+
+---
+
+## 📚 Previous Version: v4.0.0 (2026-01-21)
 
 **🚀 Major Version Upgrade!** RAG-powered Style Learning & AI Trace Removal (Humanizer-zh)!
 
@@ -711,7 +743,39 @@ Made with ❤️ by AI Novel Generator Team
 > 🎨 基于Gradio 5.38.0的现代化AI小说创作工具，支持从想法到完整小说的一键生成
 > 🚀 **GitHub开源发布版** - 完善的安全措施和详细文档
 
-### 🎉 v4.0.0 版本更新 (2026-01-21)
+### 🎉 v4.1.1 版本更新 (2026-01-22)
+
+**🛠️ NVIDIA模型稳定性修复！** 改进NVIDIA模型的思维链（CoT）内容解析！
+
+#### ✨ 问题修复 | Bug Fixes
+
+##### 🔧 NVIDIA CoT 解析修复
+- **智能内容过滤**: 自动从NVIDIA模型响应中移除思维链标签（`<think>`, `<thinking>`, `<reasoning>`, `<reflection>`）
+- **Smart Content Filtering**: Automatically removes Chain of Thought tags from NVIDIA model responses
+- **提升稳定性**: 修复了NVIDIA模型输出解析失败的问题
+- **Improved Stability**: Fixed parsing failures with NVIDIA model outputs
+- **无缝体验**: 用户无需手动清理思维过程内容，自动获得纯净正文
+- **Seamless Experience**: No manual cleanup needed, automatically extracts clean content
+
+---
+
+### 📚 上一版本：v4.1.0 (2026-01-22)
+
+**💾 断点续传功能！** 随时保存和恢复小说生成进度！
+
+#### ✨ 新功能
+
+##### 💾 小说生成断点续传功能
+- **自动保存进度**：生成过程中自动创建断点存档，保护创作成果
+- **一键恢复**：从断点直接恢复生成进度，无需重新开始
+- **存档管理系统**：完整的存档文件查看、加载、删除功能
+- **防止API失败损失**：API调用失败时，已生成的章节内容得到保护
+- **智能存档命名**：基于小说标题自动命名存档文件（.novel_save格式）
+- **详细存档信息**：显示保存时间、章节进度、配置信息、风格设置
+
+---
+
+### 📚 上一版本：v4.0.0 (2026-01-21)
 
 **🚀 重大版本升级！** RAG驱动的风格学习与Humanizer-zh去AI味功能！
 

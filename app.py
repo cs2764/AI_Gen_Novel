@@ -2358,7 +2358,16 @@ def create_gradio5_original_app():
                     try:
                         print(f"⏹️ 停止生成...")
 
-                        # 设置停止标志
+                        # 设置停止标志 - 关键：设置auto_generation_running为False，这是生成循环检查的标志
+                        if hasattr(aign, 'auto_generation_running'):
+                            aign.auto_generation_running = False
+                            print("✅ 已设置 auto_generation_running = False")
+                        
+                        # 调用停止方法（如果存在）
+                        if hasattr(aign, 'stopAutoGeneration'):
+                            aign.stopAutoGeneration()
+                        
+                        # 设置其他停止标志（用于其他可能检查这些标志的代码）
                         if hasattr(aign, 'stop_generation'):
                             aign.stop_generation = True
                         if hasattr(aign, 'stop_auto_generate'):

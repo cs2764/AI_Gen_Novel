@@ -176,7 +176,7 @@ def import_auto_saved_data_handler(aign_state):
         
     Returns:
         list: [导入结果消息, 用户想法, 写作要求, 润色要求, 目标章节数,
-               大纲, 标题, 人物列表, 详细大纲, 故事线]
+               大纲, 标题, 人物列表, 详细大纲, 故事线, 长章节模式, 风格, 剧情节奏, 高潮数量]
                
     说明:
         - 自动从State对象中提取AIGN实例
@@ -192,8 +192,8 @@ def import_auto_saved_data_handler(aign_state):
         import __main__
         if not (hasattr(__main__, 'ORIGINAL_MODULES_LOADED') and __main__.ORIGINAL_MODULES_LOADED) or not aign_instance:
             return [
-                "❌ 系统未初始化，无法导入数据",
-                "", "", "", 20, "", "", "", "", "暂无故事线内容"
+                gr.update(visible=True, value="❌ 系统未初始化，无法导入数据"),
+                "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
             ]
         
         # 调用AIGN实例的加载方法
@@ -219,8 +219,20 @@ def import_auto_saved_data_handler(aign_state):
             # 获取风格设置
             style_name = getattr(aign_instance, 'style_name', '无')
             
+            # 打印调试信息
+            print(f"📥 导入数据调试信息:")
+            print(f"   • 用户想法: {len(getattr(aign_instance, 'user_idea', '') or '')}字符")
+            print(f"   • 写作要求: {len(getattr(aign_instance, 'user_requirements', '') or '')}字符")
+            print(f"   • 润色要求: {len(getattr(aign_instance, 'embellishment_idea', '') or '')}字符")
+            print(f"   • 目标章节: {getattr(aign_instance, 'target_chapter_count', 20)}")
+            print(f"   • 大纲: {len(getattr(aign_instance, 'novel_outline', '') or '')}字符")
+            print(f"   • 标题: {getattr(aign_instance, 'novel_title', '') or '未设置'}")
+            print(f"   • 人物列表: {len(getattr(aign_instance, 'character_list', '') or '')}字符")
+            print(f"   • 详细大纲: {len(getattr(aign_instance, 'detailed_outline', '') or '')}字符")
+            print(f"   • 故事线: {len(storyline_display)}字符")
+            
             return [
-                result_message,
+                gr.update(visible=True, value=result_message),
                 getattr(aign_instance, 'user_idea', '') or '',
                 getattr(aign_instance, 'user_requirements', '') or '',
                 getattr(aign_instance, 'embellishment_idea', '') or '',
@@ -237,13 +249,13 @@ def import_auto_saved_data_handler(aign_state):
             ]
         else:
             return [
-                "⚠️ 未找到可导入的自动保存数据",
+                gr.update(visible=True, value="⚠️ 未找到可导入的自动保存数据"),
                 "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
             ]
             
     except Exception as e:
         return [
-            f"❌ 导入失败: {str(e)}",
+            gr.update(visible=True, value=f"❌ 导入失败: {str(e)}"),
             "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
         ]
 

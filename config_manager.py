@@ -480,7 +480,8 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
                 model_name=provider_config['model_name'],
                 api_key=provider_config['api_key'],
                 base_url=provider_config.get('base_url'),
-                system_prompt=provider_config.get('system_prompt', '')
+                system_prompt=provider_config.get('system_prompt', ''),
+                thinking_enabled=provider_config.get('thinking_enabled', True)
             )
         else:
             raise ValueError(f"不支持的AI提供商: {provider}")

@@ -58,7 +58,7 @@ class WebConfigInterface:
     def on_provider_change(self, provider_name):
         """当提供商改变时的回调"""
         if not provider_name:
-            return gr.update(choices=[], value=""), gr.update(visible=False, value=""), "", "", "", 0.7, ""
+            return gr.update(choices=[], value=""), gr.update(visible=False, value=""), "", "", "", 0.7, False, ""
         
         # 获取显示名称
         display_name = self.config_manager.get_provider_display_name(provider_name)
@@ -78,12 +78,16 @@ class WebConfigInterface:
             current_temperature = 0.7
             print(f"⚠️  Temperature值无效，使用默认值0.7")
         
+        # 获取thinking_enabled状态 (默认为True)
+        # 仅针对NVIDIA和SiliconFlow显示，但配置中始终读取
+        thinking_enabled = current_config.thinking_enabled if current_config and hasattr(current_config, 'thinking_enabled') else True
+        
         # Fireworks特殊处理：显示自定义模型输入框
         if provider_name == "fireworks":
             print(f"🔥 Fireworks提供商：启用自定义模型输入")
             models = self.get_model_choices(provider_name, refresh=False)
             
-            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, status)
+            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, thinking_enabled, status)
             return (
                 gr.update(choices=models, value=current_model),  # 更新模型下拉菜单
                 gr.update(visible=True, value=current_model),  # 显示并填充自定义模型输入框
@@ -91,6 +95,7 @@ class WebConfigInterface:
                 current_base_url or "",  # 更新API地址
                 current_system_prompt,  # 更新系统提示词
                 current_temperature,  # 更新temperature
+                thinking_enabled,  # 更新thinking_enabled
                 f"已切换到 {display_name}，可选择预设模型或输入自定义模型名称"  # 状态信息
             )
         else:
@@ -110,7 +115,7 @@ class WebConfigInterface:
             
             print(f"✅ {display_name} 模型列表已更新，共 {len(models)} 个模型")
             
-            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, status)
+            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, thinking_enabled, status)
             return (
                 gr.update(choices=models, value=current_model),  # 更新模型下拉菜单
                 gr.update(visible=False, value=""),  # 隐藏自定义模型输入框
@@ -118,10 +123,11 @@ class WebConfigInterface:
                 current_base_url or "",  # 更新API地址
                 current_system_prompt,  # 更新系统提示词
                 current_temperature,  # 更新temperature
+                thinking_enabled,  # 更新thinking_enabled
                 f"已切换到 {display_name}，模型列表已加载（{len(models)}个模型）"  # 状态信息
             )
     
-    def save_config(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, custom_model_name=""):
+    def save_config(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled=True, custom_model_name=""):
         """保存配置"""
         try:
             if not provider_name:
@@ -161,10 +167,17 @@ class WebConfigInterface:
                 temperature = current_config.temperature if current_config and current_config.temperature else 0.7
                 print(f"🌡️ 使用当前配置的 temperature: {temperature}")
             
-            # 更新配置
-            success = self.config_manager.update_provider_config(
-                provider_name, api_key, final_model_name, system_prompt, base_url, temperature
-            )
+            # 更新配置 (使用完整版方法以支持thinking_enabled)
+            print(f"🧠 保存配置 - thinking_enabled: {thinking_enabled}, 类型: {type(thinking_enabled)}")
+            if hasattr(self.config_manager, 'update_provider_config_full'):
+                success = self.config_manager.update_provider_config_full(
+                    provider_name, api_key, final_model_name, system_prompt, base_url, temperature, thinking_enabled
+                )
+            else:
+                # 兼容旧版本
+                success = self.config_manager.update_provider_config(
+                    provider_name, api_key, final_model_name, system_prompt, base_url, temperature
+                )
             
             if not success:
                 return f"❌ 配置更新失败: 未知提供商 {provider_name}"
@@ -180,15 +193,16 @@ class WebConfigInterface:
             prompt_info = f" (系统提示词: {len(system_prompt)}字符)" if system_prompt else ""
             url_info = f" (API地址: {base_url})" if base_url else ""
             temp_info = f" (Temperature: {temperature})"
-            return f"✅ 配置已保存: {display_name} - {final_model_name}{url_info}{prompt_info}{temp_info}"
+            think_info = f" (思考模式: {'启用' if thinking_enabled else '禁用'})"
+            return f"✅ 配置已保存: {display_name} - {final_model_name}{url_info}{prompt_info}{temp_info}{think_info}"
             
         except Exception as e:
             return f"❌ 保存配置失败: {str(e)}"
     
-    def save_config_and_refresh(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, custom_model_name=""):
+    def save_config_and_refresh(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled=True, custom_model_name=""):
         """保存配置并刷新当前配置信息显示"""
         # 先保存配置
-        save_result = self.save_config(provider_name, api_key, model_name, base_url, system_prompt, temperature, custom_model_name)
+        save_result = self.save_config(provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled, custom_model_name)
         
         # 如果保存成功，尝试刷新ChatLLM实例和AIGN实例
         if save_result.startswith("✅"):
@@ -876,6 +890,14 @@ class WebConfigInterface:
                         interactive=True,
                         info="控制生成的随机性，0=确定性，2=最大随机性"
                     )
+
+                    # 思考模式开关 (针对NVIDIA/DeepSeek R1等支持思考的模型)
+                    thinking_checkbox = gr.Checkbox(
+                        label="启用思考模式 (Reasoning/Thinking)",
+                        value=self.config_manager.get_current_config().thinking_enabled if self.config_manager.get_current_config() and hasattr(self.config_manager.get_current_config(), 'thinking_enabled') else True,
+                        interactive=True,
+                        info="启用后，模型会输出详细的思考过程 (仅支持NVIDIA API、SiliconFlow等特定模型)"
+                    )
                     
                     # 操作按钮
                     with gr.Row():
@@ -1160,7 +1182,7 @@ class WebConfigInterface:
             provider_dropdown.change(
                 fn=self.on_provider_change,
                 inputs=[provider_dropdown],
-                outputs=[model_dropdown, custom_model_input, api_key_input, base_url_input, system_prompt_input, temperature_slider, status_output]
+                outputs=[model_dropdown, custom_model_input, api_key_input, base_url_input, system_prompt_input, temperature_slider, thinking_checkbox, status_output]
             )
             
             test_btn.click(
@@ -1171,7 +1193,7 @@ class WebConfigInterface:
             
             save_btn.click(
                 fn=self.save_config_and_refresh,
-                inputs=[provider_dropdown, api_key_input, model_dropdown, base_url_input, system_prompt_input, temperature_slider, custom_model_input],
+                inputs=[provider_dropdown, api_key_input, model_dropdown, base_url_input, system_prompt_input, temperature_slider, thinking_checkbox, custom_model_input],
                 outputs=[status_output, current_info]
             )
             
@@ -1283,6 +1305,7 @@ class WebConfigInterface:
                 'base_url_input': base_url_input,
                 'system_prompt_input': system_prompt_input,
                 'temperature_slider': temperature_slider,
+                'thinking_checkbox': thinking_checkbox,
                 'test_btn': test_btn,
                 'save_btn': save_btn,
                 'refresh_btn': refresh_btn,

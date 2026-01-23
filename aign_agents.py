@@ -9,7 +9,47 @@ AIGN代理模块 - AI代理类和装饰器工具
 """
 
 import time
+import re
 import tiktoken
+
+
+def _remove_thinking_content(response: str) -> str:
+    """从AI响应中剔除思维链内容（Chain of Thought）
+    
+    某些模型（如NVIDIA的deepseek等）会在主内容中包含<think>标签的思考过程，
+    这会影响后续的markdown解析。此函数负责清理这些标签。
+    
+    Args:
+        response: AI模型的原始响应
+        
+    Returns:
+        str: 剔除思维链后的内容
+        
+    处理的标签:
+        - <think>...</think>
+        - <thinking>...</thinking>
+        - <reasoning>...</reasoning>
+        - <reflection>...</reflection>
+    """
+    if not response:
+        return response
+    
+    # 剔除常见的思维链标签及其内容（支持多行匹配）
+    thinking_patterns = [
+        r'<think>.*?</think>',
+        r'<thinking>.*?</thinking>',
+        r'<reasoning>.*?</reasoning>',
+        r'<reflection>.*?</reflection>',
+    ]
+    
+    result = response
+    for pattern in thinking_patterns:
+        result = re.sub(pattern, '', result, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 清理多余的空行
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    return result.strip()
 
 
 class TokenLimitError(Exception):
@@ -690,7 +730,6 @@ class MarkdownAgent:
                 else:
                     # 流式输出失败，记录错误信息
                     self.parent_aign.log_message(f"❌ 流式输出失败: 内容长度{len(accumulated_content)}字符，需要重试")
-                    self.parent_aign.end_stream_tracking("")  # 清空流内容
 
             # 如果流式输出失败，返回错误响应
             if not stream_successful or not accumulated_content:
@@ -719,8 +758,13 @@ class MarkdownAgent:
                 print(f"❌ 流式输出失败: {error_reason}")
                 print(f"📊 失败详情: {error_details}")
             else:
-                resp = final_result if final_result else {"content": accumulated_content, "total_tokens": 0}
+                resp = final_result if final_result else {
+                    "content": accumulated_content, 
+                    "total_tokens": 0,
+                    "reasoning_content": accumulated_reasoning  # 返回思维链内容
+                }
                 print(f"✅ 流式输出成功: {len(accumulated_content)}字符, {chunk_count}个数据块")
+
         else:
             # 非流式响应：直接使用返回的结果
             print(f"🔧 {self.name}: 检测到非流式响应，直接处理结果")
@@ -855,6 +899,15 @@ class MarkdownAgent:
         return resp
 
 
+    def _remove_thinking_content(self, text: str) -> str:
+        """移除可能存在的<think>标签及其内容"""
+        if not text:
+            return text
+        # 移除 <think>...</think>
+        import re
+        pattern = re.compile(r'<think>.*?</think>', re.DOTALL)
+        return pattern.sub('', text).strip()
+
     def getOutput(self, input_content: str, output_keys: list) -> dict:
         """解析类md格式中 # key 的内容，未解析全部output_keys中的key会报错
         
@@ -870,7 +923,9 @@ class MarkdownAgent:
             dict: 解析后的键值对
         """
         resp = self.query(input_content)
-        output = resp["content"]
+        raw_content = resp["content"]
+        # 清理可能存在的思维链标签（如NVIDIA deepseek模型的<think>标签）
+        output = self._remove_thinking_content(raw_content)
 
         sections = {}
         
@@ -879,6 +934,12 @@ class MarkdownAgent:
         key_mappings = {
             "润色内容": ["润色结果", "润色后内容", "润色文本"],
             "润色结果": ["润色内容", "润色后内容", "润色文本"],
+            "段落": ["Paragraph", "Segment", "Section", "Part", "Text", "正文", "Content", "Story Content"],
+            "开头": ["Beginning", "Start", "Opening", "Introduction", "First Paragraph"],
+            "人物列表": ["Character List", "Characters", "Personaes", "Character Info"],
+            "详细大纲": ["Detailed Outline", "Full Outline", "Extended Outline"],
+            "新的记忆": ["New Memory", "Memory", "Updated Memory", "Memory Update"],
+            "章节总结": ["Chapter Summary", "Summary", "Recap", "Plot Summary"],
         }
         
         for expected_key in output_keys:
@@ -938,8 +999,102 @@ class MarkdownAgent:
                     sections[k] = matched_key
                     print(f"🔧 智能解析：将 '{matched_key}' 识别为 '{k}'")
                 else:
+                    # 尝试从思维链内容中挽救：检查思维链中是否包含期望的key
+                    reasoning_content = resp.get("reasoning_content", "")
+                    found_in_reasoning = False
+                    
+                    if reasoning_content:
+                        # 尝试从思维链中匹配key
+                        matched_key_in_reasoning = self._find_best_match_key(k, sections, reasoning_content) # 注意这里传递sections可能不准确，主要看能否匹配
+                        
+                        # 或者直接查找标记
+                        key_patterns = [k]
+                        if k in key_mappings:
+                            key_patterns.extend(key_mappings[k])
+                            
+                        for kp in key_patterns:
+                            if f"==={kp}===" in reasoning_content or f"# {kp}" in reasoning_content:
+                                found_in_reasoning = True
+                                break
+                    
+                    if found_in_reasoning:
+                        print(f"⚠️ 警告: 在思维链(reasoning_content)中发现了key '{k}'，但这通常意味着模型输出错乱。")
+                        # 我们可以选择尝试从reasoning_content中解析，但这比较危险，因为reasoning包含思考过程
+                        # 这里我们仅记录，不自动采纳，除非确认content为空
+                    
+                    # 只有当raw_content几乎为空，且在reasoning中找到内容时，才考虑使用reasoning作为替补
+                    if len(raw_content.strip()) < 10 and found_in_reasoning:
+                        print(f"🔄 自动修复: 主内容为空，尝试从思维链中提取 '{k}'")
+                        # 临时将reasoning作为output尝试解析
+                        # 注意：这需要非常小心，因为reasoning包含大量无关思考
+                        # 这里简单地尝试再次解析reasoning_content
+                        fallback_sections = self._parse_text_sections(reasoning_content, output_keys)
+                        if k in fallback_sections:
+                            sections[k] = fallback_sections[k]
+                            print(f"✅ 从思维链中成功提取 '{k}'")
+                            continue
+
                     raise ValueError(f"fail to parse {k} in output:\n{output}\n\n")
 
+        return sections
+
+    def _parse_text_sections(self, text: str, output_keys: list) -> dict:
+        """辅助方法：从文本中解析sections"""
+        sections = {}
+        # 1. 尝试 ===key=== 格式
+        key_mappings = {
+            "润色内容": ["润色结果", "润色后内容", "润色文本"],
+            "润色结果": ["润色内容", "润色后内容", "润色文本"],
+            "正文内容": ["小说正文", "章节内容", "正文", "Story Content", "Content"],
+            "小说正文": ["正文内容", "章节内容", "正文", "Story Content", "Content"],
+            "标题": ["章节标题", "Title", "Chapter Title"],
+            "章节标题": ["标题", "Title", "Chapter Title"],
+            "大纲": ["小说大纲", "Outline", "Novel Outline"],
+            "小说大纲": ["大纲", "Outline", "Novel Outline"],
+            "段落": ["Paragraph", "Segment", "Section", "Part", "Text", "正文", "Content", "Story Content"],
+            "开头": ["Beginning", "Start", "Opening", "Introduction", "First Paragraph"],
+            "人物列表": ["Character List", "Characters", "Personaes", "Character Info"],
+            "详细大纲": ["Detailed Outline", "Full Outline", "Extended Outline"],
+            "新的记忆": ["New Memory", "Memory", "Updated Memory", "Memory Update"],
+            "章节总结": ["Chapter Summary", "Summary", "Recap", "Plot Summary"],
+        }
+        
+        for expected_key in output_keys:
+            possible_keys = [expected_key]
+            if expected_key in key_mappings:
+                possible_keys.extend(key_mappings[expected_key])
+            
+            for key_name in possible_keys:
+                start_marker = f"==={key_name}==="
+                end_marker = "===END==="
+                if start_marker in text:
+                    start_pos = text.find(start_marker) + len(start_marker)
+                    end_pos = text.find(end_marker, start_pos) if end_marker in text[start_pos:] else len(text)
+                    content = text[start_pos:end_pos].strip()
+                    if content:
+                        sections[expected_key] = content
+                        break
+        
+        # 2. 尝试 # key 格式
+        lines = text.split("\n")
+        current_section = ""
+        for line in lines:
+            if line.startswith("# "):
+                current_section = line[2:].strip()
+                if current_section not in sections:
+                    sections[current_section] = []
+            elif line.lstrip().startswith("# "):
+                current_section = line.lstrip()[2:].strip()
+                if current_section not in sections:
+                    sections[current_section] = []
+            else:
+                if current_section and isinstance(sections.get(current_section), list):
+                    sections[current_section].append(line.strip())
+        
+        for key in sections.keys():
+            if isinstance(sections[key], list):
+                sections[key] = "\n".join(sections[key]).strip()
+                
         return sections
 
     def _find_best_match_key(self, expected_key: str, sections: dict, output: str) -> str:
@@ -1138,6 +1293,9 @@ class JSONMarkdownAgent(MarkdownAgent):
                 response = self.query(user_input)
             
             raw_content = response.get("content", "")
+            # 移除可能存在的思考内容，避免干扰JSON解析
+            if hasattr(self, '_remove_thinking_content'):
+                raw_content = self._remove_thinking_content(raw_content)
             
             # 尝试修复JSON
             parsed_json, success, error_msg = self.json_repairer.repair_json(raw_content, max_attempts=1)
