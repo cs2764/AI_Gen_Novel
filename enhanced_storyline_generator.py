@@ -235,8 +235,8 @@ class EnhancedStorylineGenerator:
         except Exception as e:
             print(f"⚠️ 记录成功案例失败: {e}")
         
-    def get_storyline_schema(self, expected_count: int = 10, require_segments: bool = True) -> Dict[str, Any]:
-        """获取故事线的JSON Schema，动态设置章节数量约束；根据require_segments控制是否强制4分段"""
+    def get_storyline_schema(self, expected_count: int = 10, require_segments: bool = True, segment_count: int = 4) -> Dict[str, Any]:
+        """获取故事线的JSON Schema，动态设置章节数量约束；根据require_segments和segment_count控制分段要求"""
         # 基础章节属性（不强制分段）
         chapter_properties_base = {
             "chapter_number": {"type": "integer"},
@@ -252,12 +252,12 @@ class EnhancedStorylineGenerator:
 
         chapter_required_fields = ["chapter_number", "title", "plot_summary"]
 
-        # 如果需要分段，添加plot_segments约束
+        # 如果需要分段，添加plot_segments约束（根据segment_count动态设置）
         if require_segments:
             chapter_properties_base["plot_segments"] = {
                 "type": "array",
-                "minItems": 4,
-                "maxItems": 4,
+                "minItems": segment_count,
+                "maxItems": segment_count,
                 "items": {
                     "type": "object",
                     "properties": {
@@ -423,8 +423,8 @@ class EnhancedStorylineGenerator:
                 if duplicates:
                     print(f"📝 发现重复章节号: {duplicates}")
 
-    def get_storyline_tools(self, expected_count: int = 10, require_segments: bool = True) -> List[Dict[str, Any]]:
-        """获取故事线生成的工具定义，动态设置章节数量约束；根据require_segments控制4分段要求"""
+    def get_storyline_tools(self, expected_count: int = 10, require_segments: bool = True, segment_count: int = 4) -> List[Dict[str, Any]]:
+        """获取故事线生成的工具定义，动态设置章节数量约束；根据require_segments和segment_count控制分段要求"""
         # 基础章节属性
         chapter_properties_base = {
             "chapter_number": {"type": "integer", "description": "章节号"},
@@ -437,12 +437,12 @@ class EnhancedStorylineGenerator:
 
         chapter_required_fields = ["chapter_number", "title", "plot_summary"]
 
-        # 如果需要分段，添加plot_segments
+        # 如果需要分段，添加plot_segments（根据segment_count动态设置）
         if require_segments:
             chapter_properties_base["plot_segments"] = {
                 "type": "array",
-                "minItems": 4,
-                "maxItems": 4,
+                "minItems": segment_count,
+                "maxItems": segment_count,
                 "items": {
                     "type": "object",
                     "properties": {
@@ -458,7 +458,7 @@ class EnhancedStorylineGenerator:
             }
             chapter_required_fields = ["chapter_number", "title", "plot_summary", "plot_segments"]
 
-        description_suffix = "且每章包含4个plot_segments" if require_segments else "（仅需梗概，不要求分段）"
+        description_suffix = f"且每章包含{segment_count}个plot_segments" if require_segments else "（仅需梗概，不要求分段）"
         return [
             {
                 "type": "function",
@@ -767,7 +767,7 @@ class EnhancedStorylineGenerator:
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
-                response_format=self.get_storyline_schema(expected_count, require_segments),
+                response_format=self.get_storyline_schema(expected_count, require_segments, segment_count),
                 stream=False  # Structured outputs不支持流式输出
             )
             
@@ -840,7 +840,7 @@ class EnhancedStorylineGenerator:
             response = self.chatLLM(
                 messages=messages,
                 temperature=temperature,
-                tools=self.get_storyline_tools(expected_count, require_segments),
+                tools=self.get_storyline_tools(expected_count, require_segments, segment_count),
                 tool_choice=tool_choice_param,
                 stream=False  # Tool calling不支持流式输出
             )
@@ -913,7 +913,7 @@ class EnhancedStorylineGenerator:
             print("🔧 尝试使用传统方法+增强JSON修复生成故事线...")
 
             # 增强提示词，提高JSON格式正确率
-            enhanced_messages = self._enhance_json_prompt(messages.copy(), require_segments)
+            enhanced_messages = self._enhance_json_prompt(messages.copy(), require_segments, segment_count)
 
             for retry in range(self.max_retries + 1):
                 print(f"🔄 第{retry+1}次尝试生成...")
@@ -1017,12 +1017,13 @@ class EnhancedStorylineGenerator:
             print(f"❌ 增强传统方法调用失败: {e}")
             return None, f"enhanced_traditional_error: {e}"
 
-    def _enhance_json_prompt(self, messages: List[Dict[str, str]], require_segments: bool = True) -> List[Dict[str, str]]:
+    def _enhance_json_prompt(self, messages: List[Dict[str, str]], require_segments: bool = True, segment_count: int = 4) -> List[Dict[str, str]]:
         """增强提示词以提高JSON格式正确率
         
         Args:
             messages: 消息列表
-            require_segments: 是否要求每章包含4个plot_segments
+            require_segments: 是否要求每章包含plot_segments
+            segment_count: 每章的分段数量（2、3或4）
         """
         if not messages:
             return messages
@@ -1031,14 +1032,23 @@ class EnhancedStorylineGenerator:
         last_message = messages[-1]["content"]
 
         if require_segments:
-            json_instructions = """
+            # 动态生成segment示例
+            segment_examples = []
+            for i in range(1, segment_count + 1):
+                next_ref = f"衔接{i+1}" if i < segment_count else "承上启下至下一章"
+                segment_examples.append(
+                    f'        {{"index": {i}, "segment_title": "分段{i}", "segment_summary": "分段{i}内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "{next_ref}"}}'
+                )
+            segments_json = ",\n".join(segment_examples)
+            
+            json_instructions = f"""
 
-**重要：请严格按照以下JSON格式返回，不要添加任何解释或其他文本（每章必须包含4个plot_segments）:**
+**重要：请严格按照以下JSON格式返回，不要添加任何解释或其他文本（每章必须包含{segment_count}个plot_segments）:**
 
 ```json
-{
+{{
   "chapters": [
-    {
+    {{
       "chapter_number": 1,
       "title": "章节标题",
       "plot_summary": "详细的情节梗概，至少50字",
@@ -1046,19 +1056,16 @@ class EnhancedStorylineGenerator:
       "character_development": "人物发展描述",
       "chapter_mood": "章节情绪氛围",
       "plot_segments": [
-        {"index": 1, "segment_title": "分段1", "segment_summary": "分段1内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接2"},
-        {"index": 2, "segment_title": "分段2", "segment_summary": "分段2内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接3"},
-        {"index": 3, "segment_title": "分段3", "segment_summary": "分段3内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接4"},
-        {"index": 4, "segment_title": "分段4", "segment_summary": "分段4内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "承上启下至下一章"}
+{segments_json}
       ]
-    }
+    }}
   ],
-  "batch_info": {
+  "batch_info": {{
     "start_chapter": 1,
     "end_chapter": 1,
     "total_chapters": 1
-  }
-}
+  }}
+}}
 ```
 
 **格式要求：**
@@ -1067,7 +1074,7 @@ class EnhancedStorylineGenerator:
 3. 确保所有括号和大括号正确配对
 4. 不要在最后一个元素后添加逗号
 5. key_events必须是字符串数组，至少包含3个事件
-6. plot_segments必须是长度为4的数组，index从1到4且每段都有segment_summary"""
+6. plot_segments必须是长度为{segment_count}的数组，index从1到{segment_count}且每段都有segment_summary"""
         else:
             json_instructions = """
 
@@ -1282,7 +1289,7 @@ class EnhancedStorylineGenerator:
         print("🔄 所有标准方法失败，尝试渐进式生成策略...")
         expected_count = self._extract_chapter_count_from_messages(messages)
         if expected_count > 3:  # 只有在请求较多章节时才使用渐进式策略
-            data, status = self._attempt_progressive_generation(messages, expected_count)
+            data, status = self._attempt_progressive_generation(messages, expected_count, require_segments, segment_count)
             if data:
                 print(f"✅ 渐进式生成成功：{status}")
                 return data, status
@@ -1292,7 +1299,7 @@ class EnhancedStorylineGenerator:
         self._save_error_data("all_methods_failed", messages, "", "All generation methods failed")
         return None, "all_methods_failed"
     
-    def _attempt_progressive_generation(self, messages: List[Dict[str, str]], expected_count: int) -> Tuple[Optional[Dict[str, Any]], str]:
+    def _attempt_progressive_generation(self, messages: List[Dict[str, str]], expected_count: int, require_segments: bool = True, segment_count: int = 4) -> Tuple[Optional[Dict[str, Any]], str]:
         """渐进式生成：如果10章失败，尝试5章，如果5章失败，尝试3章"""
         print("🔄 开始渐进式生成策略...")
         
@@ -1306,7 +1313,7 @@ class EnhancedStorylineGenerator:
             print(f"🔄 尝试生成{attempt_size}章（原计划{expected_count}章）...")
             
             # 修改消息以请求更少的章节
-            modified_messages = self._modify_messages_for_smaller_batch(original_messages, attempt_size)
+            modified_messages = self._modify_messages_for_smaller_batch(original_messages, attempt_size, require_segments, segment_count)
             
             # 尝试所有生成方法
             for method_name, method_func in [
@@ -1318,7 +1325,7 @@ class EnhancedStorylineGenerator:
                     
                 print(f"🔧 {method_name}方式生成{attempt_size}章...")
                 try:
-                    data, status = method_func(modified_messages, 0.7)  # 降低温度提高稳定性
+                    data, status = method_func(modified_messages, 0.7, require_segments, segment_count)  # 降低温度提高稳定性
                     if data and self._validate_storyline_structure(data):
                         chapter_count = len(data.get('chapters', []))
                         print(f"✅ 渐进式生成成功: {method_name}方式生成了{chapter_count}章")
@@ -1332,7 +1339,7 @@ class EnhancedStorylineGenerator:
         print("❌ 所有渐进式生成尝试都失败")
         return None, "progressive_generation_failed"
     
-    def _modify_messages_for_smaller_batch(self, messages: List[Dict[str, str]], target_count: int) -> List[Dict[str, str]]:
+    def _modify_messages_for_smaller_batch(self, messages: List[Dict[str, str]], target_count: int, require_segments: bool = True, segment_count: int = 4) -> List[Dict[str, str]]:
         """修改消息内容以请求更少的章节"""
         modified_messages = []
         
@@ -1340,7 +1347,7 @@ class EnhancedStorylineGenerator:
             if message.get("role") == "user":
                 content = message["content"]
                 # 简化提示词，减少token消耗
-                simplified_content = self._simplify_prompt_for_fewer_chapters(content, target_count)
+                simplified_content = self._simplify_prompt_for_fewer_chapters(content, target_count, require_segments, segment_count)
                 modified_messages.append({
                     "role": "user", 
                     "content": simplified_content
@@ -1350,7 +1357,7 @@ class EnhancedStorylineGenerator:
         
         return modified_messages
     
-    def _simplify_prompt_for_fewer_chapters(self, original_content: str, target_count: int) -> str:
+    def _simplify_prompt_for_fewer_chapters(self, original_content: str, target_count: int, require_segments: bool = True, segment_count: int = 4) -> str:
         """简化提示词，减少token消耗，提高成功率"""
         
         # 提取关键信息
@@ -1419,9 +1426,26 @@ class EnhancedStorylineGenerator:
                 if req_lines:
                     key_info["写作要求"] = "**写作要求:**\n" + "\n".join(req_lines)
         
+        # 动态生成分段示例
+        if require_segments:
+            # 生成动态数量的分段示例
+            segment_examples = []
+            for i in range(1, segment_count + 1):
+                segment_examples.append(f'        {{"index": {i}, "segment_title": "分段{i}", "segment_summary": "分段{i}内容"}}')
+            segments_json = ",\n".join(segment_examples)
+            
+            segments_section = f''',
+      "plot_segments": [
+{segments_json}
+      ]'''
+            segment_requirement = f"（每章必须包含{segment_count}个plot_segments）"
+        else:
+            segments_section = ""
+            segment_requirement = "（不需要分段，只需梗概）"
+        
         # 构建简化的提示词
         simplified_prompt = f"""
-请严格按照JSON格式生成{target_count}章故事线（每章必须包含4个plot_segments）：
+请严格按照JSON格式生成{target_count}章故事线{segment_requirement}：
 
 {key_info.get('大纲', '')}
 {key_info.get('人物列表', '')}
@@ -1439,13 +1463,7 @@ class EnhancedStorylineGenerator:
       "plot_summary": "详细剧情梗概，至少50字",
       "key_events": ["事件1", "事件2", "事件3"],
       "character_development": "人物发展描述",
-      "chapter_mood": "情绪氛围",
-      "plot_segments": [
-        {{"index": 1, "segment_title": "分段1", "segment_summary": "分段1内容"}},
-        {{"index": 2, "segment_title": "分段2", "segment_summary": "分段2内容"}},
-        {{"index": 3, "segment_title": "分段3", "segment_summary": "分段3内容"}},
-        {{"index": 4, "segment_title": "分段4", "segment_summary": "分段4内容"}}
-      ]
+      "chapter_mood": "情绪氛围"{segments_section}
     }}
   ],
   "batch_info": {{

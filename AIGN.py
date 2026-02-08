@@ -3587,6 +3587,9 @@ class AIGN:
         is_ending_phase = self.enable_ending and next_chapter_number >= self.target_chapter_count * 0.95
         is_final_chapter = next_chapter_number >= self.target_chapter_count
         
+        # 锁定当前生成过程的精简模式状态，避免生成过程中因UI切换导致状态不一致
+        is_compact_mode = getattr(self, 'compact_mode', False)
+        
         if is_ending_phase and not is_final_chapter:
             # 结尾阶段但不是最终章
             print(f"🏁 进入结尾阶段，正在生成第{self.chapter_count + 1}章（结尾铺垫）...")
@@ -3604,7 +3607,7 @@ class AIGN:
             enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
             
             # 根据精简模式决定输入参数
-            if getattr(self, 'compact_mode', False):
+            if is_compact_mode:
                 # 精简模式：结尾阶段也使用精简输入
                 print("📦 使用精简模式生成结尾阶段...")
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
@@ -3623,6 +3626,7 @@ class AIGN:
             else:
                 # 标准模式：包含全部信息
                 print("📝 使用标准模式生成结尾阶段...")
+                enhanced_context_v2 = self.getEnhancedContextWithFirstThreeChapters(self.chapter_count + 1)
                 inputs = {
                     "大纲": self.getCurrentOutline(),
                     "人物列表": self.character_list,
@@ -3645,7 +3649,7 @@ class AIGN:
             
             if debug_level >= 2:
                 print("🎯 关键输入参数检查（结尾阶段）:")
-                if getattr(self, 'compact_mode', False):
+                if is_compact_mode:
                     key_params = ["大纲", "写作要求", "前文记忆"]
                 else:
                     key_params = ["写作要求", "润色想法"]
@@ -3662,7 +3666,7 @@ class AIGN:
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
-            if not getattr(self, 'compact_mode', False):
+            if not is_compact_mode:
                 # 仅在非精简模式下添加基础大纲
                 if self.novel_outline and self.novel_outline != self.getCurrentOutline():
                     inputs["基础大纲"] = self.novel_outline
@@ -3684,7 +3688,7 @@ class AIGN:
             enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
             
             # 根据精简模式决定输入参数
-            if getattr(self, 'compact_mode', False):
+            if is_compact_mode:
                 # 精简模式：最终章也使用精简输入
                 print("📦 使用精简模式生成最终章...")
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
@@ -3706,6 +3710,7 @@ class AIGN:
             else:
                 # 标准模式：包含全部信息
                 print("📝 使用标准模式生成最终章...")
+                enhanced_context_v2 = self.getEnhancedContextWithFirstThreeChapters(self.chapter_count + 1)
                 inputs = {
                     "大纲": self.getCurrentOutline(),
                     "人物列表": self.character_list,
@@ -3728,7 +3733,7 @@ class AIGN:
             
             if debug_level >= 2:
                 print("🎯 关键输入参数检查（最终章）:")
-                if getattr(self, 'compact_mode', False):
+                if is_compact_mode:
                     key_params = ["大纲", "写作要求", "前文记忆"]
                 else:
                     key_params = ["写作要求", "润色想法"]
@@ -3745,7 +3750,7 @@ class AIGN:
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
-            if not getattr(self, 'compact_mode', False):
+            if not is_compact_mode:
                 # 仅在非精简模式下添加基础大纲
                 if self.novel_outline and self.novel_outline != self.getCurrentOutline():
                     inputs["基础大纲"] = self.novel_outline
@@ -3760,7 +3765,7 @@ class AIGN:
             
             # 根据精简模式选择使用的writer
             # 注意：非精简模式现在也使用精简版生成器（相同提示词），区别在于上下文内容
-            if getattr(self, 'compact_mode', False):
+            if is_compact_mode:
                 print("📦 使用精简版正文生成器（精简模式）")
                 writer = self.novel_writer_compact
             else:
@@ -3780,7 +3785,7 @@ class AIGN:
                 debug_level = 1
 
             # 根据精简模式决定上下文信息获取和显示方式
-            if getattr(self, 'compact_mode', False):
+            if is_compact_mode:
                 # 精简模式：获取精简版上下文信息
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
                 
@@ -3859,7 +3864,7 @@ class AIGN:
                         print(f"   • 最近章节总结：已加载")
             
             # 根据精简模式决定输入参数
-            if getattr(self, 'compact_mode', False):
+            if is_compact_mode:
                 # 精简模式：生成正文时只包含：原始大纲（不是详细大纲）；写作要求；各种记忆，设定，计划；前2章后2章的故事线
                 print("📦 使用精简模式生成正文...")
                 segment_count = getattr(self, 'long_chapter_mode', 0)
@@ -3902,7 +3907,7 @@ class AIGN:
             if debug_level >= 2:
                 # 详细模式：显示完整参数内容
                 print("🎯 关键输入参数检查:")
-                if getattr(self, 'compact_mode', False):
+                if is_compact_mode:
                     key_params = ["大纲", "写作要求", "前文记忆"]
                 else:
                     key_params = ["用户想法", "写作要求", "润色想法"]
@@ -3922,7 +3927,7 @@ class AIGN:
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 已加入详细大纲上下文")
-            if not getattr(self, 'compact_mode', False):
+            if not is_compact_mode:
                 # 仅在非精简模式下添加基础大纲
                 if self.novel_outline and self.novel_outline != self.getCurrentOutline():
                     inputs["基础大纲"] = self.novel_outline
@@ -3962,7 +3967,7 @@ class AIGN:
             last_plan = self.writing_plan
             last_setting = self.temp_setting
             # 预备上下文
-            if getattr(self, 'compact_mode', False):
+            if is_compact_mode:
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
             else:
                 enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
@@ -3993,7 +3998,7 @@ class AIGN:
                         refs.append(f"第{j}段《{sj.get('segment_title','')}》：{sj.get('segment_summary','')}")
                 refs_text = "\n".join(refs)
 
-                if getattr(self, 'compact_mode', False):
+                if is_compact_mode:
                     if is_ending_phase or is_final_chapter:
                         writer_agent = getattr(self, f"ending_writer_seg{seg_index}", self.ending_writer)
                     else:
@@ -4005,6 +4010,7 @@ class AIGN:
                     seg_inputs = {
                         "大纲": self.getCurrentOutline(),
                         "写作要求": self.user_requirements,
+                        "风格参考": rag_references if 'rag_references' in dir() and rag_references else "",
                         "前文记忆": self.writing_memory,
                         "临时设定": self.temp_setting,
                         "计划": self.writing_plan,
@@ -4029,6 +4035,7 @@ class AIGN:
                     seg_inputs = {
                         "大纲": self.getCurrentOutline(),
                         "写作要求": self.user_requirements,
+                        "风格参考": rag_references if 'rag_references' in dir() and rag_references else "",
                         "前文记忆": self.writing_memory,
                         "临时设定": self.temp_setting,
                         "计划": self.writing_plan,
@@ -4042,14 +4049,14 @@ class AIGN:
                         "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
                 # 写作
-                seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定", "关键元素"])
+                seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定"])
                 seg_text = seg_resp["段落"]
                 seg_key_elements = seg_resp.get("关键元素", "")
                 last_plan = seg_resp.get("计划", last_plan)
                 last_setting = seg_resp.get("临时设定", last_setting)
 
                 # 润色
-                if getattr(self, 'compact_mode', False):
+                if is_compact_mode:
                     emb_agent = getattr(self, f"novel_embellisher_compact_seg{seg_index}", self.novel_embellisher_compact)
                     segment_count_val = getattr(self, 'long_chapter_mode', 0)
                     if segment_count_val > 0:
@@ -4132,7 +4139,7 @@ class AIGN:
         else:
             resp = writer.invoke(
                 inputs=inputs,
-                output_keys=["段落", "计划", "临时设定", "关键元素"],
+                output_keys=["段落", "计划", "临时设定"],
             )
             next_paragraph = resp["段落"]
             next_writing_plan = resp["计划"]
@@ -4153,7 +4160,7 @@ class AIGN:
         if not skip_generic:
             print(f"✨ 正在润色段落...")
             # 根据精简模式决定润色输入参数
-            if getattr(self, 'compact_mode', False):
+            if is_compact_mode:
                 # 精简模式：润色阶段只包含原始内容、详细大纲、润色要求、前2章后2章的故事线
                 print("📦 使用精简模式润色...")
                 # 使用前面已经获取的精简版故事线
@@ -4265,7 +4272,7 @@ class AIGN:
             if self.detailed_outline and self.detailed_outline != self.getCurrentOutline():
                 embellish_inputs["详细大纲"] = self.detailed_outline
                 print(f"📋 润色阶段已加入详细大纲上下文")
-            if not getattr(self, 'compact_mode', False):
+            if not is_compact_mode:
                 # 仅在非精简模式下添加基础大纲
                 if self.novel_outline and self.novel_outline != self.getCurrentOutline():
                     embellish_inputs["基础大纲"] = self.novel_outline
@@ -4293,7 +4300,7 @@ class AIGN:
                 embellisher = self.ending_embellisher
                 # 为结尾润色器添加特殊参数
                 embellish_inputs["是否最终章"] = "是"
-            elif getattr(self, 'compact_mode', False):
+            elif is_compact_mode:
                 print("📦 使用精简版润色器（精简模式）")
                 embellisher = self.novel_embellisher_compact
             else:
@@ -4397,8 +4404,21 @@ class AIGN:
         else:
             print(f"📁 输出目录已存在: {output_dir}")
         
-        # 生成文件名：标题+日期
+        # 生成文件名：标题+日期（模型名称放在文件内容开头）
         current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # 获取当前模型名称，用于在文件内容开头显示
+        self.current_model_name = ""
+        try:
+            from dynamic_config_manager import get_config_manager
+            config_manager = get_config_manager()
+            current_config = config_manager.get_current_config()
+            if current_config and current_config.model_name:
+                self.current_model_name = current_config.model_name
+                print(f"📊 当前使用模型：{self.current_model_name}")
+        except Exception as e:
+            print(f"⚠️ 获取模型名失败: {e}")
+        
         original_filename = f"{self.novel_title}_{current_date}.txt"
         filename = re.sub(r'[<>:"/\\|?*]', '_', original_filename)
         
@@ -4408,6 +4428,23 @@ class AIGN:
         self.current_output_file = os.path.join(output_dir, filename)
         print(f"📄 输出文件路径：{self.current_output_file}")
         print(f"📄 元数据文件将保存为：{os.path.splitext(self.current_output_file)[0]}_metadata.json")
+    
+    def _get_file_header(self):
+        """生成文件头部信息（包含模型名称和小说标题）"""
+        header_lines = []
+        
+        # 添加模型信息
+        model_name = getattr(self, 'current_model_name', '')
+        if model_name:
+            header_lines.append(f"【使用模型：{model_name}】")
+            header_lines.append("")  # 空行分隔
+        
+        # 添加小说标题
+        if self.novel_title:
+            header_lines.append(self.novel_title)
+            header_lines.append("")  # 空行分隔
+        
+        return "\n".join(header_lines) + "\n" if header_lines else ""
     
     def saveToFile(self, save_metadata=True):
         """保存小说内容到文件"""
@@ -4420,8 +4457,7 @@ class AIGN:
                 # 保存包含CosyVoice标记的版本
                 cosyvoice_file = self.current_output_file.replace('.txt', '_cosyvoice.txt')
                 with open(cosyvoice_file, "w", encoding="utf-8") as f:
-                    if self.novel_title:
-                        f.write(f"{self.novel_title}\n\n")
+                    f.write(self._get_file_header())
                     f.write(self.novel_content)
                 print(f"🎙️ 已保存CosyVoice2版本: {cosyvoice_file}")
                 
@@ -4433,9 +4469,8 @@ class AIGN:
                     
                     # 保存清理后的版本（常规文件）
                     with open(self.current_output_file, "w", encoding="utf-8") as f:
-                        if self.novel_title:
-                            f.write(f"{self.novel_title}\n\n")
-                            f.write(cleaned_content)
+                        f.write(self._get_file_header())
+                        f.write(cleaned_content)
                     print(f"📖 已保存纯净版本: {self.current_output_file}")
                     
                     # 提取并显示标记统计
@@ -4449,15 +4484,13 @@ class AIGN:
                 except ImportError:
                     print("⚠️ CosyVoice清理器不可用，保存原始版本")
                     with open(self.current_output_file, "w", encoding="utf-8") as f:
-                        if self.novel_title:
-                            f.write(f"{self.novel_title}\n\n")
-                            f.write(self.novel_content)
+                        f.write(self._get_file_header())
+                        f.write(self.novel_content)
                     print(f"💾 已保存到文件: {self.current_output_file}")
             else:
                 # 非CosyVoice模式，正常保存
                 with open(self.current_output_file, "w", encoding="utf-8") as f:
-                    if self.novel_title:
-                        f.write(f"{self.novel_title}\n\n")
+                    f.write(self._get_file_header())
                     f.write(self.novel_content)
                 print(f"💾 已保存到文件: {self.current_output_file}")
             
@@ -4482,8 +4515,7 @@ class AIGN:
                 # 保存包含CosyVoice标记的版本
                 cosyvoice_file = self.current_output_file.replace('.txt', '_cosyvoice.txt')
                 with open(cosyvoice_file, "w", encoding="utf-8") as f:
-                    if self.novel_title:
-                        f.write(f"{self.novel_title}\n\n")
+                    f.write(self._get_file_header())
                     f.write(self.novel_content)
                 print(f"🎙️ 已保存CosyVoice2版本: {cosyvoice_file}")
                 
@@ -4494,23 +4526,20 @@ class AIGN:
                     cleaned_content = cleaner.clean_text(self.novel_content)
                     
                     with open(self.current_output_file, "w", encoding="utf-8") as f:
-                        if self.novel_title:
-                            f.write(f"{self.novel_title}\n\n")
-                            f.write(cleaned_content)
+                        f.write(self._get_file_header())
+                        f.write(cleaned_content)
                     print(f"📖 已保存纯净版本: {self.current_output_file}")
                     
                 except ImportError:
                     # 如果清理器不可用，至少保存原始版本
                     with open(self.current_output_file, "w", encoding="utf-8") as f:
-                        if self.novel_title:
-                            f.write(f"{self.novel_title}\n\n")
-                            f.write(self.novel_content)
+                        f.write(self._get_file_header())
+                        f.write(self.novel_content)
                     print(f"📖 已保存小说文件: {self.current_output_file}")
             else:
                 # 非CosyVoice模式，正常保存
                 with open(self.current_output_file, "w", encoding="utf-8") as f:
-                    if self.novel_title:
-                        f.write(f"{self.novel_title}\n\n")
+                    f.write(self._get_file_header())
                     f.write(self.novel_content)
                 print(f"📖 已保存小说文件: {self.current_output_file}")
             
@@ -4594,7 +4623,8 @@ class AIGN:
     def updateMetadataAfterDetailedOutline(self):
         """在详细大纲生成完成后更新元数据"""
         if not hasattr(self, 'current_output_file') or not self.current_output_file:
-            print("❌ 没有输出文件路径，无法更新元数据")
+            # 详细大纲生成阶段可能还没有创建输出文件，这是正常的
+            print("ℹ️ 详细大纲生成完成，元数据将在小说生成开始后更新")
             return
         
         # 生成元数据文件名
@@ -4652,7 +4682,8 @@ class AIGN:
     def updateMetadataAfterStoryline(self):
         """在故事线生成完成后更新元数据"""
         if not hasattr(self, 'current_output_file') or not self.current_output_file:
-            print("❌ 没有输出文件路径，无法更新元数据")
+            # 故事线生成阶段可能还没有创建输出文件，这是正常的
+            print("ℹ️ 故事线生成完成，元数据将在小说生成开始后更新")
             return
         
         # 生成元数据文件名
@@ -5101,6 +5132,7 @@ class AIGN:
             return
             
         self.auto_generation_running = True
+        self._auto_gen_ever_started = True  # 标记自动生成曾经启动过，用于流式输出停止检测
         
         # 🔧 重置停止标志，确保干净启动
         self.stop_generation = False
@@ -5269,8 +5301,7 @@ class AIGN:
                         success_msg = f"✅ 第{self.chapter_count}章生成完成，耗时: {self.format_time_duration(chapter_time, include_seconds=True)}"
                         print(success_msg)
                         
-                        # 生成成功，重置连续失败计数器
-                        self.consecutive_parse_failures = 0
+
 
                         # 生成后自动保存存档（每章）
                         try:
@@ -5292,40 +5323,24 @@ class AIGN:
                         error_msg = f"❌ 生成第{next_chapter_num}章时出错: {e}"
                         print(error_msg)
                         
-                        # 增加连续失败计数
-                        self.consecutive_parse_failures += 1
-                        print(f"⚠️ 连续失败次数: {self.consecutive_parse_failures}/{self.max_consecutive_failures}")
+                        # 发生了未被Retryer捕获或Retryer耗尽后的异常
+                        # 此时意味着已经重试了多次仍然失败，应立即停止
                         
-                        # 检查是否达到最大失败次数
-                        if self.consecutive_parse_failures >= self.max_consecutive_failures:
-                            critical_msg = f"❌❌❌ 检测到API提供商问题！"
-                            print("\n" + "=" * 60)
-                            print(critical_msg)
-                            print(f"🚫 连续{self.consecutive_parse_failures}次API调用无法解析返回值")
-                            print(f"🚨 建议操作：")
-                            print("   1. 检查API提供商服务状态")
-                            print("   2. 切换到其他AI提供商")
-                            print("   3. 点击'开始自动生成'继续")
-                            print("")
-                            print(f"📚 当前进度: {self.chapter_count}/{self.target_chapter_count}章")
-                            print(f"💾 进度已自动保存")
-                            print("=" * 60 + "\n")
-                            
-                            # 同步到WebUI
-                            self._sync_to_webui(critical_msg + f" 连续{self.consecutive_parse_failures}次失败，已停止生成")
-                            
-                            # 停止生成并重置计数器
-                            self.stop_generation = True
-                            self.auto_generation_running = False
-                            self.consecutive_parse_failures = 0  # 重置以便下次继续
-                            break
+                        critical_msg = f"❌❌❌ API多次重试后仍然失败，自动停止生成。"
+                        print("\n" + "=" * 60)
+                        print(critical_msg)
+                        print(f"🚫 错误详情: {str(e)}")
+                        print(f"📚 当前进度: {self.chapter_count}/{self.target_chapter_count}章")
+                        print(f"💾 进度已自动保存")
+                        print("=" * 60 + "\n")
                         
-                        # 如果出错，尝试刷新ChatLLM后重试
-                        print("🔄 尝试刷新ChatLLM配置后重试...")
-                        self._refresh_chatllm_for_auto_generation()
-                        self._sync_to_webui(error_msg + " (已尝试刷新配置)")
-                        time.sleep(5)  # 出错后等待5秒再继续
-                        continue
+                        # 同步到WebUI
+                        self._sync_to_webui(critical_msg + f" 错误: {str(e)}")
+                        
+                        # 停止生成
+                        self.stop_generation = True
+                        self.auto_generation_running = False
+                        break
                 
                 total_time = time.time() - start_time
                 if self.chapter_count >= self.target_chapter_count:

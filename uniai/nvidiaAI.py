@@ -55,7 +55,7 @@ def nvidiaChatLLM(model_name="deepseek-ai/deepseek-v3.2", api_key=None, system_p
         
         # NVIDIA AI默认max_tokens设置为8192
         if max_tokens is None:
-            max_tokens = 8192
+            max_tokens = 64000
         
         # 如果设置了系统提示词，合并到第一个用户消息的开头
         if system_prompt and messages:

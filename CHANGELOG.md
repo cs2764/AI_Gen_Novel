@@ -1,5 +1,41 @@
 # 更新日志 | Changelog
 
+## [4.2.0] - 2026-02-08 ✨ WebUI数据集成 | WebUI Data Integration
+
+### ✨ 核心新功能 | Core New Features
+
+#### 📝 WebUI数据集成功能 | WebUI Data Integration Feature
+- **大纲从WebUI读取**：详细大纲现在直接从WebUI读取，用户可在生成前修改
+- **Outline from WebUI**: Detailed outline now read directly from WebUI, users can modify before generation
+- **人物列表从WebUI读取**：人物列表现在从WebUI读取，支持用户自定义编辑
+- **Character List from WebUI**: Character list now read from WebUI, supports user customization
+- **标题从WebUI读取**：标题生成与WebUI集成，用户可随时编辑
+- **Title from WebUI**: Title generation integrated with WebUI, users can edit anytime
+- **用户控制增强**：用户可在章节生成前自由修改大纲、人物设定和标题
+- **Enhanced User Control**: Users can freely modify outline, character settings, and title before chapter generation
+
+### 🔧 功能改进 | Improvements
+
+#### 📝 提示词优化 | Prompt Enhancements
+- **润色提示词改进**：优化精简模式、长章节模式和标准模式的润色提示词
+- **Embellisher Prompt Improvements**: Optimized embellisher prompts across compact, long_chapter, and standard modes
+- **故事线提示词增强**：改进故事线生成提示词，提升生成质量
+- **Storyline Prompt Enhancement**: Improved storyline generation prompts for better quality
+- **人物/大纲提示词优化**：优化人物和大纲生成提示词
+- **Character/Outline Prompt Optimization**: Better character and outline generation prompts
+
+### 📝 修改文件 | Modified Files
+- `AIGN.py`: 核心WebUI数据集成逻辑 | Core WebUI data integration logic
+- `aign_agents.py`: 智能体参数传递优化 | Agent parameter passing optimization
+- `app.py`: WebUI数据读取接口 | WebUI data reading interface
+- `enhanced_storyline_generator.py`: 故事线生成器增强 | Storyline generator enhancement
+- `prompts/common/*.py`: 提示词优化 | Prompt optimization
+- `prompts/compact/base_embellisher_template.py`: 精简模式润色模板 | Compact mode embellisher template
+- `prompts/long_chapter/base_embellisher_template.py`: 长章节润色模板 | Long chapter embellisher template
+- `prompts/standard/embellisher_prompt.py`: 标准模式润色提示词 | Standard mode embellisher prompt
+
+---
+
 ## [4.1.1] - 2026-01-22 🔧 NVIDIA稳定性修复 | NVIDIA Stability Fix
 
 ### 🔧 Bug修复 | Bug Fixes

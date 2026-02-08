@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "4.1.2"
+__version__ = "4.2.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-01-22)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-02-08)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,8 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "WebUI数据集成：大纲、人物列表、标题从WebUI读取和编辑",
+        "用户可在生成前自定义修改大纲、人物设定、标题",
         "NVIDIA思维链内容过滤功能",
         "小说生成断点续传功能",
         "生成进度自动保存与恢复",

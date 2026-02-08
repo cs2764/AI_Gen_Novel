@@ -1,10 +1,36 @@
-﻿# 🤖 AI Novel Generator v4.1.1 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.2.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.1.1 (2026-01-22)
+## 🎉 What's New in v4.2.0 (2026-02-08)
+
+**📝 WebUI Data Integration!** Edit outline, character list, and title directly in WebUI before generation!
+
+### ✨ New Features | 新功能
+
+#### 📝 WebUI Data Integration
+- **大纲从WebUI读取**: 详细大纲现在直接从WebUI读取，用户可在生成前修改
+- **Outline from WebUI**: Detailed outline now read directly from WebUI, users can modify before generation
+- **人物列表从WebUI读取**: 人物列表现在从WebUI读取，支持用户自定义编辑
+- **Character List from WebUI**: Character list now read from WebUI, supports user customization
+- **标题从WebUI读取**: 标题生成与WebUI集成，用户可随时编辑
+- **Title from WebUI**: Title generation integrated with WebUI, users can edit anytime
+- **用户控制增强**: 用户可在章节生成前自由修改大纲、人物设定和标题
+- **Enhanced User Control**: Users can freely modify outline, character settings, and title before chapter generation
+
+### 🔧 Improvements | 功能改进
+
+#### 📝 Prompt Enhancements
+- **润色提示词改进**: 优化精简模式、长章节模式和标准模式的润色提示词
+- **Embellisher Prompt Improvements**: Optimized embellisher prompts across compact, long_chapter, and standard modes
+- **故事线提示词增强**: 改进故事线生成提示词，提升生成质量
+- **Storyline Prompt Enhancement**: Improved storyline generation prompts for better quality
+
+---
+
+## 📚 Previous Version: v4.1.1 (2026-01-22)
 
 **🛠️ NVIDIA Model Stability Fix!** Improved Chain of Thought (CoT) content parsing for NVIDIA models!
 

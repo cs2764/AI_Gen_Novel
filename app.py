@@ -1475,7 +1475,7 @@ def create_gradio5_original_app():
                 # gen_ouline_button_clicked 已在上面定义
 
                 # 实现详细大纲生成功能
-                def gen_detailed_outline_button_clicked(aign, user_idea, user_requirements, embellishment_idea, novel_outline, target_chapters, status_text):
+                def gen_detailed_outline_button_clicked(aign, user_idea, user_requirements, embellishment_idea, novel_outline, character_list, novel_title, target_chapters, status_text):
                     """生成详细大纲按钮点击处理函数"""
                     try:
                         import threading
@@ -1495,6 +1495,8 @@ def create_gradio5_original_app():
                         aign.user_requirements = user_requirements
                         aign.embellishment_idea = embellishment_idea
                         aign.novel_outline = novel_outline
+                        aign.character_list = character_list or getattr(aign, 'character_list', '')
+                        aign.novel_title = novel_title or getattr(aign, 'novel_title', '')
                         aign.target_chapter_count = target_chapters
 
                         # 初始化状态历史
@@ -2805,7 +2807,7 @@ def create_gradio5_original_app():
                 # 绑定生成详细大纲按钮
                 gen_detailed_outline_button.click(
                     gen_detailed_outline_button_clicked,
-                    [aign, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, target_chapters_slider, status_output],
+                    [aign, user_idea_text, user_requirements_text, embellishment_idea_text, novel_outline_text, character_list_text, novel_title_text, target_chapters_slider, status_output],
                     [aign, status_output, detailed_outline_text, gen_detailed_outline_button],
                 )
 
@@ -3259,24 +3261,22 @@ def create_gradio5_original_app():
                             except Exception as e:
                                 return ("❌ 保存失败", "", f"### 当前配置: 错误 - {e}")
 
-                        # 注意：save_btn 已经在 web_config_interface.py 中绑定了正确的处理函数
-                        # 不要在这里重复绑定，否则会导致两次保存，第二次覆盖第一次的正确配置
-                        # 如果需要更新 provider_info_display，应该通过其他方式（如页面加载事件）实现
-                        # if 'save_btn' in config_components:
-                        #     # 重新绑定保存按钮，添加提供商信息更新
-                        #     # 注意：必须包含 temperature_slider，否则保存时 temperature 为空
-                        #     config_components['save_btn'].click(
-                        #         fn=save_config_and_refresh_provider,
-                        #         inputs=[config_components['provider_dropdown'], config_components['api_key_input'],
-                        #                 config_components['model_dropdown'], config_components['base_url_input'],
-                        #                 config_components['system_prompt_input'], config_components['temperature_slider'],
-                        #                 config_components['custom_model_input']],
-                        #         outputs=[config_components['status_output'], config_components['current_info'], provider_info_display]
-                        #     )
-                        #     print("✅ 配置界面自动刷新功能已启用")
-                        # else:
-                        #     print("💡 配置保存按钮未找到，跳过自动刷新绑定")
-                        print("💡 save_btn 绑定由 web_config_interface.py 处理，避免重复绑定")
+                        # 使用 .then() 链式调用在保存配置后更新顶部的提供商信息显示
+                        # 这样不会重复绑定，而是在原有保存完成后追加更新操作
+                        if 'save_btn' in config_components:
+                            def update_provider_display_after_save():
+                                """保存配置后更新顶部提供商信息显示"""
+                                return f"### 当前配置: {get_current_provider_info()}"
+                            
+                            # 获取原始绑定的save_btn，使用.then()追加provider_info_display更新
+                            config_components['save_btn'].click(
+                                fn=update_provider_display_after_save,
+                                inputs=[],
+                                outputs=[provider_info_display]
+                            )
+                            print("✅ 配置保存后顶部信息刷新功能已启用")
+                        else:
+                            print("💡 配置保存按钮未找到，跳过自动刷新绑定")
                     else:
                         print("💡 配置界面组件未找到，跳过自动刷新绑定")
 

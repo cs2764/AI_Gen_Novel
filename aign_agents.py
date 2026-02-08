@@ -57,7 +57,7 @@ class TokenLimitError(Exception):
     pass
 
 
-def Retryer(func, max_retries=3):
+def Retryer(func=None, max_retries=3):
     """自动重试装饰器，用于处理API调用失败和流式输出问题
     
     Args:
@@ -67,6 +67,11 @@ def Retryer(func, max_retries=3):
     Returns:
         装饰后的函数
     """
+    if func is None:
+        def decorator(f):
+            return Retryer(f, max_retries=max_retries)
+        return decorator
+
     def wrapper(*args, **kwargs):
         for attempt in range(max_retries):
             try:
@@ -359,6 +364,7 @@ class MarkdownAgent:
         # 不应该到达这里，但为了安全
         raise ValueError(f"{self.name}: Token检查重试循环异常退出")
     
+    @Retryer(max_retries=3)
     def _do_query(self, user_input: str) -> dict:
         """实际执行查询的内部方法
         
@@ -492,7 +498,7 @@ class MarkdownAgent:
                 field_name = None
                 field_value_start = None
                 
-                if stripped_line.startswith('##') and (':' in stripped_line or '：' in stripped_line):
+                if stripped_line.startswith('##') and not stripped_line.startswith('###') and (':' in stripped_line or '：' in stripped_line):
                     separator = ':' if ':' in stripped_line else '：'
                     parts = stripped_line.split(separator, 1)
                     field_name = parts[0].replace('##', '').strip()
@@ -528,14 +534,21 @@ class MarkdownAgent:
             
             # 构建用户输入详细组成字符串
             input_parts_summary = []
+            rag_info = ""  # RAG参考信息
             for key, value in input_parts.items():
                 part_len = len(value)
                 part_tokens = self.count_tokens(value)
-                if part_len > 50 or key in ['大纲', '写作要求', '润色要求', '要润色的内容', '前文记忆', '临时设定', '计划', '人物列表', '详细大纲', '基础大纲', '前2章故事线', '后2章故事线', '前五章总结', '后五章梗概', '上一章原文', '本章故事线', '上一段原文', '润色结果']:
+                if part_len > 50 or key in ['大纲', '写作要求', '润色要求', '要润色的内容', '前文记忆', '临时设定', '计划', '人物列表', '详细大纲', '基础大纲', '前2章故事线', '后2章故事线', '前五章总结', '后五章梗概', '上一章原文', '本章故事线', '上一段原文', '润色结果', '风格参考']:
                     input_parts_summary.append(f"{key}:{part_len}字/{part_tokens}tk")
+                    # 单独记录RAG信息
+                    if key == '风格参考' and part_len > 0:
+                        # 统计参考数量（通过'# 参考'或'### 参考'标记）
+                        import re
+                        ref_count = len(re.findall(r'#+ 参考\d+', value))
+                        rag_info = f" | 📚RAG:{ref_count}条/{part_len}字/{part_tokens}tk"
             
-            # 输出紧凑格式
-            print(f"🔍 [{agent_name}{style_info}] 系统:{sys_prompt_len}字/{sys_prompt_tokens}tk | 用户:{len(user_input)}字/{user_input_tokens}tk | 总计:{total_prompt_length}字/{total_prompt_tokens}tk")
+            # 输出紧凑格式（包含RAG信息）
+            print(f"🔍 [{agent_name}{style_info}] 系统:{sys_prompt_len}字/{sys_prompt_tokens}tk | 用户:{len(user_input)}字/{user_input_tokens}tk | 总计:{total_prompt_length}字/{total_prompt_tokens}tk{rag_info}")
             if input_parts_summary:
                 print(f"   📝 {' | '.join(input_parts_summary)}")
         
@@ -568,21 +581,17 @@ class MarkdownAgent:
                 full_prompt_content, content_type, self.name, direction="sent"
             )
         
-        # 根据提供商类型决定是否使用流式输出
-        # NVIDIA API使用非流式模式以避免流式输出问题
-        use_stream = True  # 默认使用流式输出
+        # 默认使用流式输出，但NVIDIA API使用非流式模式以避免流式问题
+        use_stream = True
         try:
             from dynamic_config_manager import get_config_manager
             config_manager = get_config_manager()
-            current_config = config_manager.get_current_config()
-            
-            if current_config and hasattr(current_config, 'name'):
-                provider_name = current_config.name.lower()
-                if 'nvidia' in provider_name:
-                    use_stream = False
-                    print(f"🔧 [Debug] 检测到NVIDIA提供商，已切换为非流式输出模式")
+            current_provider = config_manager.current_provider
+            if current_provider and current_provider.lower() == 'nvidia':
+                use_stream = False
+                print(f"🔧 检测到NVIDIA提供商，使用非流式模式")
         except Exception:
-            pass  # 获取失败时使用默认的流式模式
+            pass  # 获取失败时默认使用流式
         
         # ⏱️ 开始API调用计时
         api_start_time = time.time()
@@ -621,6 +630,21 @@ class MarkdownAgent:
 
             try:
                 for chunk in resp:
+                    # 🛑 检查是否需要停止生成
+                    # 注意：只有在 stop_generation 被明确设置为 True 时才停止
+                    # auto_generation_running 仅在自动生成模式下有效（已启动后被停止的情况）
+                    # 避免在大纲生成等非自动生成场景误判停止
+                    if hasattr(self, 'parent_aign') and self.parent_aign:
+                        should_stop = getattr(self.parent_aign, 'stop_generation', False)
+                        # 仅当 auto_generation_running 曾经被设置为 True（即自动生成已启动）后变为 False 时才视为停止
+                        # 通过检查是否存在 _auto_gen_ever_started 标志来判断
+                        auto_gen_ever_started = getattr(self.parent_aign, '_auto_gen_ever_started', False)
+                        if auto_gen_ever_started and not getattr(self.parent_aign, 'auto_generation_running', True):
+                            should_stop = True
+                        if should_stop:
+                            print(f"\n🛑 检测到停止信号，中断流式输出...")
+                            break
+                    
                     final_result = chunk
                     chunk_count += 1
                     last_chunk_time = time.time()
@@ -950,7 +974,7 @@ class MarkdownAgent:
         key_mappings = {
             "润色内容": ["润色结果", "润色后内容", "润色文本"],
             "润色结果": ["润色内容", "润色后内容", "润色文本"],
-            "段落": ["Paragraph", "Segment", "Section", "Part", "Text", "正文", "Content", "Story Content"],
+            "段落": ["段子", "Paragraph", "Segment", "Section", "Part", "Text", "正文", "Content", "Story Content"],
             "开头": ["Beginning", "Start", "Opening", "Introduction", "First Paragraph"],
             "人物列表": ["Character List", "Characters", "Personaes", "Character Info"],
             "详细大纲": ["Detailed Outline", "Full Outline", "Extended Outline"],
@@ -1013,7 +1037,7 @@ class MarkdownAgent:
                 matched_key = self._find_best_match_key(k, sections, output)
                 if matched_key:
                     sections[k] = matched_key
-                    print(f"🔧 智能解析：将 '{matched_key}' 识别为 '{k}'")
+                    # print(f"🔧 智能解析：将 '{matched_key}' 识别为 '{k}'")
                 else:
                     # 尝试从思维链内容中挽救：检查思维链中是否包含期望的key
                     reasoning_content = resp.get("reasoning_content", "")
@@ -1038,14 +1062,23 @@ class MarkdownAgent:
                         # 我们可以选择尝试从reasoning_content中解析，但这比较危险，因为reasoning包含思考过程
                         # 这里我们仅记录，不自动采纳，除非确认content为空
                     
-                    # 只有当raw_content几乎为空，且在reasoning中找到内容时，才考虑使用reasoning作为替补
-                    if len(raw_content.strip()) < 10 and found_in_reasoning:
-                        print(f"🔄 自动修复: 主内容为空，尝试从思维链中提取 '{k}'")
+                    # 改进的思维链提取逻辑：
+                    # 1. 当主内容几乎为空时尝试提取
+                    # 2. 当在思维链中找到期望的key时也尝试提取（即使主内容有一些文本）
+                    should_try_reasoning = False
+                    if len(raw_content.strip()) < 10:
+                        should_try_reasoning = True
+                        print(f"🔄 自动修复: 主内容为空或过短({len(raw_content.strip())}字符)，尝试从思维链中提取 '{k}'")
+                    elif found_in_reasoning and reasoning_content:
+                        should_try_reasoning = True
+                        print(f"🔄 自动修复: 主内容解析失败，尝试从思维链中提取 '{k}'")
+                    
+                    if should_try_reasoning and reasoning_content:
                         # 临时将reasoning作为output尝试解析
                         # 注意：这需要非常小心，因为reasoning包含大量无关思考
                         # 这里简单地尝试再次解析reasoning_content
                         fallback_sections = self._parse_text_sections(reasoning_content, output_keys)
-                        if k in fallback_sections:
+                        if k in fallback_sections and fallback_sections[k]:
                             sections[k] = fallback_sections[k]
                             print(f"✅ 从思维链中成功提取 '{k}'")
                             continue
@@ -1067,7 +1100,7 @@ class MarkdownAgent:
             "章节标题": ["标题", "Title", "Chapter Title"],
             "大纲": ["小说大纲", "Outline", "Novel Outline"],
             "小说大纲": ["大纲", "Outline", "Novel Outline"],
-            "段落": ["Paragraph", "Segment", "Section", "Part", "Text", "正文", "Content", "Story Content"],
+            "段落": ["段子", "Paragraph", "Segment", "Section", "Part", "Text", "正文", "Content", "Story Content"],
             "开头": ["Beginning", "Start", "Opening", "Introduction", "First Paragraph"],
             "人物列表": ["Character List", "Characters", "Personaes", "Character Info"],
             "详细大纲": ["Detailed Outline", "Full Outline", "Extended Outline"],
@@ -1135,7 +1168,7 @@ class MarkdownAgent:
         if expected_key in equivalent_keys:
             for alt_key in equivalent_keys[expected_key]:
                 if alt_key in sections and len(sections[alt_key]) > 0:
-                    print(f"🔄 等效Key匹配：'{alt_key}' → '{expected_key}'")
+                    # print(f"🔄 等效Key匹配：'{alt_key}' → '{expected_key}'")
                     return sections[alt_key]
         
         # 特殊处理：标题生成器的情况
