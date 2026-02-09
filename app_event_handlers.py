@@ -580,6 +580,275 @@ def bind_main_events(
                 outputs=[components.get('status_output'), novel_outline_text, novel_title_text, character_list_text, detailed_outline_text]
             )
         
+        # ========== 绑定单独重新生成按钮 ==========
+        
+        # 重新生成大纲
+        def _regenerate_outline_only(aign_state, user_idea, user_requirements, embellishment_idea):
+            """仅重新生成大纲（生成器版本，支持实时状态更新）"""
+            import threading
+            import time
+            from datetime import datetime
+            from app_utils import format_status_output, format_time_duration
+            
+            try:
+                a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                
+                # 同步用户输入
+                a.user_idea = user_idea
+                a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
+                a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
+                
+                # 初始化状态历史
+                if not hasattr(a, 'global_status_history'):
+                    a.global_status_history = []
+                status_history = a.global_status_history
+                
+                start_time = time.time()
+                generation_start_time = datetime.now()
+                start_timestamp = generation_start_time.strftime("%H:%M:%S")
+                
+                status_history.append(["系统", "🔄 开始重新生成大纲...", start_timestamp, generation_start_time])
+                
+                def generate_outline():
+                    try:
+                        a.genNovelOutline(user_idea)
+                    except Exception as e:
+                        print(f"❌ 大纲重新生成失败: {e}")
+                
+                gen_thread = threading.Thread(target=generate_outline)
+                gen_thread.start()
+                
+                update_counter = 0
+                max_wait_time = 1800
+                
+                while gen_thread.is_alive():
+                    if time.time() - start_time > max_wait_time:
+                        break
+                    
+                    if update_counter % 2 == 0:
+                        elapsed_time = int(time.time() - start_time)
+                        current_timestamp = datetime.now().strftime("%H:%M:%S")
+                        outline_chars = len(a.novel_outline) if a.novel_outline else 0
+                        
+                        status_text = f"📖 正在重新生成大纲...\\n   • 已生成: {outline_chars} 字符\\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                        
+                        stage_found = False
+                        for i, item in enumerate(status_history):
+                            if len(item) >= 2 and item[0] == "大纲重新生成进度":
+                                status_history[i] = ["大纲重新生成进度", status_text, current_timestamp, generation_start_time]
+                                stage_found = True
+                                break
+                        if not stage_found:
+                            status_history.append(["大纲重新生成进度", status_text, current_timestamp, generation_start_time])
+                        
+                        yield (format_status_output(status_history), "生成中...")
+                    
+                    update_counter += 1
+                    time.sleep(0.5)
+                
+                gen_thread.join(timeout=30)
+                
+                final_timestamp = datetime.now().strftime("%H:%M:%S")
+                total_elapsed = int(time.time() - start_time)
+                
+                if a.novel_outline:
+                    status_history.append(["系统", f"✅ 大纲重新生成完成\\n   • 字数: {len(a.novel_outline)} 字\\n   • 耗时: {format_time_duration(total_elapsed, include_seconds=True)}", final_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), a.novel_outline)
+                else:
+                    yield (format_status_output(status_history), "❌ 大纲重新生成失败")
+            
+            except Exception as e:
+                err = f"❌ 大纲重新生成失败: {e}"
+                yield (err, err)
+        
+        # 重新生成标题
+        def _regenerate_title_only(aign_state, outline):
+            """仅重新生成标题（生成器版本，支持实时状态更新）"""
+            import threading
+            import time
+            from datetime import datetime
+            from app_utils import format_status_output, format_time_duration
+            
+            try:
+                a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                
+                # 同步大纲（确保使用最新的大纲生成标题）
+                a.novel_outline = outline or getattr(a, 'novel_outline', '')
+                
+                if not a.novel_outline:
+                    yield ("⚠️ 请先生成或输入大纲后再生成标题", "")
+                    return
+                
+                if not hasattr(a, 'global_status_history'):
+                    a.global_status_history = []
+                status_history = a.global_status_history
+                
+                start_time = time.time()
+                generation_start_time = datetime.now()
+                start_timestamp = generation_start_time.strftime("%H:%M:%S")
+                
+                status_history.append(["系统", "🔄 开始重新生成标题...", start_timestamp, generation_start_time])
+                
+                def generate_title():
+                    try:
+                        a.genNovelTitle()
+                    except Exception as e:
+                        print(f"⚠️ 标题重新生成失败: {e}")
+                        a.novel_title = "未命名小说"
+                
+                gen_thread = threading.Thread(target=generate_title)
+                gen_thread.start()
+                
+                update_counter = 0
+                while gen_thread.is_alive():
+                    if time.time() - start_time > 300:
+                        break
+                    
+                    if update_counter % 2 == 0:
+                        elapsed_time = int(time.time() - start_time)
+                        current_timestamp = datetime.now().strftime("%H:%M:%S")
+                        status_text = f"📚 正在重新生成标题...\\n   • 大纲: {len(a.novel_outline)} 字符\\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                        
+                        stage_found = False
+                        for i, item in enumerate(status_history):
+                            if len(item) >= 2 and item[0] == "标题重新生成进度":
+                                status_history[i] = ["标题重新生成进度", status_text, current_timestamp, generation_start_time]
+                                stage_found = True
+                                break
+                        if not stage_found:
+                            status_history.append(["标题重新生成进度", status_text, current_timestamp, generation_start_time])
+                        
+                        yield (format_status_output(status_history), "生成中...")
+                    
+                    update_counter += 1
+                    time.sleep(0.5)
+                
+                gen_thread.join(timeout=30)
+                
+                final_timestamp = datetime.now().strftime("%H:%M:%S")
+                total_elapsed = int(time.time() - start_time)
+                
+                if a.novel_title and a.novel_title != "未命名小说":
+                    status_history.append(["系统", f"✅ 标题重新生成完成\\n   • 标题: 《{a.novel_title}》\\n   • 耗时: {format_time_duration(total_elapsed, include_seconds=True)}", final_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), a.novel_title)
+                else:
+                    a.novel_title = "未命名小说"
+                    status_history.append(["系统", "⚠️ 标题重新生成失败，使用默认标题", final_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), a.novel_title)
+            
+            except Exception as e:
+                err = f"❌ 标题重新生成失败: {e}"
+                yield (err, "")
+        
+        # 重新生成人物列表
+        def _regenerate_character_only(aign_state, outline):
+            """仅重新生成人物列表（生成器版本，支持实时状态更新）"""
+            import threading
+            import time
+            from datetime import datetime
+            from app_utils import format_status_output, format_time_duration
+            
+            try:
+                a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                
+                # 同步大纲（确保使用最新的大纲生成人物列表）
+                a.novel_outline = outline or getattr(a, 'novel_outline', '')
+                
+                if not a.novel_outline:
+                    yield ("⚠️ 请先生成或输入大纲后再生成人物列表", "")
+                    return
+                
+                if not hasattr(a, 'global_status_history'):
+                    a.global_status_history = []
+                status_history = a.global_status_history
+                
+                start_time = time.time()
+                generation_start_time = datetime.now()
+                start_timestamp = generation_start_time.strftime("%H:%M:%S")
+                
+                status_history.append(["系统", "🔄 开始重新生成人物列表...", start_timestamp, generation_start_time])
+                
+                def generate_character():
+                    try:
+                        a.genCharacterList()
+                    except Exception as e:
+                        print(f"⚠️ 人物列表重新生成失败: {e}")
+                        a.character_list = "暂未生成人物列表"
+                
+                gen_thread = threading.Thread(target=generate_character)
+                gen_thread.start()
+                
+                update_counter = 0
+                while gen_thread.is_alive():
+                    if time.time() - start_time > 300:
+                        break
+                    
+                    if update_counter % 2 == 0:
+                        elapsed_time = int(time.time() - start_time)
+                        current_timestamp = datetime.now().strftime("%H:%M:%S")
+                        character_chars = len(a.character_list) if a.character_list else 0
+                        status_text = f"👥 正在重新生成人物列表...\\n   • 大纲: {len(a.novel_outline)} 字符\\n   • 已生成: {character_chars} 字符\\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                        
+                        stage_found = False
+                        for i, item in enumerate(status_history):
+                            if len(item) >= 2 and item[0] == "人物重新生成进度":
+                                status_history[i] = ["人物重新生成进度", status_text, current_timestamp, generation_start_time]
+                                stage_found = True
+                                break
+                        if not stage_found:
+                            status_history.append(["人物重新生成进度", status_text, current_timestamp, generation_start_time])
+                        
+                        yield (format_status_output(status_history), "生成中...")
+                    
+                    update_counter += 1
+                    time.sleep(0.5)
+                
+                gen_thread.join(timeout=30)
+                
+                final_timestamp = datetime.now().strftime("%H:%M:%S")
+                total_elapsed = int(time.time() - start_time)
+                
+                if a.character_list and a.character_list != "暂未生成人物列表":
+                    character_count = len(a.character_list.split('\\n')) if a.character_list else 0
+                    status_history.append(["系统", f"✅ 人物列表重新生成完成\\n   • 人物数量: 约{character_count}个\\n   • 耗时: {format_time_duration(total_elapsed, include_seconds=True)}", final_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), a.character_list)
+                else:
+                    a.character_list = "暂未生成人物列表"
+                    status_history.append(["系统", "⚠️ 人物列表重新生成失败，使用默认内容", final_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), a.character_list)
+            
+            except Exception as e:
+                err = f"❌ 人物列表重新生成失败: {e}"
+                yield (err, "")
+        
+        # 绑定重新生成按钮
+        regen_outline_btn = components.get('regen_outline_button')
+        regen_title_btn = components.get('regen_title_button')
+        regen_character_btn = components.get('regen_character_button')
+        
+        if regen_outline_btn:
+            regen_outline_btn.click(
+                fn=_regenerate_outline_only,
+                inputs=[aign, user_idea_text, user_requirements_text, embellishment_idea_text],
+                outputs=[components.get('status_output'), novel_outline_text]
+            )
+        
+        if regen_title_btn:
+            regen_title_btn.click(
+                fn=_regenerate_title_only,
+                inputs=[aign, novel_outline_text],
+                outputs=[components.get('status_output'), novel_title_text]
+            )
+        
+        if regen_character_btn:
+            regen_character_btn.click(
+                fn=_regenerate_character_only,
+                inputs=[aign, novel_outline_text],
+                outputs=[components.get('status_output'), character_list_text]
+            )
+        
+        print("✅ 重新生成按钮绑定成功")
+        
         # 绑定写作/润色要求扩展按钮
         try:
             from app_ai_expansion import expand_writing_requirements, expand_embellishment_requirements

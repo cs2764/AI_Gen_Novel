@@ -1,5 +1,37 @@
 # 更新日志 | Changelog
 
+[中文版本](#中文版本)
+
+## [4.3.0] - 2026-02-09 ✨ Regenerate Buttons & Streaming Console | 独立重新生成按钮与流式控制台
+
+### ✨ Core New Features | 核心新功能
+
+#### 🔄 Independent Regenerate Buttons | 独立重新生成按钮
+- **Regenerate Outline Button**: Users can now regenerate just the original outline without re-running the entire generation process
+- **大纲重新生成按钮**：用户现可单独重新生成原始大纲，无需重新运行整个生成流程
+- **Regenerate Title Button**: Regenerate only the novel title while keeping other elements intact
+- **标题重新生成按钮**：仅重新生成小说标题，保留其他元素不变
+- **Regenerate Character List Button**: Regenerate just the character list independently
+- **人物列表重新生成按钮**：独立重新生成人物列表
+- **Improved Efficiency**: Fix individual issues without wasting API calls on already-satisfactory content
+- **效率提升**：修复单个问题时无需浪费API调用重新生成已满意的内容
+
+#### 💻 Streaming Console Output for Storyline | 故事线流式控制台输出
+- **Real-time Console Display**: Storyline generation now streams output to the console in real-time
+- **实时控制台显示**：故事线生成现在实时流式输出到控制台
+- **Progress Visibility**: See generation progress chunk by chunk during storyline creation
+- **进度可视化**：故事线创建过程中可逐块查看生成进度
+- **Smart Toggle**: Console streaming only active when WebUI streaming is disabled
+- **智能切换**：仅在WebUI流式输出禁用时激活控制台流式输出
+
+### 📝 Modified Files | 修改文件
+- `app_ui_components.py`: Added three regenerate buttons (outline, title, character list)
+- `app_event_handlers.py`: Added event handlers for regenerate operations (+269 lines)
+- `enhanced_storyline_generator.py`: Added streaming console output support
+- `AIGN.py`: Minor integration improvements
+
+---
+
 ## [4.2.0] - 2026-02-08 ✨ WebUI数据集成 | WebUI Data Integration
 
 ### ✨ 核心新功能 | Core New Features

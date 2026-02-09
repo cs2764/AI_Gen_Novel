@@ -6565,7 +6565,7 @@ class AIGN:
         
         Args:
             query: 检索查询文本
-            top_k: 返回结果数量，默认10
+            top_k: 返回结果数量，默认10（精简模式下），非精简模式翻倍
             for_embellishment: 是否用于润色阶段
             
         Returns:
@@ -6588,8 +6588,12 @@ class AIGN:
                 print(f"⚠️ RAG 服务不可用 ({api_url})，跳过风格参考")
                 return ""
             
+            # 根据精简模式调整检索数量：非精简模式时检索数量翻倍
+            compact_mode = getattr(self, 'compact_mode', True)
+            actual_top_k = top_k if compact_mode else top_k * 2
+            
             # 执行检索
-            results = client.search(query, top_k=top_k, min_similarity=0.3)
+            results = client.search(query, top_k=actual_top_k, min_similarity=0.3)
             
             if not results:
                 print(f"📚 RAG 检索未找到匹配结果")

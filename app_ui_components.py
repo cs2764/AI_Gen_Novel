@@ -312,17 +312,35 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             lines=30, 
             interactive=True
         )
+        # 原始大纲重新生成按钮
+        components['regen_outline_button'] = gr.Button(
+            "🔄 重新生成大纲", 
+            variant="secondary", 
+            size="sm"
+        )
         components['novel_title_text'] = gr.Textbox(
             loaded_data.get("title", ""),
             label="小说标题", 
             lines=1, 
             interactive=True
         )
+        # 小说标题重新生成按钮
+        components['regen_title_button'] = gr.Button(
+            "🔄 重新生成标题", 
+            variant="secondary", 
+            size="sm"
+        )
         components['character_list_text'] = gr.Textbox(
             loaded_data.get("character_list", ""),
             label="人物列表", 
             lines=16, 
             interactive=True
+        )
+        # 人物列表重新生成按钮
+        components['regen_character_button'] = gr.Button(
+            "🔄 重新生成人物", 
+            variant="secondary", 
+            size="sm"
         )
         components['target_chapters_slider'] = gr.Slider(
             minimum=5, 

@@ -929,20 +929,27 @@ class EnhancedStorylineGenerator:
                     stream=True  # 使用流式输出，实时显示生成内容
                 )
                 
-                # 处理流式响应：收集所有内容后再解析JSON
+                # 处理流式响应：实时输出到console并收集所有内容
                 if hasattr(response, '__next__'):
-                    print(f"🔧 故事线生成: 检测到流式响应，开始接收数据...")
+                    print(f"🔧 故事线生成: 检测到流式响应，开始接收数据...\n")
                     final_result = None
                     accumulated_content = ""
                     chunk_count = 0
+                    last_content_length = 0  # 用于追踪新增内容
                     
                     for chunk in response:
                         chunk_count += 1
                         final_result = chunk
                         if chunk and 'content' in chunk:
-                            accumulated_content = chunk['content']
+                            current_content = chunk['content']
+                            # 计算新增的内容并输出到console
+                            new_content = current_content[last_content_length:]
+                            if new_content:
+                                print(new_content, end='', flush=True)
+                            accumulated_content = current_content
+                            last_content_length = len(current_content)
                     
-                    print(f"\n✅ 流式接收完成: {len(accumulated_content)} 字符, {chunk_count} 个数据块")
+                    print(f"\n\n✅ 流式接收完成: {len(accumulated_content)} 字符, {chunk_count} 个数据块")
                     
                     # 使用累积的内容构建响应
                     response = {

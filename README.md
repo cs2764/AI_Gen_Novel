@@ -1,10 +1,36 @@
-﻿# 🤖 AI Novel Generator v4.2.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.3.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.2.0 (2026-02-08)
+## 🎉 What's New in v4.3.0 (2026-02-09)
+
+**🔄 Independent Regenerate Buttons & Streaming Console!** Regenerate outline, title, or character list individually, plus real-time console output for storyline generation!
+
+### ✨ New Features | 新功能
+
+#### 🔄 Independent Regenerate Buttons | 独立重新生成按钮
+- **大纲重新生成按钮**: 用户现可单独重新生成原始大纲，无需重新运行整个生成流程
+- **Regenerate Outline Button**: Users can now regenerate just the original outline without re-running the entire generation process
+- **标题重新生成按钮**: 仅重新生成小说标题，保留其他元素不变
+- **Regenerate Title Button**: Regenerate only the novel title while keeping other elements intact
+- **人物列表重新生成按钮**: 独立重新生成人物列表
+- **Regenerate Character List Button**: Regenerate just the character list independently
+- **效率提升**: 修复单个问题时无需浪费API调用重新生成已满意的内容
+- **Improved Efficiency**: Fix individual issues without wasting API calls on already-satisfactory content
+
+#### 💻 Streaming Console Output | 故事线流式控制台输出
+- **实时控制台显示**: 故事线生成现在实时流式输出到控制台
+- **Real-time Console Display**: Storyline generation now streams output to the console in real-time
+- **进度可视化**: 故事线创建过程中可逐块查看生成进度
+- **Progress Visibility**: See generation progress chunk by chunk during storyline creation
+- **智能切换**: 仅在WebUI流式输出禁用时激活控制台流式输出
+- **Smart Toggle**: Console streaming only active when WebUI streaming is disabled
+
+---
+
+## 📚 Previous Version: v4.2.0 (2026-02-08)
 
 **📝 WebUI Data Integration!** Edit outline, character list, and title directly in WebUI before generation!
 
