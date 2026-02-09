@@ -1,10 +1,26 @@
-﻿# 🤖 AI Novel Generator v4.3.1 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.3.2 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.3.1 (2026-02-09)
+## 🎉 What's New in v4.3.2 (2026-02-09)
+
+**🔧 Bug Fix Release!** Fixed unresponsive "Start Auto Generation" button.
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Auto Generate Button Fix | 自动生成按钮修复
+- **Fixed unresponsive auto-generate button**: Button now responds correctly when clicked
+- **修复自动生成按钮无响应**: 按钮点击现在可以正常响应
+- **Root cause**: `app.py` was binding to local button variables, but the UI displayed different buttons
+- **问题原因**: `app.py` 绑定的是局部变量按钮，但 UI 显示的是 components 字典里的按钮
+- **Solution**: Moved bindings to `app_event_handlers.py` to use `components` dictionary
+- **解决方案**: 将绑定移至 `app_event_handlers.py` 并使用 `components` 字典
+
+---
+
+## 📚 Previous Version: v4.3.1 (2026-02-09)
 
 **🔧 Bug Fix Release!** Fixed Gradio event handler input parameter mismatch error.
 
@@ -13,10 +29,10 @@
 #### 🛠️ Event Handler Binding Fix | 事件处理器绑定修复
 - **Fixed duplicate button binding**: Resolved `ValueError: event handler didn't receive enough input values` error
 - **修复重复按钮绑定**: 解决了 `ValueError: 事件处理器未接收到足够输入值` 的错误
-- **Root cause**: Duplicate `.click()` bindings for `auto_generate_button` and `stop_generate_button` in both `app.py` and `app_event_handlers.py`
-- **问题原因**: `auto_generate_button` 和 `stop_generate_button` 在 `app.py` 和 `app_event_handlers.py` 中存在重复的 `.click()` 绑定
-- **Solution**: Removed duplicate bindings from `app_event_handlers.py`, keeping only `app.py` bindings
-- **解决方案**: 从 `app_event_handlers.py` 中移除重复绑定，仅保留 `app.py` 中的绑定
+- **Root cause**: Duplicate `.click()` bindings in `app.py` and `app_event_handlers.py`
+- **问题原因**: `app.py` 和 `app_event_handlers.py` 中存在重复的 `.click()` 绑定
+- **Solution**: Removed duplicate bindings from `app_event_handlers.py`
+- **解决方案**: 从 `app_event_handlers.py` 中移除重复绑定
 
 ---
 

@@ -2,6 +2,24 @@
 
 [中文版本](#中文版本)
 
+## [4.3.2] - 2026-02-09 🔧 Bug Fix Release | 问题修复版本
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Auto Generate Button Fix | 自动生成按钮修复
+- **Fixed unresponsive auto-generate button**: Button now responds correctly when clicked
+- **修复自动生成按钮无响应**: 按钮点击现在可以正常响应
+- **Root cause**: `app.py` was binding to local button variables (line 1106), but the UI displayed different buttons from `app_ui_components.py` (line 513)
+- **问题原因**: `app.py` 绑定的是局部变量按钮（第1106行），但 UI 显示的是 `app_ui_components.py` 中 components 字典里的按钮（第513行）
+- **Solution**: Moved button bindings to `app_event_handlers.py` to use the `components` dictionary, ensuring bindings connect to the actual UI buttons
+- **解决方案**: 将按钮绑定移至 `app_event_handlers.py` 并使用 `components` 字典，确保绑定连接到实际的 UI 按钮
+
+### 📝 Modified Files | 修改文件
+- `app_event_handlers.py`: Enabled `auto_generate_button` and `stop_generate_button` bindings using `components.get()`
+- `app.py`: Commented out incorrect local variable bindings
+
+---
+
 ## [4.3.1] - 2026-02-09 🔧 Bug Fix Release | 问题修复版本
 
 ### 🔧 Bug Fixes | 问题修复

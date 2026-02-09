@@ -2004,18 +2004,86 @@ def bind_main_events(
                         gr.update(visible=False)   # 隐藏停止生成按钮
                     )
             
-            # 🚀 注意：自动生成按钮已在 app.py 中绑定（使用 long_chapter_feature_checkbox）
-            # 为避免重复绑定导致的输入参数冲突，这里不再绑定
-            # 详情见：app.py 第2880行 auto_generate_button.click()
-            print("⏭️ 跳过自动生成按钮绑定（已在app.py中绑定）")
+            # 绑定自动生成按钮到components字典中的按钮（这是UI显示的按钮）
+            components.get('auto_generate_button').click(
+                _wrap_auto_generate,
+                [aign, 
+                 components.get('target_chapters_slider'), 
+                 components.get('enable_chapters_checkbox'), 
+                 components.get('enable_ending_checkbox'),
+                 user_requirements_text, 
+                 embellishment_idea_text, 
+                 components.get('compact_mode_checkbox'), 
+                 components.get('long_chapter_mode_dropdown')],
+                [components.get('status_output'), 
+                 components.get('progress_text'), 
+                 components.get('auto_generate_button'), 
+                 components.get('stop_generate_button')]
+            )
+            print("✅ 自动生成按钮绑定完成（使用components字典）")
         else:
             print("⚠️ 自动生成按钮或autoGenerate方法未找到")
         
         if 'stop_generate_button' in components:
-            # 🚀 注意：停止生成按钮已在 app.py 中绑定
-            # 为避免重复绑定导致的输入参数冲突，这里不再绑定
-            # 详情见：app.py 第2888行 stop_generate_button.click()
-            print("⏭️ 跳过停止生成按钮绑定（已在app.py中绑定）")
+            def _wrap_stop_generate(aign_state):
+                """停止生成包装函数"""
+                try:
+                    from datetime import datetime
+                    from app_utils import format_status_output
+                    
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    
+                    print(f"⏹️ 停止生成...")
+                    
+                    # 设置停止标志
+                    if hasattr(a, 'auto_generation_running'):
+                        a.auto_generation_running = False
+                        print("✅ 已设置 auto_generation_running = False")
+                    
+                    # 调用停止方法（如果存在）
+                    if hasattr(a, 'stopAutoGeneration'):
+                        a.stopAutoGeneration()
+                    
+                    # 设置其他停止标志
+                    if hasattr(a, 'stop_generation'):
+                        a.stop_generation = True
+                    if hasattr(a, 'stop_auto_generate'):
+                        a.stop_auto_generate = True
+                    
+                    # 初始化状态历史
+                    if not hasattr(a, 'global_status_history'):
+                        a.global_status_history = []
+                    status_history = a.global_status_history
+                    
+                    # 记录停止状态
+                    stop_timestamp = datetime.now().strftime("%H:%M:%S")
+                    status_history.append(["系统", "⏹️ 用户请求停止生成", stop_timestamp, datetime.now()])
+                    
+                    return (
+                        format_status_output(status_history),
+                        "已发送停止信号",
+                        gr.update(visible=True),   # 显示自动生成按钮
+                        gr.update(visible=False)   # 隐藏停止生成按钮
+                    )
+                except Exception as e:
+                    error_msg = f"❌ 停止生成失败: {str(e)}"
+                    return (
+                        error_msg,
+                        error_msg,
+                        gr.update(visible=True),
+                        gr.update(visible=False)
+                    )
+            
+            # 绑定停止生成按钮到components字典中的按钮
+            components.get('stop_generate_button').click(
+                _wrap_stop_generate,
+                [aign],
+                [components.get('status_output'), 
+                 components.get('progress_text'), 
+                 components.get('auto_generate_button'), 
+                 components.get('stop_generate_button')]
+            )
+            print("✅ 停止生成按钮绑定完成（使用components字典）")
         
         # 绑定刷新进度按钮
         if 'refresh_progress_btn' in components:

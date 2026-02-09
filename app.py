@@ -2875,21 +2875,26 @@ def create_gradio5_original_app():
                     print(f"🔴 参数类型: {[type(arg).__name__ for arg in args]}")
                     print("="*80 + "\n")
                     return auto_generate_button_clicked(*args)
+                # 🚀 注意：以下按钮绑定已移至 app_event_handlers.py
+                # 原因：这里绑定的是 app.py 中定义的局部变量 auto_generate_button，
+                # 但实际 UI 显示的是 app_ui_components.py 中的 components['auto_generate_button']
+                # 正确的绑定需要在 app_event_handlers.py 中使用 components 字典
+                # 详情见：app_event_handlers.py bind_main_events() 函数
                 
-                print("🔵 正在绑定自动生成按钮...")
-                auto_generate_button.click(
-                    auto_generate_button_clicked_wrapper,
-                    [aign, target_chapters_slider, enable_chapters_checkbox, enable_ending_checkbox, user_requirements_text, embellishment_idea_text, compact_mode_checkbox, long_chapter_feature_checkbox],
-                    [aign, status_output, progress_text, auto_generate_button, stop_generate_button]
-                )
-                print("✅ 自动生成按钮绑定完成")
+                # print("🔵 正在绑定自动生成按钮...")
+                # auto_generate_button.click(
+                #     auto_generate_button_clicked_wrapper,
+                #     [aign, target_chapters_slider, enable_chapters_checkbox, enable_ending_checkbox, user_requirements_text, embellishment_idea_text, compact_mode_checkbox, long_chapter_feature_checkbox],
+                #     [aign, status_output, progress_text, auto_generate_button, stop_generate_button]
+                # )
+                # print("✅ 自动生成按钮绑定完成")
 
-                # 绑定停止生成按钮
-                stop_generate_button.click(
-                    stop_generate_button_clicked,
-                    [aign],
-                    [aign, status_output, progress_text, auto_generate_button, stop_generate_button]
-                )
+                # # 绑定停止生成按钮 (同样移至 app_event_handlers.py)
+                # stop_generate_button.click(
+                #     stop_generate_button_clicked,
+                #     [aign],
+                #     [aign, status_output, progress_text, auto_generate_button, stop_generate_button]
+                # )
 
                 # 绑定刷新进度按钮
                 def auto_refresh_progress(aign_instance):
