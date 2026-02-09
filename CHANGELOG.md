@@ -2,6 +2,23 @@
 
 [中文版本](#中文版本)
 
+## [4.3.1] - 2026-02-09 🔧 Bug Fix Release | 问题修复版本
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Event Handler Binding Fix | 事件处理器绑定修复
+- **Fixed duplicate button binding**: Resolved `ValueError: event handler didn't receive enough input values (needed: 8, got: 1)` error when clicking "Start Auto Generation" button
+- **修复重复按钮绑定**: 解决了点击"开始自动生成"按钮时报错 `ValueError: 事件处理器未接收到足够输入值` 的问题
+- **Root cause**: Duplicate `.click()` bindings for `auto_generate_button` and `stop_generate_button` existed in both `app.py` and `app_event_handlers.py`, causing input parameter mismatch
+- **问题原因**: `auto_generate_button` 和 `stop_generate_button` 在 `app.py` 和 `app_event_handlers.py` 中存在重复的 `.click()` 绑定，导致输入参数不匹配
+- **Solution**: Removed duplicate bindings from `app_event_handlers.py`, keeping only the correct bindings in `app.py`
+- **解决方案**: 从 `app_event_handlers.py` 中移除重复绑定，仅保留 `app.py` 中的正确绑定
+
+### 📝 Modified Files | 修改文件
+- `app_event_handlers.py`: Removed duplicate `auto_generate_button.click()` and `stop_generate_button.click()` bindings
+
+---
+
 ## [4.3.0] - 2026-02-09 ✨ Regenerate Buttons & Streaming Console | 独立重新生成按钮与流式控制台
 
 ### ✨ Core New Features | 核心新功能

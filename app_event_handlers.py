@@ -1929,6 +1929,23 @@ def bind_main_events(
         
         # 绑定自动生成按钮
         print("🔵 正在绑定自动生成按钮...")
+        # 调试：检查所有需要的组件是否存在
+        auto_gen_required_components = [
+            ('aign', aign),
+            ('target_chapters_slider', components.get('target_chapters_slider')),
+            ('enable_chapters_checkbox', components.get('enable_chapters_checkbox')),
+            ('enable_ending_checkbox', components.get('enable_ending_checkbox')),
+            ('user_requirements_text', user_requirements_text),
+            ('embellishment_idea_text', embellishment_idea_text),
+            ('compact_mode_checkbox', components.get('compact_mode_checkbox')),
+            ('long_chapter_mode_dropdown', components.get('long_chapter_mode_dropdown'))
+        ]
+        for name, comp in auto_gen_required_components:
+            if comp is None:
+                print(f"⚠️ 自动生成输入组件缺失: {name} = None")
+            else:
+                print(f"✅ 自动生成输入组件已找到: {name}")
+        
         if 'auto_generate_button' in components and hasattr(AIGN, 'autoGenerate'):
             def _wrap_auto_generate(aign_state, target_chapters, enable_chapters, enable_ending, user_requirements, embellishment_idea, compact_mode, long_chapter_feature):
                 """自动生成包装函数"""
@@ -1987,91 +2004,18 @@ def bind_main_events(
                         gr.update(visible=False)   # 隐藏停止生成按钮
                     )
             
-            components['auto_generate_button'].click(
-                fn=_wrap_auto_generate,
-                inputs=[
-                    aign,
-                    components.get('target_chapters_slider'),
-                    components.get('enable_chapters_checkbox'),
-                    components.get('enable_ending_checkbox'),
-                    user_requirements_text,
-                    embellishment_idea_text,
-                    components.get('compact_mode_checkbox'),
-                    components.get('long_chapter_mode_dropdown')
-                ],
-                outputs=[
-                    components.get('status_output'),
-                    progress_text,
-                    components.get('auto_generate_button'),
-                    components.get('stop_generate_button')
-                ]
-            )
-            print("✅ 自动生成按钮绑定成功")
+            # 🚀 注意：自动生成按钮已在 app.py 中绑定（使用 long_chapter_feature_checkbox）
+            # 为避免重复绑定导致的输入参数冲突，这里不再绑定
+            # 详情见：app.py 第2880行 auto_generate_button.click()
+            print("⏭️ 跳过自动生成按钮绑定（已在app.py中绑定）")
         else:
             print("⚠️ 自动生成按钮或autoGenerate方法未找到")
         
         if 'stop_generate_button' in components:
-            def _wrap_stop_generate(aign_state):
-                """停止生成包装函数"""
-                print("⏹️ 停止生成...")
-                try:
-                    from datetime import datetime
-                    from app_utils import format_status_output
-                    
-                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
-                    
-                    # 设置停止标志 - 关键：设置auto_generation_running为False，这是生成循环检查的标志
-                    if hasattr(a, 'auto_generation_running'):
-                        a.auto_generation_running = False
-                        print("✅ 已设置 auto_generation_running = False")
-                    
-                    # 调用停止方法（如果存在）- 这会清空流内容
-                    if hasattr(a, 'stopAutoGeneration'):
-                        a.stopAutoGeneration()
-                    
-                    # 设置其他停止标志（用于其他可能检查这些标志的代码）
-                    if hasattr(a, 'stop_generation'):
-                        a.stop_generation = True
-                    if hasattr(a, 'stop_auto_generate'):
-                        a.stop_auto_generate = True
-                    
-                    # 清空当前流内容（确保UI也清空）
-                    if hasattr(a, 'current_stream_content'):
-                        a.current_stream_content = ""
-                    
-                    # 初始化状态历史
-                    if not hasattr(a, 'global_status_history'):
-                        a.global_status_history = []
-                    status_history = a.global_status_history
-                    
-                    # 记录停止状态
-                    stop_timestamp = datetime.now().strftime("%H:%M:%S")
-                    status_history.append(["系统", "⏹️ 用户请求停止生成", stop_timestamp, datetime.now()])
-                    
-                    # 返回结果时清空实时流显示
-                    return (
-                        format_status_output(status_history),
-                        "已发送停止信号，生成将在当前操作完成后停止",
-                        gr.update(visible=True),   # 显示自动生成按钮
-                        gr.update(visible=False),  # 隐藏停止生成按钮
-                        ""  # 清空实时流显示
-                    )
-                except Exception as e:
-                    error_msg = f"❌ 停止生成失败: {str(e)}"
-                    return (error_msg, error_msg, gr.update(visible=True), gr.update(visible=False), "")
-            
-            components['stop_generate_button'].click(
-                fn=_wrap_stop_generate,
-                inputs=[aign],
-                outputs=[
-                    components.get('status_output'),
-                    progress_text,
-                    components.get('auto_generate_button'),
-                    components.get('stop_generate_button'),
-                    components.get('realtime_stream_text')  # 添加：清空实时流显示
-                ]
-            )
-            print("✅ 停止生成按钮绑定成功")
+            # 🚀 注意：停止生成按钮已在 app.py 中绑定
+            # 为避免重复绑定导致的输入参数冲突，这里不再绑定
+            # 详情见：app.py 第2888行 stop_generate_button.click()
+            print("⏭️ 跳过停止生成按钮绑定（已在app.py中绑定）")
         
         # 绑定刷新进度按钮
         if 'refresh_progress_btn' in components:

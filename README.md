@@ -1,10 +1,26 @@
-﻿# 🤖 AI Novel Generator v4.3.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.3.1 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.3.0 (2026-02-09)
+## 🎉 What's New in v4.3.1 (2026-02-09)
+
+**🔧 Bug Fix Release!** Fixed Gradio event handler input parameter mismatch error.
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Event Handler Binding Fix | 事件处理器绑定修复
+- **Fixed duplicate button binding**: Resolved `ValueError: event handler didn't receive enough input values` error
+- **修复重复按钮绑定**: 解决了 `ValueError: 事件处理器未接收到足够输入值` 的错误
+- **Root cause**: Duplicate `.click()` bindings for `auto_generate_button` and `stop_generate_button` in both `app.py` and `app_event_handlers.py`
+- **问题原因**: `auto_generate_button` 和 `stop_generate_button` 在 `app.py` 和 `app_event_handlers.py` 中存在重复的 `.click()` 绑定
+- **Solution**: Removed duplicate bindings from `app_event_handlers.py`, keeping only `app.py` bindings
+- **解决方案**: 从 `app_event_handlers.py` 中移除重复绑定，仅保留 `app.py` 中的绑定
+
+---
+
+## 📚 Previous Version: v4.3.0 (2026-02-09)
 
 **🔄 Independent Regenerate Buttons & Streaming Console!** Regenerate outline, title, or character list individually, plus real-time console output for storyline generation!
 
