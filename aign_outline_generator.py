@@ -62,12 +62,26 @@ class OutlineGenerator:
             print("⚠️ 检测到停止信号，中断大纲生成")
             return ""
         
+        # RAG: 获取风格参考（大纲生成阶段）
+        rag_references = ""
+        if hasattr(self.aign, '_is_rag_enabled') and self.aign._is_rag_enabled():
+            print("📚 RAG (大纲生成): 正在检索风格参考...")
+            rag_query = self.aign.user_idea
+            rag_top_k = getattr(self.aign, 'rag_top_k', 10)
+            rag_references = self.aign._get_rag_references(rag_query, top_k=rag_top_k, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+            else:
+                print("📚 RAG: 未检索到相关参考")
+        
         try:
+            inputs = {
+                "用户想法": self.aign.user_idea,
+                "写作要求": getattr(self.aign, 'user_requirements', ''),
+                "风格参考": rag_references,
+            }
             resp = self.novel_outline_writer.invoke(
-                inputs={
-                    "用户想法": self.aign.user_idea,
-                    "写作要求": getattr(self.aign, 'user_requirements', '')
-                },
+                inputs=inputs,
                 output_keys=["大纲"],
             )
             self.aign.novel_outline = resp["大纲"]
@@ -317,6 +331,18 @@ class OutlineGenerator:
         if hasattr(self.aign, 'log_message'):
             self.aign.log_message(f"👥 正在生成人物列表...")
         
+        # RAG: 获取风格参考（人物列表生成阶段）
+        rag_references = ""
+        if hasattr(self.aign, '_is_rag_enabled') and self.aign._is_rag_enabled():
+            print("📚 RAG (人物列表生成): 正在检索风格参考...")
+            rag_query = self.aign.user_idea
+            rag_top_k = getattr(self.aign, 'rag_top_k', 10)
+            rag_references = self.aign._get_rag_references(rag_query, top_k=rag_top_k, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+            else:
+                print("📚 RAG: 未检索到相关参考")
+        
         # 添加重试机制处理人物列表生成错误
         retry_count = 0
         success = False
@@ -330,7 +356,8 @@ class OutlineGenerator:
                     inputs={
                         "大纲": current_outline,
                         "用户想法": self.aign.user_idea,
-                        "写作要求": getattr(self.aign, 'user_requirements', '')
+                        "写作要求": getattr(self.aign, 'user_requirements', ''),
+                        "风格参考": rag_references,
                     },
                     output_keys=["人物列表"]
                 )
@@ -471,6 +498,18 @@ class OutlineGenerator:
             )
         mode_guide_text = "\n".join(mode_instructions) if mode_instructions else ""
         
+        # RAG: 获取风格参考（详细大纲生成阶段）
+        rag_references = ""
+        if hasattr(self.aign, '_is_rag_enabled') and self.aign._is_rag_enabled():
+            print("📚 RAG (详细大纲生成): 正在检索风格参考...")
+            rag_query = self.aign.user_idea
+            rag_top_k = getattr(self.aign, 'rag_top_k', 10)
+            rag_references = self.aign._get_rag_references(rag_query, top_k=rag_top_k, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+            else:
+                print("📚 RAG: 未检索到相关参考")
+        
         # 准备输入
         inputs = {
             "原始大纲": self.aign.novel_outline,
@@ -478,7 +517,8 @@ class OutlineGenerator:
             "用户想法": self.aign.user_idea,
             "写作要求": getattr(self.aign, 'user_requirements', ''),
             "剧情结构信息": structure_info,
-            "模式说明": mode_guide_text
+            "模式说明": mode_guide_text,
+            "风格参考": rag_references,
         }
         
         # 如果已有人物列表，也加入输入

@@ -137,7 +137,7 @@ def _parse_harmony_response(raw_response: str) -> str:
 
 def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, system_prompt=""):
     """
-    LM Studio API 接口（使用 Completions 模式，而非 Chat Completions）
+    LM Studio API 接口（标准模型使用 Chat Completions，gpt-oss模型使用 Completions + Harmony 格式）
 
     参数说明:
     - model_name: 模型名称，可以是任何在LM Studio中加载的模型
@@ -150,32 +150,24 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
 
     client = OpenAI(api_key=api_key, base_url=base_url, timeout=1800.0)  # 30分钟超时
 
-    def _build_completion_prompt(messages: list) -> str:
-        parts = []
-        if system_prompt:
-            parts.append(f"System: {system_prompt}".strip())
+    def _build_chat_messages(messages: list) -> list:
+        """构建标准 Chat Completions 的 messages 数组"""
+        chat_messages = []
         
-        for i, msg in enumerate(messages or []):
+        # 添加系统消息
+        if system_prompt:
+            chat_messages.append({"role": "system", "content": system_prompt})
+        
+        # 添加用户消息
+        for msg in messages or []:
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            
-            if role == "system":
-                # 如果已经在模型提供商层面设置了system_prompt，跳过消息中的system内容
-                # 避免重复添加系统提示词
-                if not system_prompt:
-                    parts.append(f"System: {content}")
-            elif role == "assistant":
-                parts.append(f"Assistant: {content}")
-            else:
-                parts.append(f"User: {content}")
+            # 跳过重复的系统消息
+            if role == "system" and system_prompt:
+                continue
+            chat_messages.append({"role": role, "content": content})
         
-        # 引导模型继续作为助手回复
-        if not parts or not parts[-1].startswith("Assistant:"):
-            parts.append("Assistant:")
-        
-        final_prompt = "\n\n".join(parts)
-        
-        return final_prompt
+        return chat_messages
 
     def chatLLM(
         messages: list,
@@ -187,31 +179,18 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
         tools=None,
         tool_choice=None,
     ) -> dict:
-        # 检查是否使用Chat Completions模式（当提供tools时启用）
-        use_chat_mode = tools is not None
+        # 检查是否为gpt-oss模型（需要特殊的 Harmony 格式，走 Completions 端点）
+        is_gpt_oss = _is_gpt_oss_model(model_name)
         
-        if use_chat_mode:
+        # 检查是否使用 tools（Function Calling）
+        use_tools = tools is not None
+        
+        if use_tools:
             # ========== Chat Completions模式（支持Function Calling）==========
             print(f"🔧 LM Studio: 检测到tools参数，使用Chat Completions模式")
             print(f"🔧 LM Studio: tools数量={len(tools)}, tool_choice={tool_choice}")
             
-            # 构建Chat Completions请求参数
-            chat_messages = []
-            
-            # 添加系统消息
-            if system_prompt:
-                chat_messages.append({"role": "system", "content": system_prompt})
-                print(f"🔧 LM Studio Chat: 系统提示词长度: {len(system_prompt)} 字符")
-            
-            # 添加用户消息
-            for msg in messages or []:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                # 跳过重复的系统消息
-                if role == "system" and system_prompt:
-                    continue
-                chat_messages.append({"role": role, "content": content})
-            
+            chat_messages = _build_chat_messages(messages)
             print(f"🔧 LM Studio Chat: 消息数量={len(chat_messages)}")
             
             # 构建请求参数
@@ -230,9 +209,6 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
                 params["max_tokens"] = max_tokens
             else:
                 params["max_tokens"] = 40000
-            
-            # 注意：LM Studio的tools模式不建议设置temperature，让模型使用默认值
-            # 以获得更稳定的函数调用输出
             
             try:
                 print("🔧 LM Studio: 调用chat.completions.create()（带tools）...")
@@ -268,19 +244,13 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
                 print(f"请确保模型支持function calling（如Qwen2.5, Llama 3.1+, Mistral等）")
                 raise e
         
-        else:
-            # ========== 传统Completions模式 ==========
+        elif is_gpt_oss:
+            # ========== gpt-oss模型：使用 Completions + Harmony 格式 ==========
             if response_format is not None:
                 print("⚠️ LM Studio Completions 模式不支持 response_format，已忽略")
 
-            # 检查是否为gpt-oss模型，使用相应的提示词格式
-            is_gpt_oss = _is_gpt_oss_model(model_name)
-            if is_gpt_oss:
-                print(f"🔧 检测到gpt-oss模型: {model_name}，使用Harmony格式")
-                prompt_text = _build_harmony_prompt(messages, system_prompt)
-            else:
-                print(f"🔧 使用标准模型: {model_name}，使用传统格式")
-                prompt_text = _build_completion_prompt(messages)
+            print(f"🔧 检测到gpt-oss模型: {model_name}，使用Harmony格式")
+            prompt_text = _build_harmony_prompt(messages, system_prompt)
 
             # 构建请求参数（Completions）
             params = {
@@ -288,55 +258,31 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
                 "prompt": prompt_text,
             }
 
-            # 按需求：不在API调用中包含 temperature / top_p
             if max_tokens is not None:
                 params["max_tokens"] = max_tokens
             else:
-                # 检测是否为详细大纲生成
-                is_detailed_outline = False
-                try:
-                    # 检查消息内容是否包含详细大纲相关的关键词
-                    for msg in messages:
-                        content = msg.get("content", "")
-                        if any(keyword in content for keyword in ["详细大纲", "DetailedOutlineGenerator", "小说详细大纲扩展专家"]):
-                            is_detailed_outline = True
-                            break
-                except Exception:
-                    pass
-                
-                # 根据上下文设置不同的max_tokens
-                if is_detailed_outline:
-                    params["max_tokens"] = 40000  # 详细大纲生成
-                    print("🔧 LM Studio: 检测到详细大纲生成，设置max_tokens=40000")
-                else:
-                    params["max_tokens"] = 40000   # 其他情况
-                    print("🔧 LM Studio: 其他情况，设置max_tokens=40000")
+                params["max_tokens"] = 40000
 
             try:
                 if not stream:
-                    print("🔧 LM Studio: 使用非流式模式")
+                    print("🔧 LM Studio: 使用非流式模式（Harmony格式）")
                     response = client.completions.create(**params)
                     raw_text = response.choices[0].text if response and response.choices else ""
                     
-                    # 如果是gpt-oss模型，解析Harmony格式
-                    if is_gpt_oss:
-                        content = _parse_harmony_response(raw_text)
-                        print(f"🔧 Harmony格式解析完成，提取内容长度: {len(content)} 字符")
-                    else:
-                        content = raw_text
+                    content = _parse_harmony_response(raw_text)
+                    print(f"🔧 Harmony格式解析完成，提取内容长度: {len(content)} 字符")
                     
                     return {
                         "content": content,
                         "total_tokens": getattr(getattr(response, "usage", None), "total_tokens", 0) or 0,
                     }
                 else:
-                    print("🔧 LM Studio: 使用流式模式")
+                    print("🔧 LM Studio: 使用流式模式（Harmony格式）")
                     stream_params = {**params, "stream": True}
                     responses = client.completions.create(**stream_params)
 
                     def respGenerator():
                         raw_content = ""
-                        last_content_len = 0
                         for response in responses:
                             delta_text = ""
                             try:
@@ -346,14 +292,8 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
                             if delta_text:
                                 raw_content += delta_text
 
-                            # 如果是gpt-oss模型，尝试解析Harmony格式
-                            if is_gpt_oss:
-                                # 对于流式响应，我们需要等到有完整的标记才能正确解析
-                                # 先返回原始内容，最后一次迭代时解析完整格式
-                                parsed_content = _parse_harmony_response(raw_content)
-                                content = parsed_content if parsed_content != raw_content else raw_content
-                            else:
-                                content = raw_content
+                            parsed_content = _parse_harmony_response(raw_content)
+                            content = parsed_content if parsed_content != raw_content else raw_content
 
                             total_tokens = 0
                             if hasattr(response, "usage") and response.usage:
@@ -367,7 +307,73 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
                     return respGenerator()
 
             except Exception as e:
-                print(f"❌ LM Studio API 调用失败: {e}")
+                print(f"❌ LM Studio API 调用失败（Harmony格式）: {e}")
+                print(f"请确保 LM Studio 正在运行并监听 {base_url}")
+                raise e
+        
+        else:
+            # ========== 标准模型：使用 Chat Completions ==========
+            print(f"🔧 使用标准模型: {model_name}，使用Chat Completions模式")
+            
+            chat_messages = _build_chat_messages(messages)
+            print(f"🔧 LM Studio Chat: 消息数量={len(chat_messages)}")
+            
+            # 构建请求参数
+            params = {
+                "model": model_name,
+                "messages": chat_messages,
+            }
+
+            if max_tokens is not None:
+                params["max_tokens"] = max_tokens
+            else:
+                params["max_tokens"] = 40000
+                print("🔧 LM Studio: 设置max_tokens=40000")
+
+            try:
+                if not stream:
+                    print("🔧 LM Studio: 使用非流式Chat Completions模式")
+                    response = client.chat.completions.create(**params)
+                    
+                    content = ""
+                    if response and response.choices:
+                        content = response.choices[0].message.content or ""
+                    
+                    print(f"✅ LM Studio: 返回内容长度: {len(content)} 字符")
+                    return {
+                        "content": content,
+                        "total_tokens": getattr(getattr(response, "usage", None), "total_tokens", 0) or 0,
+                    }
+                else:
+                    print("🔧 LM Studio: 使用流式Chat Completions模式")
+                    stream_params = {**params, "stream": True}
+                    responses = client.chat.completions.create(**stream_params)
+
+                    def respGenerator():
+                        full_content = ""
+                        for chunk in responses:
+                            delta_content = ""
+                            try:
+                                delta = chunk.choices[0].delta
+                                delta_content = delta.content or ""
+                            except Exception:
+                                delta_content = ""
+                            if delta_content:
+                                full_content += delta_content
+
+                            total_tokens = 0
+                            if hasattr(chunk, "usage") and chunk.usage:
+                                total_tokens = getattr(chunk.usage, "total_tokens", 0) or 0
+
+                            yield {
+                                "content": full_content,
+                                "total_tokens": total_tokens,
+                            }
+
+                    return respGenerator()
+
+            except Exception as e:
+                print(f"❌ LM Studio Chat Completions 调用失败: {e}")
                 print(f"请确保 LM Studio 正在运行并监听 {base_url}")
                 raise e
 

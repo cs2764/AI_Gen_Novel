@@ -123,21 +123,40 @@ class RAGClient:
             print(f"⚠️ RAG 统计信息获取失败: {e}")
             return None
     
-    def is_available(self) -> bool:
+    def is_available(self, max_retries: int = 2) -> bool:
         """
-        检查 RAG 服务是否可用
+        检查 RAG 服务是否可用（含重试机制）
         
+        Args:
+            max_retries: 最大重试次数，默认2次
+            
         Returns:
             服务可用返回 True，否则返回 False
         """
-        try:
-            response = requests.get(
-                f"{self.base_url}/stats",
-                timeout=5  # 健康检查使用更短超时
-            )
-            return response.status_code == 200
-        except Exception:
-            return False
+        import time as _time
+        
+        for attempt in range(max_retries + 1):
+            try:
+                response = requests.get(
+                    f"{self.base_url}/stats",
+                    timeout=10  # 健康检查超时
+                )
+                if response.status_code == 200:
+                    return True
+                else:
+                    print(f"⚠️ RAG 健康检查返回非200状态码: {response.status_code}")
+            except requests.exceptions.Timeout:
+                print(f"⚠️ RAG 健康检查超时 ({self.base_url}/stats), 尝试 {attempt + 1}/{max_retries + 1}")
+            except requests.exceptions.ConnectionError as e:
+                print(f"⚠️ RAG 健康检查连接失败: {e}, 尝试 {attempt + 1}/{max_retries + 1}")
+            except Exception as e:
+                print(f"⚠️ RAG 健康检查异常: {e}, 尝试 {attempt + 1}/{max_retries + 1}")
+            
+            # 如果还有重试机会，等待后重试
+            if attempt < max_retries:
+                _time.sleep(1)
+        
+        return False
     
     def format_references(self, results: List[Dict], max_length: int = 3000) -> str:
         """

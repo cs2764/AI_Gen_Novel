@@ -1311,10 +1311,22 @@ class AIGN:
             print("⚠️ 检测到停止信号，中断大纲生成")
             return ""
         
+        # RAG: 获取风格参考（大纲生成阶段）
+        rag_references = ""
+        if self._is_rag_enabled():
+            print("📚 RAG (大纲生成): 正在检索风格参考...")
+            rag_query = self.user_idea
+            rag_references = self._get_rag_references(rag_query, top_k=self.rag_top_k, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+            else:
+                print("📚 RAG: 未检索到相关参考")
+        
         resp = self.novel_outline_writer.invoke(
             inputs={
                 "用户想法": self.user_idea,
-                "写作要求": self.user_requirements
+                "写作要求": self.user_requirements,
+                "风格参考": rag_references,
             },
             output_keys=["大纲"],
         )
@@ -1498,6 +1510,17 @@ class AIGN:
         print(f"📋 基于大纲和用户想法分析人物")
         
         self.log_message(f"👥 正在生成人物列表...")
+    
+        # RAG: 获取风格参考（人物列表生成阶段）
+        rag_references = ""
+        if self._is_rag_enabled():
+            print("📚 RAG (人物列表生成): 正在检索风格参考...")
+            rag_query = self.user_idea
+            rag_references = self._get_rag_references(rag_query, top_k=self.rag_top_k, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+            else:
+                print("📚 RAG: 未检索到相关参考")
         
         # 添加重试机制处理人物列表生成错误
         retry_count = 0
@@ -1512,7 +1535,8 @@ class AIGN:
                     inputs={
                         "大纲": self.getCurrentOutline(),
                         "用户想法": self.user_idea,
-                        "写作要求": self.user_requirements
+                        "写作要求": self.user_requirements,
+                        "风格参考": rag_references,
                     },
                     output_keys=["人物列表"]
                 )
@@ -1604,13 +1628,25 @@ class AIGN:
         print(f"📝 结构说明：{plot_structure['description']}")
         self.log_message(f"📊 使用剧情结构：{plot_structure['type']}")
         
+        # RAG: 获取风格参考（详细大纲生成阶段）
+        rag_references = ""
+        if self._is_rag_enabled():
+            print("📚 RAG (详细大纲生成): 正在检索风格参考...")
+            rag_query = self.user_idea
+            rag_references = self._get_rag_references(rag_query, top_k=self.rag_top_k, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+            else:
+                print("📚 RAG: 未检索到相关参考")
+        
         # 准备输入
         inputs = {
             "原始大纲": self.novel_outline,
             "目标章节数": str(self.target_chapter_count),
             "用户想法": self.user_idea,
             "写作要求": self.user_requirements,
-            "剧情结构信息": structure_info
+            "剧情结构信息": structure_info,
+            "风格参考": rag_references,
         }
         
         # 如果已有人物列表，也加入输入
@@ -4423,7 +4459,12 @@ class AIGN:
             print(f"⚠️ 获取模型名失败: {e}")
         
         original_filename = f"{self.novel_title}_{current_date}.txt"
-        filename = re.sub(r'[<>:"/\\|?*]', '_', original_filename)
+        # 替换所有非文件系统安全字符（包括换行符、制表符等）
+        filename = re.sub(r'[\r\n\t<>:"/\\|?*]', '_', original_filename)
+        # 替换其他不可见字符
+        filename = re.sub(r'[\x00-\x1f]', '_', filename)
+        # 合并多个下划线
+        filename = re.sub(r'_+', '_', filename)
         
         if original_filename != filename:
             print(f"📝 文件名包含特殊字符，已处理：{original_filename} -> {filename}")
@@ -4668,8 +4709,21 @@ class AIGN:
             existing_metadata['novel_info']['stage'] = "detailed_outline_completed"
             
             # 保存更新后的元数据
-            with open(metadata_file, "w", encoding="utf-8") as f:
-                json.dump(existing_metadata, f, ensure_ascii=False, indent=2)
+            try:
+                with open(metadata_file, "w", encoding="utf-8") as f:
+                    json.dump(existing_metadata, f, ensure_ascii=False, indent=2)
+            except OSError as e:
+                # 如果文件名无效导致保存失败，尝试净化文件名后重试
+                if "Invalid argument" in str(e) or e.errno == 22:
+                    print(f"⚠️ 元数据文件名包含非法字符，尝试经净化后保存: {metadata_file}")
+                    # 净化文件名
+                    clean_base = re.sub(r'[\r\n\t<>:"/\\|?*]', '_', base_name)
+                    clean_base = re.sub(r'[\x00-\x1f]', '_', clean_base)
+                    metadata_file = f"{clean_base}_metadata.json"
+                    with open(metadata_file, "w", encoding="utf-8") as f:
+                        json.dump(existing_metadata, f, ensure_ascii=False, indent=2)
+                else:
+                    raise e
             
             print(f"📄 元数据已更新: {metadata_file}")
             print(f"📊 详细大纲阶段更新:")

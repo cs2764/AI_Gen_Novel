@@ -1,10 +1,30 @@
-﻿# 🤖 AI Novel Generator v4.4.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.5.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.4.0 (2026-02-12)
+## 🎉 What's New in v4.5.0 (2026-02-12)
+
+**✨ RAG Integrated Outline & LM Studio Fix!** RAG now supports outline/character generation, and LM Studio API compatibility is restored.
+
+### ✨ New Features | 新功能
+
+#### 🔍 RAG for Outline Generation | 大纲生成RAG集成
+- **Comprehensive Integration**: RAG now integrated into Outline, Detailed Outline, Character, and Title generation
+- **全面集成**: RAG现已集成到大纲、详细大纲、人物和标题生成流程中
+- **Contextual References**: Uses retrieved references to guide the creation of story structure and characters
+- **上下文参考**: 利用检索到的参考资料指导故事结构和人物的创作
+
+#### 🛠️ LM Studio API Fix | LM Studio API修复
+- **Modern API Usage**: Switched from legacy `completions` endpoint to `chat.completions` for LM Studio
+- **现代化API使用**: 将LM Studio的调用从遗留的`completions`接口切换为`chat.completions`
+- **Compatibility**: Resolved issues with repeated content and extraneous role information
+- **兼容性**: 解决了内容重复和多余角色信息的问题
+
+---
+
+## 📚 Previous Version: v4.4.0 (2026-02-12)
 
 **✨ Prompt Optimization & Provider Expansion!** Humanizer rules refinement, thinking chain extraction fix, and lambda3 provider addition.
 

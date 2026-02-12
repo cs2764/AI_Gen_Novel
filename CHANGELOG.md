@@ -2,6 +2,36 @@
 
 [中文版本](#中文版本)
 
+## [4.5.0] - 2026-02-12 ✨ RAG Outline Integration & LM Studio Fix | 大纲RAG集成与LM Studio修复
+
+### ✨ Core New Features | 核心新功能
+
+#### 🔍 RAG for Outline Generation | 大纲生成RAG集成
+- **Comprehensive Integration**: RAG now integrated into Outline, Detailed Outline, Character, and Title generation
+- **全面集成**: RAG现已集成到大纲、详细大纲、人物和标题生成流程中
+- **Contextual References**: Uses retrieved references to guide the creation of story structure and characters
+- **上下文参考**: 利用检索到的参考资料指导故事结构和人物的创作
+- **Consistency**: Ensures generated outlines better align with established style and content
+- **一致性**: 确保生成的大纲与既定风格和内容更加一致
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ LM Studio API Fix | LM Studio API修复
+- **Modern API Usage**: Switched from legacy `completions` endpoint to `chat.completions` for LM Studio
+- **现代化API使用**: 将LM Studio的调用从遗留的`completions`接口切换为`chat.completions`
+- **Compatibility**: Resolved issues with repeated content and extraneous role information
+- **兼容性**: 解决了内容重复和多余角色信息的问题
+- **Reliability**: Improved stability of local model inference
+- **可靠性**: 提升了本地模型推理的稳定性
+
+### 📝 Modified Files | 修改文件
+- `AIGN.py`: Added RAG integration for outline generation
+- `aign_outline_generator.py`: Updated to use RAG references
+- `prompts/common/*.py`: Updated prompts to accept RAG context
+- `uniai/lmstudioAI.py`: Fixed API call structure
+
+---
+
 ## [4.4.0] - 2026-02-12 ✨ Prompt Optimization & Provider Expansion | 提示词优化与提供商扩展
 
 ### ✨ Core New Features | 核心新功能
