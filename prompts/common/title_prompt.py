@@ -140,6 +140,13 @@ title_generator_prompt = """
 - ❌ 不直接模仿知名作品标题
 - ❌ 不使用纯英文或拼音
 
+"""
+
+from prompts.common.humanizer_rules import HUMANIZER_RULES
+
+title_generator_prompt += f"\n\n{HUMANIZER_RULES}\n\n"
+
+title_generator_prompt += """
 ## init:
 接下来，我会提供给你用户想法和小说大纲，请你基于这些信息创作一个精彩的标题。
 请严格按照指定的格式输出，不要偏离。
@@ -176,6 +183,11 @@ title_generator_json_prompt = """
 ## Workflows:
 [与上面的title_generator_prompt相同的工作流程]
 
+"""
+
+title_generator_json_prompt += f"\n\n{HUMANIZER_RULES}\n\n"
+
+title_generator_json_prompt += """
 ## init:
 接下来，我会提供给你用户想法和小说大纲，请你基于这些信息创作一个精彩的标题。
 请严格按照JSON格式输出，不要偏离。

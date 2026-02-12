@@ -48,6 +48,7 @@ PROVIDER_DISPLAY_NAMES = {
     "fireworks": "Fireworks",
     "lambda": "OpenAI兼容模式",  # Lambda 显示为 OpenAI兼容模式
     "lambda2": "OpenAI兼容模式2",  # Lambda2 显示为 OpenAI兼容模式2
+    "lambda3": "OpenAI兼容模式3",  # Lambda3 显示为 OpenAI兼容模式3
     "siliconflow": "SiliconFlow",
     "nvidia": "NVIDIA"
 }
@@ -192,6 +193,27 @@ class DynamicConfigManager:
             "lambda2": ProviderConfig(
                 name="lambda2",
                 api_key="your-lambda2-api-key-here",
+                model_name="llama-4-maverick-17b-128e-instruct-fp8",
+                base_url="https://api.lambda.ai/v1",
+                models=[
+                    "deepseek-r1-0528",
+                    "deepseek-v3-0324",
+                    "hermes3-405b",
+                    "hermes3-70b",
+                    "hermes3-8b",
+                    "llama-4-maverick-17b-128e-instruct-fp8",
+                    "llama-4-scout-17b-16e-instruct",
+                    "llama3.1-405b-instruct-fp8",
+                    "llama3.1-70b-instruct-fp8",
+                    "llama3.1-8b-instruct",
+                    "llama3.3-70b-instruct-fp8",
+                    "qwen3-32b-fp8"
+                ]
+            ),
+            # OpenAI兼容模式3 (Lambda AI 备用3) - 第三个OpenAI兼容的API接口配置
+            "lambda3": ProviderConfig(
+                name="lambda3",
+                api_key="your-lambda3-api-key-here",
                 model_name="llama-4-maverick-17b-128e-instruct-fp8",
                 base_url="https://api.lambda.ai/v1",
                 models=[
@@ -607,6 +629,14 @@ class DynamicConfigManager:
                 system_prompt=current_config.system_prompt
             )
         elif provider_name == "lambda2":
+            from uniai.lambdaAI import lambdaChatLLM
+            return lambdaChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                base_url=current_config.base_url,
+                system_prompt=current_config.system_prompt
+            )
+        elif provider_name == "lambda3":
             from uniai.lambdaAI import lambdaChatLLM
             return lambdaChatLLM(
                 model_name=current_config.model_name,

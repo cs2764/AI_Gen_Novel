@@ -60,6 +60,15 @@ LAMBDA2_CONFIG = {
     "system_prompt": ""
 }
 
+# OpenAI兼容模式3配置 (Lambda AI 备用3)
+# 可用于配置第三个Lambda账户或其他OpenAI兼容的API服务
+LAMBDA3_CONFIG = {
+    "api_key": "your-lambda3-api-key-here",
+    "model_name": "llama-4-maverick-17b-128e-instruct-fp8",
+    "base_url": "https://api.lambda.ai/v1",
+    "system_prompt": ""
+}
+
 # SiliconFlow配置 (SiliconFlow AI)国内GPU云服务商，支持多种开源模型
 SILICONFLOW_API_KEY = "your_siliconflow_api_key_here"
 SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
@@ -144,6 +153,7 @@ FILE_CONFIG = {
 • Grok: https://console.x.ai/
 • Lambda (OpenAI兼容模式): https://lambda.ai/
 • Lambda2 (OpenAI兼容模式2): 第二个Lambda账户或其他OpenAI兼容服务
+• Lambda3 (OpenAI兼容模式3): 第三个Lambda账户或其他OpenAI兼容服务
 • SiliconFlow: https://siliconflow.cn/
 
 🛡️ 安全提醒：

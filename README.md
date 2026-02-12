@@ -1,10 +1,36 @@
-﻿# 🤖 AI Novel Generator v4.3.2 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.4.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.3.2 (2026-02-09)
+## 🎉 What's New in v4.4.0 (2026-02-12)
+
+**✨ Prompt Optimization & Provider Expansion!** Humanizer rules refinement, thinking chain extraction fix, and lambda3 provider addition.
+
+### ✨ New Features | 新功能
+
+#### 🎯 Humanizer Rules Refinement | Humanizer规则优化
+- **Integrated into polishing process**: Humanizer rules now directly integrated into polishing workflow
+- **集成到润色流程**: Humanizer规则现在直接集成到润色工作流程中
+- **Targeted application**: Applied only to title generation, novel content generation, and polishing prompts
+- **定向应用**: 仅应用于标题生成、小说内容生成和润色提示词
+
+#### 🛠️ Thinking Chain Extraction Fix | 思维链提取修复
+- **Clean content extraction**: Removed thinking chain tags from final extracted text
+- **清洁内容提取**: 从最终提取文本中移除思维链标签
+- **Improved extraction logic**: Enhanced extraction to correctly exclude thinking tags
+- **改进提取逻辑**: 增强提取逻辑以正确排除思维标签及其内容
+
+#### 🌐 Lambda3 Provider Addition | Lambda3提供商添加
+- **Third OpenAI-compatible provider**: Added `lambda3` as third provider option
+- **第三个OpenAI兼容提供商**: 添加`lambda3`作为第三个提供商选项
+- **Expanded flexibility**: More options for users with multiple Lambda API keys
+- **扩展灵活性**: 为拥有多个Lambda API密钥的用户提供更多选项
+
+---
+
+## 📚 Previous Version: v4.3.2 (2026-02-09)
 
 **🔧 Bug Fix Release!** Fixed unresponsive "Start Auto Generation" button.
 

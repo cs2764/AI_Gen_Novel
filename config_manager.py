@@ -105,6 +105,14 @@ LAMBDA2_CONFIG = {
     "system_prompt": ""
 }
 
+# OpenAI兼容模式3配置 (Lambda3)
+LAMBDA3_CONFIG = {
+    "api_key": "your-lambda3-api-key-here",
+    "model_name": "llama-4-maverick-17b-128e-instruct-fp8",
+    "base_url": "https://api.lambda.ai/v1",
+    "system_prompt": ""
+}
+
 NOVEL_SETTINGS = {
     "default_chapters": 20,
     "enable_chapters": True,
@@ -174,6 +182,7 @@ NETWORK_SETTINGS = {
             'GROK_CONFIG',
             'LAMBDA_CONFIG',
             'LAMBDA2_CONFIG',
+            'LAMBDA3_CONFIG',
             'SILICONFLOW_CONFIG',
             'NVIDIA_CONFIG'
         ]
@@ -191,7 +200,7 @@ NETWORK_SETTINGS = {
         # 验证当前提供商设置
         # lambda: OpenAI兼容模式
         provider = config_module.CURRENT_PROVIDER
-        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda", "lambda2", "siliconflow", "nvidia"]
+        valid_providers = ["deepseek", "ali", "lmstudio", "gemini", "openrouter", "claude", "grok", "fireworks", "lambda", "lambda2", "lambda3", "siliconflow", "nvidia"]
         
         if provider not in valid_providers:
             if allow_incomplete:
@@ -215,6 +224,7 @@ NETWORK_SETTINGS = {
             "grok": config_module.GROK_CONFIG,
             "lambda": config_module.LAMBDA_CONFIG,
             "lambda2": config_module.LAMBDA2_CONFIG,
+            "lambda3": config_module.LAMBDA3_CONFIG,
             "siliconflow": config_module.SILICONFLOW_CONFIG,
             "nvidia": config_module.NVIDIA_CONFIG
         }
@@ -459,6 +469,14 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
                 system_prompt=provider_config.get('system_prompt', '')
             )
         elif provider == "lambda2":
+            from uniai.lambdaAI import lambdaChatLLM
+            return lambdaChatLLM(
+                model_name=provider_config['model_name'],
+                api_key=provider_config['api_key'],
+                base_url=provider_config.get('base_url'),
+                system_prompt=provider_config.get('system_prompt', '')
+            )
+        elif provider == "lambda3":
             from uniai.lambdaAI import lambdaChatLLM
             return lambdaChatLLM(
                 model_name=provider_config['model_name'],

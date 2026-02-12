@@ -2,6 +2,49 @@
 
 [中文版本](#中文版本)
 
+## [4.4.0] - 2026-02-12 ✨ Prompt Optimization & Provider Expansion | 提示词优化与提供商扩展
+
+### ✨ Core New Features | 核心新功能
+
+#### 🎯 Humanizer Rules Refinement | Humanizer规则优化
+- **Integrated into polishing process**: Humanizer rules now directly integrated into polishing workflow instead of acting as separate review step
+- **集成到润色流程**: Humanizer规则现在直接集成到润色工作流程中，而不是作为单独的审查步骤
+- **Targeted application**: Applied only to title generation, novel content generation, and polishing prompts
+- **定向应用**: 仅应用于标题生成、小说内容生成和润色提示词
+- **Content preservation**: All existing 24 patterns preserved, only reframed application and presentation
+- **内容保留**: 保留所有现有的24种模式，仅重新构建应用方式和呈现形式
+
+#### 🛠️ Thinking Chain Extraction Fix | 思维链提取修复
+- **Clean content extraction**: Removed thinking chain tags (`<think>`, `<thinking>`, `<reasoning>`, `<reflection>`) from final extracted text
+- **清洁内容提取**: 从最终提取文本中移除思维链标签（`<think>`、`<thinking>`、`<reasoning>`、`<reflection>`）
+- **Improved extraction logic**: Enhanced extraction to correctly exclude thinking tags and their content
+- **改进提取逻辑**: 增强提取逻辑以正确排除思维标签及其内容
+- **Prevented mistakes**: Avoid mistakenly including thinking chain content as part of main novel content
+- **防止错误**: 避免将思维链内容误包含为主要小说内容的一部分
+
+#### 🌐 Lambda3 Provider Addition | Lambda3提供商添加
+- **Third OpenAI-compatible provider**: Added `lambda3` as third provider option alongside existing `lambda` and `lambda2`
+- **第三个OpenAI兼容提供商**: 添加`lambda3`作为第三个提供商选项，与现有的`lambda`和`lambda2`并列
+- **Consistent settings**: Configured with settings consistent with existing lambda providers
+- **一致性设置**: 使用与现有lambda提供商一致的配置
+- **Expanded flexibility**: More options for users with multiple Lambda API keys
+- **扩展灵活性**: 为拥有多个Lambda API密钥的用户提供更多选项
+
+### 📝 Modified Files | 修改文件
+- `prompts/common/humanizer_rules.py`: Optimized humanizer rules for integration into polishing process
+- `aign_agents.py`: Improved extraction logic to filter thinking chain tags
+- `config_template.py`: Added lambda3 provider configuration
+- `config_manager.py`: Added lambda3 provider support
+- `dynamic_config_manager.py`: Added lambda3 provider management
+- `model_fetcher.py`: Added lambda3 model fetching support
+- `AIGN.py`: Integration improvements
+- `app_event_handlers.py`: Enhanced event handling
+- `app_ai_expansion.py`: AI expansion improvements
+- `prompts/common/title_prompt.py`: Title prompt optimization
+- `uniai/lmstudioAI.py`: LM Studio integration improvements
+
+---
+
 ## [4.3.2] - 2026-02-09 🔧 Bug Fix Release | 问题修复版本
 
 ### 🔧 Bug Fixes | 问题修复

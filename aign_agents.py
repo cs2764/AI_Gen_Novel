@@ -46,6 +46,20 @@ def _remove_thinking_content(response: str) -> str:
     for pattern in thinking_patterns:
         result = re.sub(pattern, '', result, flags=re.DOTALL | re.IGNORECASE)
     
+    # 剔除残留的孤立思维链标签（开始或结束标签单独出现时）
+    orphan_tag_patterns = [
+        r'</think>',
+        r'</thinking>',
+        r'</reasoning>',
+        r'</reflection>',
+        r'<think>',
+        r'<thinking>',
+        r'<reasoning>',
+        r'<reflection>',
+    ]
+    for tag in orphan_tag_patterns:
+        result = re.sub(tag, '', result, flags=re.IGNORECASE)
+    
     # 清理多余的空行
     result = re.sub(r'\n{3,}', '\n\n', result)
     
@@ -943,10 +957,27 @@ class MarkdownAgent:
         """移除可能存在的<think>标签及其内容"""
         if not text:
             return text
-        # 移除 <think>...</think>
         import re
-        pattern = re.compile(r'<think>.*?</think>', re.DOTALL)
-        return pattern.sub('', text).strip()
+        # 移除完整的思维链标签对
+        thinking_patterns = [
+            r'<think>.*?</think>',
+            r'<thinking>.*?</thinking>',
+            r'<reasoning>.*?</reasoning>',
+            r'<reflection>.*?</reflection>',
+        ]
+        result = text
+        for pattern in thinking_patterns:
+            result = re.sub(pattern, '', result, flags=re.DOTALL | re.IGNORECASE)
+        
+        # 移除残留的孤立标签（如只有</think>没有<think>的情况）
+        orphan_tags = [
+            r'</think>', r'</thinking>', r'</reasoning>', r'</reflection>',
+            r'<think>', r'<thinking>', r'<reasoning>', r'<reflection>',
+        ]
+        for tag in orphan_tags:
+            result = re.sub(tag, '', result, flags=re.IGNORECASE)
+        
+        return result.strip()
 
     def getOutput(self, input_content: str, output_keys: list) -> dict:
         """解析类md格式中 # key 的内容，未解析全部output_keys中的key会报错

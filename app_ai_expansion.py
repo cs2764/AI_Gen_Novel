@@ -258,6 +258,14 @@ def _remove_thinking_content(response):
     for pattern in thinking_patterns:
         result = re.sub(pattern, '', result, flags=re.DOTALL | re.IGNORECASE)
     
+    # 剔除残留的孤立思维链标签（开始或结束标签单独出现时）
+    orphan_tag_patterns = [
+        r'</think>', r'</thinking>', r'</reasoning>', r'</reflection>',
+        r'<think>', r'<thinking>', r'<reasoning>', r'<reflection>',
+    ]
+    for tag in orphan_tag_patterns:
+        result = re.sub(tag, '', result, flags=re.IGNORECASE)
+    
     # 清理多余的空行
     result = re.sub(r'\n{3,}', '\n\n', result)
     

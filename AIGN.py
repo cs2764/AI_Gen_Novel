@@ -113,6 +113,9 @@ class AIGN:
         self.user_requirements = ""
         self.embellishment_idea = ""
         
+        # WebUI实时设置缓存（由Timer刷新函数写入，由autoGenerate读取）
+        self._webui_live_settings = {}
+        
         # 风格设定
         self.style_name = "无"  # 当前选择的风格名称
         
@@ -5122,6 +5125,25 @@ class AIGN:
             
         return result
     
+    def _refresh_webui_settings(self):
+        """从WebUI实时设置中刷新写作要求和润色要求
+        
+        此方法从 _webui_live_settings 字典中读取最新值。
+        该字典由 app_event_handlers.py 中的 Timer 刷新函数定期更新。
+        这样后台线程（如autoGenerate）可以获取用户在WebUI中实时修改的设定。
+        """
+        if hasattr(self, '_webui_live_settings') and self._webui_live_settings:
+            new_req = self._webui_live_settings.get('user_requirements')
+            new_emb = self._webui_live_settings.get('embellishment_idea')
+            if new_req is not None:
+                if new_req != self.user_requirements:
+                    print(f"📝 写作要求已从WebUI实时更新 ({len(self.user_requirements or '')}字符 → {len(new_req)}字符)")
+                self.user_requirements = new_req
+            if new_emb is not None:
+                if new_emb != self.embellishment_idea:
+                    print(f"✨ 润色要求已从WebUI实时更新 ({len(self.embellishment_idea or '')}字符 → {len(new_emb)}字符)")
+                self.embellishment_idea = new_emb
+    
     def autoGenerate(self, target_chapters=None):
         """自动生成指定章节数的小说"""
         if target_chapters:
@@ -5249,6 +5271,8 @@ class AIGN:
                         print("✅ 输出文件初始化完成")
                     
                     try:
+                        # 在生成前从WebUI刷新最新的写作/润色要求
+                        self._refresh_webui_settings()
                         self.genBeginning(self.user_requirements, self.embellishment_idea)
                         print("✅ 开头生成完成")
                     except Exception as e:
@@ -5296,6 +5320,8 @@ class AIGN:
                             print(f"✅ 已达到目标章节数 {self.target_chapter_count}，停止生成")
                             break
 
+                        # 在生成前从WebUI刷新最新的写作/润色要求
+                        self._refresh_webui_settings()
                         self.genNextParagraph(self.user_requirements, self.embellishment_idea)
                         chapter_time = time.time() - chapter_start_time
                         success_msg = f"✅ 第{self.chapter_count}章生成完成，耗时: {self.format_time_duration(chapter_time, include_seconds=True)}"

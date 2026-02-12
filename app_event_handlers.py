@@ -1967,6 +1967,16 @@ def bind_main_events(
                     a.compact_mode = bool(compact_mode)
                     sync_long_chapter_mode_from_ui(a, long_chapter_feature, "自动生成")
                     
+                    # 设置写作要求和润色要求到AIGN实例
+                    a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
+                    a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
+                    
+                    # 初始化WebUI实时设置缓存（供后台线程读取最新的WebUI值）
+                    a._webui_live_settings = {
+                        'user_requirements': a.user_requirements,
+                        'embellishment_idea': a.embellishment_idea
+                    }
+                    
                     # 保存用户设置
                     if hasattr(a, 'save_user_settings'):
                         a.save_user_settings()
@@ -2121,7 +2131,7 @@ def bind_main_events(
         
         # 绑定Timer自动刷新功能
         if 'progress_timer' in components:
-            def _wrap_auto_refresh_with_buttons(aign_state):
+            def _wrap_auto_refresh_with_buttons(aign_state, live_user_requirements, live_embellishment_idea):
                 """带按钮控制的自动刷新进度函数"""
                 try:
                     from app_data_handlers import update_progress
@@ -2132,6 +2142,11 @@ def bind_main_events(
                     
                     # 检查是否正在自动生成
                     is_generating = hasattr(a, 'auto_generation_running') and a.auto_generation_running
+                    
+                    # 在自动生成期间，将WebUI最新的写作/润色要求同步到AIGN实例
+                    if is_generating and hasattr(a, '_webui_live_settings'):
+                        a._webui_live_settings['user_requirements'] = live_user_requirements or ''
+                        a._webui_live_settings['embellishment_idea'] = live_embellishment_idea or ''
                     
                     # 安全地获取故事线显示
                     storyline_display = "暂无故事线内容"
@@ -2153,7 +2168,7 @@ def bind_main_events(
             
             components['progress_timer'].tick(
                 fn=_wrap_auto_refresh_with_buttons,
-                inputs=[aign],
+                inputs=[aign, user_requirements_text, embellishment_idea_text],
                 outputs=[
                     progress_text,
                     output_file_text,

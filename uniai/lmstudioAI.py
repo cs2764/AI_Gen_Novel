@@ -153,47 +153,17 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
     def _build_completion_prompt(messages: list) -> str:
         parts = []
         if system_prompt:
-            print(f"🔧 LM Studio 模型提供商层面系统提示词长度: {len(system_prompt)} 字符")
-            if len(system_prompt) > 100:
-                print(f"🔧 系统提示词内容预览: {system_prompt[:200]}...")
-                
-            # 检查是否有重复内容
-            if len(system_prompt) > 1000:
-                lines = system_prompt.split('\n')
-                print(f"🔧 系统提示词行数: {len(lines)}")
-                if len(lines) > 10:
-                    first_10_lines = '\n'.join(lines[:10])
-                    print(f"🔧 前10行内容: {first_10_lines[:300]}...")
-                    
-                    # 检查是否有重复的行
-                    line_counts = {}
-                    for line in lines:
-                        line_counts[line] = line_counts.get(line, 0) + 1
-                    
-                    repeated_lines = [(line, count) for line, count in line_counts.items() if count > 1 and len(line.strip()) > 10]
-                    if repeated_lines:
-                        print(f"🔧 发现重复行: {len(repeated_lines)} 种重复")
-                        for line, count in repeated_lines[:3]:  # 只显示前3种
-                            print(f"🔧   重复{count}次: {line[:50]}...")
-                    
             parts.append(f"System: {system_prompt}".strip())
         
-        print(f"🔧 LM Studio 处理消息列表，共 {len(messages)} 条消息:")
         for i, msg in enumerate(messages or []):
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            content_len = len(content)
-            print(f"🔧   消息{i+1} [{role}]: {content_len} 字符")
-            if content_len > 1000:
-                print(f"🔧     内容预览: {content[:200]}...")
             
             if role == "system":
                 # 如果已经在模型提供商层面设置了system_prompt，跳过消息中的system内容
                 # 避免重复添加系统提示词
                 if not system_prompt:
                     parts.append(f"System: {content}")
-                else:
-                    print(f"🔧     跳过system消息（已有模型提供商层面的system_prompt）")
             elif role == "assistant":
                 parts.append(f"Assistant: {content}")
             else:
@@ -204,15 +174,6 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
             parts.append("Assistant:")
         
         final_prompt = "\n\n".join(parts)
-        print(f"🔧 LM Studio 最终构建的提示词长度: {len(final_prompt)} 字符")
-        
-        # 如果最终提示词异常长，进行额外分析
-        if len(final_prompt) > 30000:
-            print(f"⚠️  最终提示词异常长 ({len(final_prompt)} 字符)，进行分析:")
-            parts_analysis = []
-            for i, part in enumerate(parts):
-                parts_analysis.append(f"  部分{i+1}: {len(part)} 字符 - {part[:50]}...")
-            print('\n'.join(parts_analysis[:5]))  # 只显示前5部分
         
         return final_prompt
 
