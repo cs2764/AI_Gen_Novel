@@ -658,6 +658,76 @@ class WebConfigInterface:
         except Exception as e:
             return f"❌ 保存RAG配置失败: {str(e)}", self.get_rag_info()
     
+    def get_lmstudio_reload_info(self):
+        """获取LM Studio模型重载配置信息"""
+        try:
+            interval = self.config_manager.get_lmstudio_reload_interval()
+            
+            if interval == 0:
+                status_display = "🔇 已关闭（不自动重载）"
+            else:
+                status_display = f"🔄 每 {interval} 章重载一次"
+            
+            info = f"""⚙️ LM Studio 模型重载配置:
+📊 当前状态: {status_display}
+🔢 重载间隔: {interval} 章
+
+📋 功能说明:
+• 使用 LM Studio 时，随着推理进行，KV Cache 可能导致输出异常
+• 启用后，每生成指定章节数后自动卸载模型并重新载入以清空 KV Cache
+• 卸载后等待 10 秒，然后通过 Load API 重新载入模型，载入完成后继续生成
+• 设置为 0 则不自动重载
+
+🚨 连续失败自动重载:
+• 当同一个 API 调用连续失败 3 次时，会自动卸载并重载模型后再重试
+• 此机制在正文生成阶段始终生效（仅限 LM Studio 提供商）
+
+💾 配置已保存到 runtime_config.json 文件，重启应用后自动加载"""
+            
+            return info
+            
+        except Exception as e:
+            return f"❌ 获取LM Studio重载配置失败: {str(e)}"
+    
+    def save_lmstudio_reload_interval(self, interval):
+        """保存LM Studio模型重载间隔配置"""
+        try:
+            interval = int(interval)
+            success = self.config_manager.set_lmstudio_reload_interval(interval)
+            
+            if interval == 0:
+                status = "✅ LM Studio 模型自动重载已关闭"
+            else:
+                status = f"✅ LM Studio 模型重载间隔已设置为每 {interval} 章"
+            
+            if not success:
+                status += "（但保存到配置文件失败）"
+            
+            updated_info = self.get_lmstudio_reload_info()
+            return status, updated_info
+            
+        except Exception as e:
+            return f"❌ 保存LM Studio重载配置失败: {str(e)}", self.get_lmstudio_reload_info()
+    
+    def test_lmstudio_unload(self):
+        """测试LM Studio模型卸载并重载功能"""
+        try:
+            from lmstudio_model_manager import is_lmstudio_provider, unload_lmstudio_model
+            
+            if not is_lmstudio_provider():
+                return "⚠️ 当前未使用 LM Studio 提供商，无法测试"
+            
+            success, msg = unload_lmstudio_model(wait_seconds=10)
+            if success:
+                return f"✅ 测试成功（卸载+重载）: {msg}"
+            else:
+                return f"⚠️ 测试结果: {msg}"
+                
+        except ImportError:
+            return "❌ lmstudio_model_manager 模块未找到"
+        except Exception as e:
+            return f"❌ 测试失败: {str(e)}"
+
     def save_tts_config(self, tts_provider, tts_model, tts_api_key, tts_base_url):
         """保存TTS模型配置"""
         try:
@@ -1114,6 +1184,41 @@ class WebConfigInterface:
                         interactive=False
                     )
                 
+                with gr.TabItem("🖥️ LM Studio 设置"):
+                    gr.Markdown("### 🖥️ LM Studio 模型重载设置")
+                    
+                    # LM Studio 重载配置信息
+                    lmstudio_reload_info = gr.Textbox(
+                        label="当前 LM Studio 重载配置",
+                        value=self.get_lmstudio_reload_info(),
+                        lines=12,
+                        interactive=False
+                    )
+                    
+                    # 重载间隔滑块
+                    lmstudio_reload_slider = gr.Slider(
+                        label="模型重载间隔（章节数）",
+                        minimum=0,
+                        maximum=50,
+                        step=1,
+                        value=self.config_manager.get_lmstudio_reload_interval(),
+                        interactive=True,
+                        info="每生成多少章后自动卸载模型以清空 KV Cache，0 = 不自动重载，推荐值: 5"
+                    )
+                    
+                    # 操作按钮
+                    with gr.Row():
+                        lmstudio_reload_save_btn = gr.Button("💾 应用设置", variant="primary")
+                        lmstudio_reload_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
+                        lmstudio_unload_test_btn = gr.Button("🧪 测试卸载", variant="secondary")
+                    
+                    # 状态信息
+                    lmstudio_reload_status_output = gr.Textbox(
+                        label="状态",
+                        lines=2,
+                        interactive=False
+                    )
+                
                 with gr.TabItem("📝 默认想法配置"):
                     gr.Markdown("### 📝 自定义默认想法设置")
                     
@@ -1191,7 +1296,7 @@ class WebConfigInterface:
                 outputs=[status_output]
             )
             
-            save_btn.click(
+            save_btn_event = save_btn.click(
                 fn=self.save_config_and_refresh,
                 inputs=[provider_dropdown, api_key_input, model_dropdown, base_url_input, system_prompt_input, temperature_slider, thinking_checkbox, custom_model_input],
                 outputs=[status_output, current_info]
@@ -1297,7 +1402,25 @@ class WebConfigInterface:
                 outputs=[json_repair_info]
             )
             
+            # LM Studio 重载相关事件绑定
+            lmstudio_reload_save_btn.click(
+                fn=self.save_lmstudio_reload_interval,
+                inputs=[lmstudio_reload_slider],
+                outputs=[lmstudio_reload_status_output, lmstudio_reload_info]
+            )
+            
+            lmstudio_reload_refresh_btn.click(
+                fn=self.get_lmstudio_reload_info,
+                outputs=[lmstudio_reload_info]
+            )
+            
+            lmstudio_unload_test_btn.click(
+                fn=self.test_lmstudio_unload,
+                outputs=[lmstudio_reload_status_output]
+            )
+            
             return {
+                'save_btn_event': save_btn_event,
                 'provider_dropdown': provider_dropdown,
                 'model_dropdown': model_dropdown,
                 'custom_model_input': custom_model_input,
@@ -1339,7 +1462,13 @@ class WebConfigInterface:
                 'tts_refresh_btn': tts_refresh_btn,
                 'tts_refresh_models_btn': tts_refresh_models_btn,
                 'tts_status_output': tts_status_output,
-                'tts_config_info': tts_config_info
+                'tts_config_info': tts_config_info,
+                'lmstudio_reload_slider': lmstudio_reload_slider,
+                'lmstudio_reload_save_btn': lmstudio_reload_save_btn,
+                'lmstudio_reload_refresh_btn': lmstudio_reload_refresh_btn,
+                'lmstudio_unload_test_btn': lmstudio_unload_test_btn,
+                'lmstudio_reload_status_output': lmstudio_reload_status_output,
+                'lmstudio_reload_info': lmstudio_reload_info
             }
 
 # 全局实例

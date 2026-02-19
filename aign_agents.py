@@ -74,6 +74,9 @@ class TokenLimitError(Exception):
 def Retryer(func=None, max_retries=3):
     """自动重试装饰器，用于处理API调用失败和流式输出问题
     
+    当使用 LM Studio 时，连续失败 max_retries 次后会自动卸载模型以清空 KV Cache，
+    然后再进行一轮额外重试。
+    
     Args:
         func: 要装饰的函数
         max_retries: 最大重试次数，默认3次（连续失败3次后停止并报错）
@@ -87,6 +90,9 @@ def Retryer(func=None, max_retries=3):
         return decorator
 
     def wrapper(*args, **kwargs):
+        # 是否已经执行过一次卸载重试
+        unload_attempted = False
+        
         for attempt in range(max_retries):
             try:
                 result = func(*args, **kwargs)
@@ -108,6 +114,17 @@ def Retryer(func=None, max_retries=3):
                             time.sleep(2.333)
                             continue
                         else:
+                            # 达到最大重试次数，尝试卸载 LM Studio 模型
+                            if not unload_attempted:
+                                if _try_unload_lmstudio_on_failure():
+                                    unload_attempted = True
+                                    # 卸载成功后再试一次
+                                    print(f"🔄 模型已卸载，进行最后一次重试...")
+                                    try:
+                                        result = func(*args, **kwargs)
+                                        return result
+                                    except Exception:
+                                        pass
                             print(f"❌ 达到最大重试次数({max_retries})，放弃重试")
                             return result
                 
@@ -129,12 +146,41 @@ def Retryer(func=None, max_retries=3):
                 if attempt < max_retries - 1:  # 不是最后一次尝试
                     time.sleep(2.333)
                 else:
+                    # 达到最大重试次数，尝试卸载 LM Studio 模型后再试一次
+                    if not unload_attempted:
+                        if _try_unload_lmstudio_on_failure():
+                            unload_attempted = True
+                            print(f"🔄 模型已卸载，进行最后一次重试...")
+                            try:
+                                result = func(*args, **kwargs)
+                                return result
+                            except Exception as final_e:
+                                print(f"❌ 卸载模型后重试仍然失败: {final_e}")
+                                raise ValueError(f"重试{max_retries}次+卸载重试后仍然失败: {str(final_e)}")
+                    
                     print(f"❌ 达到最大重试次数({max_retries})，放弃重试")
                     raise ValueError(f"重试{max_retries}次后仍然失败: {error_msg}")
         
         raise ValueError("失败")
 
     return wrapper
+
+
+def _try_unload_lmstudio_on_failure() -> bool:
+    """尝试在 API 连续失败后卸载 LM Studio 模型
+    
+    Returns:
+        bool: 是否成功执行了卸载操作
+    """
+    try:
+        from lmstudio_model_manager import is_lmstudio_provider, handle_consecutive_failures
+        if is_lmstudio_provider():
+            return handle_consecutive_failures()
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"⚠️ 尝试卸载 LM Studio 模型时出错: {e}")
+    return False
 
 
 class MarkdownAgent:
@@ -1114,7 +1160,8 @@ class MarkdownAgent:
                             print(f"✅ 从思维链中成功提取 '{k}'")
                             continue
 
-                    raise ValueError(f"fail to parse {k} in output:\n{output}\n\n")
+                    truncated_output = output[:100] + "..." if len(output) > 100 else output
+                    raise ValueError(f"fail to parse {k} in output (length: {len(output)}):\n{truncated_output}\n\n")
 
         return sections
 

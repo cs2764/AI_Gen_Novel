@@ -2,7 +2,41 @@
 
 [中文版本](#中文版本)
 
+## [4.6.0] - 2026-02-19 🔧 LM Studio Auto-Reload & UI Fix | LM Studio自动重载与界面修复
+
+### ✨ Core New Features | 核心新功能
+
+#### 🔄 LM Studio KV Cache Auto-Reload | LM Studio KV Cache自动重载
+- **Periodic Model Reload**: Automatically unloads and reloads the LM Studio model after every N chapters to clear KV Cache, preventing degraded output in long-form generation
+- **定期模型重载**: 每生成指定章节数后自动卸载并重新载入LM Studio模型，清空KV Cache，防止长篇生成输出异常
+- **Configurable Interval**: Set the reload interval in the WebUI config panel (0 = disabled); configuration is saved to `runtime_config.json`
+- **可配置间隔**: 在WebUI配置面板中设置重载间隔（0=关闭），配置保存至`runtime_config.json`
+- **On-Failure Auto-Recovery**: When the same API call fails 3 consecutive times, automatically unloads and reloads the model before one final retry
+- **连续失败自动恢复**: 当同一API调用连续失败3次时，自动卸载重载模型后再进行一次额外重试
+- **Manual Test Button**: New "Test Unload" button in config panel to verify reload functionality
+- **手动测试按钮**: 配置面板新增"测试卸载"按钮，可验证重载功能是否正常
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Provider Settings Header Real-time Update | 提供商配置标题栏实时更新
+- **Fixed stale header**: After saving provider configuration, the top header bar now immediately reflects the new provider and model name
+- **修复标题栏不更新**: 保存提供商配置后，顶部标题栏现在立即显示新的提供商和模型名称
+- **Root cause**: The previous `save_btn.click()` handler in `app.py` ran in parallel with the save, sometimes reading stale config; fixed using proper `.then()` chaining via exposed `save_btn_event`
+- **原因**: 之前`app.py`中的`save_btn.click()`与保存并行运行，有时读到旧配置；通过暴露`save_btn_event`并使用`.then()`链式调用修复
+
+### 📝 Modified Files | 修改文件
+- `lmstudio_model_manager.py`: LM Studio model unload/reload manager (new)
+- `aign_agents.py`: Enhanced `Retryer` with LM Studio on-failure auto-unload
+- `AIGN.py`: Periodic model reload logic triggered after N chapters
+- `dynamic_config_manager.py`: `get/set_lmstudio_reload_interval()` config methods
+- `web_config_interface.py`: LM Studio reload config UI + exposed `save_btn_event`
+- `app_event_handlers.py`: `bind_config_events` now chains `.then()` for header update
+- `app.py`: Minor fix to dead-code save button binding
+
+---
+
 ## [4.5.0] - 2026-02-12 ✨ RAG Outline Integration & LM Studio Fix | 大纲RAG集成与LM Studio修复
+
 
 ### ✨ Core New Features | 核心新功能
 

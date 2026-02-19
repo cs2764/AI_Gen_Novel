@@ -1,10 +1,34 @@
-﻿# 🤖 AI Novel Generator v4.5.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.6.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.5.0 (2026-02-12)
+## 🎉 What's New in v4.6.0 (2026-02-19)
+
+**🔄 LM Studio KV Cache Auto-Reload & UI Fix!** Automatic model reloading for LM Studio to prevent KV Cache degradation, plus real-time provider header update after save.
+
+### ✨ New Features | 新功能
+
+#### 🔄 LM Studio KV Cache Auto-Reload | LM Studio KV Cache自动重载
+- **Periodic Model Reload**: Automatically unloads and reloads the LM Studio model after every N chapters to clear KV Cache
+- **定期模型重载**: 每生成指定章节数后自动卸载并重新载入模型，清空KV Cache，防止长篇输出异常
+- **On-Failure Auto-Recovery**: When the same API call fails 3 consecutive times, automatically unloads and reloads the model before one final retry
+- **连续失败自动恢复**: 当同一API调用连续失败3次时，自动卸载重载模型后再进行一次额外重试
+- **Configurable & Testable**: Set reload interval in WebUI (0 = disabled); new "Test Unload" button to verify functionality
+- **可配置且可测试**: 在WebUI中设置重载间隔（0=关闭）；新增"测试卸载"按钮，可验证重载功能
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Provider Settings Header Real-time Update | 提供商配置标题栏实时更新
+- **Fixed stale header**: After saving provider configuration, the top header bar now immediately reflects the new provider and model name
+- **修复标题栏不更新**: 保存提供商配置后，顶部标题栏现在立即显示新的提供商和模型名称
+- **Proper event chaining**: Fixed using `.then()` chaining so header reads config after save completes, not in parallel
+- **正确事件链式调用**: 通过`.then()`链式调用修复，确保在保存完成后再读取配置
+
+---
+
+## 📚 Previous Version: v4.5.0 (2026-02-12)
 
 **✨ RAG Integrated Outline & LM Studio Fix!** RAG now supports outline/character generation, and LM Studio API compatibility is restored.
 
@@ -13,14 +37,10 @@
 #### 🔍 RAG for Outline Generation | 大纲生成RAG集成
 - **Comprehensive Integration**: RAG now integrated into Outline, Detailed Outline, Character, and Title generation
 - **全面集成**: RAG现已集成到大纲、详细大纲、人物和标题生成流程中
-- **Contextual References**: Uses retrieved references to guide the creation of story structure and characters
-- **上下文参考**: 利用检索到的参考资料指导故事结构和人物的创作
 
 #### 🛠️ LM Studio API Fix | LM Studio API修复
 - **Modern API Usage**: Switched from legacy `completions` endpoint to `chat.completions` for LM Studio
 - **现代化API使用**: 将LM Studio的调用从遗留的`completions`接口切换为`chat.completions`
-- **Compatibility**: Resolved issues with repeated content and extraneous role information
-- **兼容性**: 解决了内容重复和多余角色信息的问题
 
 ---
 

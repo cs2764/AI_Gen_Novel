@@ -2509,25 +2509,36 @@ def bind_config_events(
             print("💡 配置界面组件未找到，跳过自动刷新绑定")
             return True
         
-        # 【重要】不要在这里重新绑定save_btn！
-        # save_btn 已经在 web_config_interface.py 中正确绑定，包含所有8个输入参数：
-        # [provider_dropdown, api_key_input, model_dropdown, base_url_input, 
-        #  system_prompt_input, temperature_slider, thinking_checkbox, custom_model_input]
-        #
-        # 如果在这里重新绑定，会导致以下问题：
-        # 1. Gradio会为同一个按钮注册两个click事件处理器
-        # 2. 两个处理器会依次执行
-        # 3. 第二个处理器（这里的）只传6个参数，缺少temperature_slider和thinking_checkbox
-        # 4. 缺失的参数会使用默认值（thinking_enabled=True）
-        # 5. 第二次保存会覆盖第一次正确的保存，导致用户的设置被默认值覆盖
-        #
-        # 解决方案：不要在此重新绑定，让web_config_interface.py处理所有配置保存
-        print("💡 save_btn 绑定由 web_config_interface.py 处理，避免重复绑定导致配置覆盖")
+        provider_info_display = components.get('provider_info_display')
+        save_btn_event = config_components.get('save_btn_event')
+        
+        if save_btn_event is not None and provider_info_display is not None:
+            # 使用 .then() 链式追加：在 save_config_and_refresh() 完成后，
+            # 立即读取最新配置并更新顶部标题栏，保证顺序执行无竞态
+            from app_utils import get_current_provider_info
+            
+            def update_provider_display_after_save():
+                """保存配置后更新顶部提供商信息显示"""
+                return f"### 当前配置: {get_current_provider_info()}"
+            
+            save_btn_event.then(
+                fn=update_provider_display_after_save,
+                inputs=[],
+                outputs=[provider_info_display]
+            )
+            print("✅ 配置保存后顶部标题栏刷新功能已启用（链式 .then()）")
+        else:
+            if save_btn_event is None:
+                print("💡 save_btn_event 未找到，跳过顶部刷新绑定")
+            if provider_info_display is None:
+                print("💡 provider_info_display 未找到，跳过顶部刷新绑定")
+        
         return True
         
     except Exception as e:
         print(f"⚠️ 配置界面自动刷新绑定失败: {e}")
         return False
+
 
 
 def bind_all_events(

@@ -3274,7 +3274,7 @@ def create_gradio5_original_app():
                                 return f"### 当前配置: {get_current_provider_info()}"
                             
                             # 获取原始绑定的save_btn，使用.then()追加provider_info_display更新
-                            config_components['save_btn'].click(
+                            config_components['save_btn'].then(
                                 fn=update_provider_display_after_save,
                                 inputs=[],
                                 outputs=[provider_info_display]

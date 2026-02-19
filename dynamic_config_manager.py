@@ -70,6 +70,7 @@ class DynamicConfigManager:
         self._rag_enabled = False  # RAG风格学习开关
         self._rag_api_url = ""  # RAG API服务地址
         self._rag_top_k = 10  # RAG检索返回数量，默认10，范围5-30
+        self._lmstudio_reload_interval = 5  # LM Studio模型重载间隔，每N章重载一次，0=不自动重载
         self._load_default_configs()
         # 尝试从文件加载配置
         self.load_config_from_file()
@@ -436,6 +437,7 @@ class DynamicConfigManager:
                 config_data["rag_enabled"] = self._rag_enabled
                 config_data["rag_api_url"] = self._rag_api_url
                 config_data["rag_top_k"] = self._rag_top_k
+                config_data["lmstudio_reload_interval"] = self._lmstudio_reload_interval
                 config_data["providers"] = {}
                 
                 for name, provider_config in self._providers.items():
@@ -473,6 +475,7 @@ class DynamicConfigManager:
                 self._rag_enabled = config_data.get("rag_enabled", False)
                 self._rag_api_url = config_data.get("rag_api_url", "")
                 self._rag_top_k = config_data.get("rag_top_k", 10)
+                self._lmstudio_reload_interval = config_data.get("lmstudio_reload_interval", 5)
                 
                 # 不再设置环境变量，统一从配置文件读取
                 
@@ -893,6 +896,38 @@ class DynamicConfigManager:
         except Exception as e:
             print(f"设置RAG检索数量失败: {e}")
             return False
+
+    def get_lmstudio_reload_interval(self) -> int:
+        """获取LM Studio模型重载间隔（每N章重载一次）"""
+        with self._config_lock:
+            return self._lmstudio_reload_interval
+
+    def set_lmstudio_reload_interval(self, interval: int) -> bool:
+        """设置LM Studio模型重载间隔并保存到配置文件
+
+        Args:
+            interval: 每多少章重载一次模型，0表示不自动重载
+        """
+        try:
+            if interval < 0:
+                print(f"⚠️ LM Studio重载间隔不能为负数，当前值: {interval}，将使用默认值5")
+                interval = 5
+
+            with self._config_lock:
+                old_value = self._lmstudio_reload_interval
+                self._lmstudio_reload_interval = interval
+
+                if interval == 0:
+                    print(f"LM Studio模型自动重载已关闭（之前: 每{old_value}章）")
+                else:
+                    print(f"LM Studio模型重载间隔已从 每{old_value}章 更改为 每{interval}章")
+
+            return self.save_config_to_file()
+
+        except Exception as e:
+            print(f"设置LM Studio重载间隔失败: {e}")
+            return False
+
 
 
 # 全局配置管理器实例

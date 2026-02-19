@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "4.5.0"
+__version__ = "4.6.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-02-12)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-02-19)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,9 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "LM Studio KV Cache自动重载：定期重载模型清空KV Cache，防止长篇生成输出异常",
+        "LM Studio连续失败自动恢复：API连续失败时自动卸载重载模型后重试",
+        "提供商配置标题栏实时更新：保存配置后顶部标题栏立即显示新配置",
         "大纲RAG集成：大纲、详细大纲、人物、标题生成均支持RAG参考",
         "LM Studio修复：修复API兼容性问题，移除遗留Completions接口",
         "Humanizer规则优化：集成到润色流程，适用于标题、小说内容和润色提示词",

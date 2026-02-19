@@ -5394,6 +5394,25 @@ class AIGN:
                         # 同步生成结果到WebUI
                         self._sync_to_webui(success_msg)
 
+                        # LM Studio 定期重载模型以清空 KV Cache
+                        try:
+                            from lmstudio_model_manager import is_lmstudio_provider, should_reload_model, unload_lmstudio_model
+                            if is_lmstudio_provider() and should_reload_model(self.chapter_count):
+                                from lmstudio_model_manager import get_lmstudio_reload_interval
+                                interval = get_lmstudio_reload_interval()
+                                reload_msg = f"🔄 已生成 {self.chapter_count} 章（每 {interval} 章重载一次），正在卸载 LM Studio 模型以清空 KV Cache..."
+                                print(reload_msg)
+                                self._sync_to_webui(reload_msg)
+                                success, msg = unload_lmstudio_model(wait_seconds=10)
+                                if success:
+                                    print(f"✅ 模型重载完成，继续生成下一章")
+                                else:
+                                    print(f"⚠️ 模型卸载未成功: {msg}，继续生成")
+                        except ImportError:
+                            pass
+                        except Exception as e:
+                            print(f"⚠️ LM Studio 模型重载检查失败: {e}，继续生成")
+
                         # 生成后再次检查是否已达到目标章节数
                         if self.chapter_count >= self.target_chapter_count:
                             print(f"🎉 已完成目标章节数 {self.target_chapter_count}，生成结束")
