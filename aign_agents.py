@@ -135,6 +135,10 @@ def Retryer(func=None, max_retries=3):
                 error_msg = str(e)
                 print("-" * 30 + f"\n🛑 Token超限错误，停止重试：\n{error_msg}\n" + "-" * 30)
                 raise
+            except InterruptedError as e:
+                # 用户主动中止，直接抛出
+                print("-" * 30 + f"\n🛑 检测到中止信号，停止重试\n" + "-" * 30)
+                raise
             except Exception as e:
                 error_msg = str(e)
                 print("-" * 30 + f"\n第{attempt + 1}次尝试失败：\n{error_msg}\n" + "-" * 30)
@@ -703,7 +707,13 @@ class MarkdownAgent:
                             should_stop = True
                         if should_stop:
                             print(f"\n🛑 检测到停止信号，中断流式输出...")
-                            break
+                            if hasattr(resp, 'close') and callable(resp.close):
+                                try:
+                                    resp.close()
+                                    print("✅ 已关闭流式输出连接")
+                                except Exception as e:
+                                    print(f"⚠️ 关闭流连接失败: {e}")
+                            raise InterruptedError("用户停止了生成")
                     
                     final_result = chunk
                     chunk_count += 1
@@ -799,6 +809,12 @@ class MarkdownAgent:
                     print(f"⚠️ 流式输出内容过短或为空: {len(accumulated_content)} 字符, {chunk_count}个数据块")
 
             except Exception as generator_error:
+                if isinstance(generator_error, InterruptedError):
+                    # 确保结束流式跟踪
+                    if hasattr(self, 'parent_aign') and self.parent_aign:
+                        self.parent_aign.end_stream_tracking(accumulated_content)
+                    raise  # 重新抛出，让外层捕获
+                    
                 error_msg = str(generator_error)
                 print(f"❌ 流式输出异常: {error_msg}")
                 

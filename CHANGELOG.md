@@ -2,6 +2,28 @@
 
 [中文版本](#中文版本)
 
+## [4.7.0] - 2026-03-06 ✨ TTS Markdown Cleanup & Streaming Fix | TTS Markdown格式清理与流式输出修复
+
+### ✨ Core New Features | 核心新功能
+
+#### 🎙️ TTS Markdown Formatting Cleanup | TTS Markdown格式清理
+- **Markdown Stripping for TTS**: Integrated a `strip_markdown` function inside the pipeline to strip `**`, `*`, `#`, `_`, backticks, `~~`, `<`, `>`, and markdown links
+- **为TTS清理Markdown**: 在文本处理管线内置了`strip_markdown`功能，自动移除加粗、斜体、引用、外链和标题标记等Markdown符号
+- **Improved TTS Quality**: Enhances the overall readout experience in text-to-speech engines like CosyVoice by removing unpronounceable formatting artifacts
+- **提升TTS质量**: 移除了无法发音的格式人工产物，从而提高了CosyVoice等文本转语音引擎的整体朗读体验
+- **Option Configurable**: Controlled by the `clean_markdown` setting toggle (enabled by default) across the system
+- **可配置选项**: 受全局系统中的`clean_markdown`配置开关控制（默认开启）
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Streaming Connection & Incomplete Chunk Fix | 流式输出连接与残缺生成块修复
+- **Orphan Chunk Prevention**: Fixed issue where incomplete text from a stopped generation run leaked into or merged with the next chapter/generation call
+- **防止孤立文本块**: 修复了由于用户手动停止生成导致上一段未完成文本被意外合并到下一章节/生成调用中的问题
+- **Clean Connection Closure**: Ensure proper reset of generation buffers and API connections when generation streams are stopped by the user
+- **干脆的连接关闭**: 在用户主动中断生成流时，确保彻底重置生成缓存与API连接状态
+
+---
+
 ## [4.6.0] - 2026-02-19 🔧 LM Studio Auto-Reload & UI Fix | LM Studio自动重载与界面修复
 
 ### ✨ Core New Features | 核心新功能

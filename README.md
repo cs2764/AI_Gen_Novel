@@ -1,10 +1,32 @@
-﻿# 🤖 AI Novel Generator v4.6.0 | AI 网络小说生成器
+﻿# 🤖 AI Novel Generator v4.7.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.6.0 (2026-02-19)
+## 🎉 What's New in v4.7.0 (2026-03-06)
+
+**✨ TTS Markdown Cleanup & Streaming Fixes!** Automatic removal of Markdown tags to improve compatibility with Text-to-Speech engines like CosyVoice, combined with comprehensive streaming output fixes preventing chunk leakage.
+
+### ✨ New Features | 新功能
+
+#### 🎙️ TTS Markdown Formatting Cleanup | TTS Markdown格式清理
+- **Markdown Stripping for TTS**: Integrated a `strip_markdown` function inside the pipeline to strip formatting (e.g., `**`, `*`, `#`) from output texts
+- **为TTS清理Markdown**: 在文本处理管线内置了`strip_markdown`功能，自动移除生成内容的Markdown格式
+- **Improved TTS Quality**: Enhances the overall readout experience in text-to-speech engines like CosyVoice by removing unpronounceable artifacts
+- **提升TTS质量**: 移除了无法发音的格式人工产物，从而提高了CosyVoice等引擎的整体朗读体验
+
+### 🔧 Bug Fixes | 问题修复
+
+#### 🛠️ Streaming Connection & Incomplete Chunk Fix | 流式输出连接与残缺生成块修复
+- **Clean Connection Closure**: Ensure proper reset of generation buffers and API connections when generation streams are stopped by the user
+- **干脆的连接关闭**: 在用户主动中断生成流时，确保彻底重置生成缓存与API连接状态
+- **Orphan Chunk Prevention**: Fixed issue where incomplete text from a stopped generation run leaked into the next chapter
+- **防止孤立文本块**: 修复了手动停止生成导致上一段未完成文本被意外合并到下一章节的问题
+
+---
+
+## 📚 Previous Version: v4.6.0 (2026-02-19)
 
 **🔄 LM Studio KV Cache Auto-Reload & UI Fix!** Automatic model reloading for LM Studio to prevent KV Cache degradation, plus real-time provider header update after save.
 
@@ -679,6 +701,11 @@ TEMPERATURE_SETTINGS = {
 ```
 
 ## 🆕 Version History | 版本历史
+
+### v4.7.0 (2026-03-06) 🎉
+- 🎙️ **TTS Markdown清理**：内置`strip_markdown`管线模块，自动移除Markdown标签以优化CosyVoice等引擎的朗读体验
+- 🌊 **流式连接关闭**：彻底重置用户中断时的连接状态，防止孤立生成块泄漏到下一章节
+- 🔧 **残缺生成修复**：解决了偶尔出现的文本合并导致的上文污染问题
 
 ### v3.5.0 (2025-11-05) 🎉
 - 📏 **长章节模式**：4段式生成系统，支持更长章节，显著提升质量和连贯性

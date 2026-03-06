@@ -132,7 +132,7 @@ class AIGN:
         self.long_chapter_mode = 0
         # 剧情紧凑度设置：控制剧情节奏和高潮分布
         self.chapters_per_plot = 5  # 每个剧情单元的章节数，默认5章
-        self.num_climaxes = 5       # 故事高潮总数，默认5个
+        self.num_climaxes = 10      # 故事高潮总数，默认10个
         # RAG设置：检索结果数量
         self.rag_top_k = 10  # RAG检索返回结果数量，默认10，范围5-30
 
@@ -914,7 +914,7 @@ class AIGN:
                 self.storyline = story_data.get("storyline", {})
                 # 从故事线中加载目标章节数（只在还是默认值时更新，可能被用户设置覆盖）
                 storyline_target_chapters = story_data.get("target_chapters", 0)
-                if storyline_target_chapters > 0 and self.target_chapter_count <= 20:  # 只在还是默认值时更新
+                if storyline_target_chapters > 0 and self.target_chapter_count <= 100:  # 只在还是默认值时更新
                     self.target_chapter_count = storyline_target_chapters
                     print(f"📊 从故事线载入目标章节数: {self.target_chapter_count}（可能被用户设置覆盖）")
                 # 如果前面没有用户输入数据，从故事线中加载
@@ -1050,7 +1050,7 @@ class AIGN:
                 "long_chapter_mode": long_chapter_mode_value,
                 "cosyvoice_mode": getattr(self, 'cosyvoice_mode', False),
                 "chapters_per_plot": getattr(self, 'chapters_per_plot', 5),
-                "num_climaxes": getattr(self, 'num_climaxes', 5)
+                "num_climaxes": getattr(self, 'num_climaxes', 10)
             }
             
             result = self._save_to_local("user_settings", settings=settings)
@@ -1620,7 +1620,7 @@ class AIGN:
         plot_structure = generate_plot_structure(
             self.target_chapter_count,
             chapters_per_plot=getattr(self, 'chapters_per_plot', 5),
-            num_climaxes=getattr(self, 'num_climaxes', 5)
+            num_climaxes=getattr(self, 'num_climaxes', 10)
         )
         structure_info = format_structure_for_prompt(plot_structure, self.target_chapter_count)
         
@@ -3416,6 +3416,10 @@ class AIGN:
                     print(f"✅ 重试成功！")
                 return True, result, None
                 
+            except InterruptedError:
+                # 用户主动停止，不重试，直接抛出
+                print(f"🛑 {operation_name}: 检测到用户停止信号，立即中止")
+                raise
             except Exception as e:
                 retry_count += 1
                 last_error = e
@@ -4195,6 +4199,11 @@ class AIGN:
                      self.last_rag_key_elements = self._extract_key_elements_from_content(next_paragraph)
                      print(f"📝 自动提炼关键元素 ({len(self.last_rag_key_elements)}字符)")
         
+        # 🛑 在润色前检查停止信号
+        if getattr(self, 'stop_generation', False) or not getattr(self, 'auto_generation_running', True):
+            print("🛑 检测到停止信号，跳过润色阶段")
+            raise InterruptedError("用户停止了生成")
+        
         # 润色（分段模式已单独完成，这里仅在非分段模式下执行）
         if not skip_generic:
             print(f"✨ 正在润色段落...")
@@ -4386,6 +4395,11 @@ class AIGN:
             print("🎉 小说创作完成！")
             print(f"📊 使用模型：{model_info}")
 
+        # 🛑 在合并内容前最终检查停止信号
+        if getattr(self, 'stop_generation', False) or not getattr(self, 'auto_generation_running', True):
+            print("🛑 检测到停止信号，丢弃未完成的章节内容")
+            raise InterruptedError("用户停止了生成")
+        
         self.paragraph_list.append(next_paragraph)
         self.writing_plan = next_writing_plan
         self.temp_setting = next_temp_setting

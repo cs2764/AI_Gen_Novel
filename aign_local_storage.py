@@ -340,7 +340,7 @@ class LocalStorageManager:
                 "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', 0),
                 "cosyvoice_mode": getattr(self.aign, 'cosyvoice_mode', False),
                 "chapters_per_plot": getattr(self.aign, 'chapters_per_plot', 5),
-                "num_climaxes": getattr(self.aign, 'num_climaxes', 5)
+                "num_climaxes": getattr(self.aign, 'num_climaxes', 10)
             }
             
             result = self.save_to_local("user_settings", settings=settings)

@@ -114,7 +114,7 @@ LAMBDA3_CONFIG = {
 }
 
 NOVEL_SETTINGS = {
-    "default_chapters": 20,
+    "default_chapters": 100,
     "enable_chapters": True,
     "enable_ending": True,
     "auto_save": True,
@@ -529,7 +529,7 @@ def update_aign_settings(aign_instance, allow_incomplete: bool = True):
     # 应用小说设置
     novel_settings = config.get('novel_settings', {})
     if novel_settings:
-        aign_instance.target_chapter_count = novel_settings.get('default_chapters', 20)
+        aign_instance.target_chapter_count = novel_settings.get('default_chapters', 100)
         aign_instance.enable_chapters = novel_settings.get('enable_chapters', True)
         aign_instance.enable_ending = novel_settings.get('enable_ending', True)
     
@@ -611,7 +611,7 @@ def print_config_info(allow_incomplete: bool = True):
 
         novel_settings = config.get('novel_settings', {})
         if novel_settings:
-            print(f"📚 默认章节数: {novel_settings.get('default_chapters', 20)}")
+            print(f"📚 默认章节数: {novel_settings.get('default_chapters', 100)}")
             print(f"📖 章节标题: {'启用' if novel_settings.get('enable_chapters', True) else '禁用'}")
             print(f"🎯 智能结尾: {'启用' if novel_settings.get('enable_ending', True) else '禁用'}")
 

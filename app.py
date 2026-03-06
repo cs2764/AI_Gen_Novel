@@ -598,7 +598,7 @@ def create_gradio5_original_app():
                     'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
                     'current_output_file': '', 'character_list': '', 'detailed_outline': '',
                     'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
-                    'target_chapter_count': 20
+                    'target_chapter_count': 100
                 })()
         else:
             # 创建模拟实例
@@ -607,7 +607,7 @@ def create_gradio5_original_app():
                 'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
                 'current_output_file': '', 'character_list': '', 'detailed_outline': '',
                 'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
-                'target_chapter_count': 20
+                'target_chapter_count': 100
             })()
         
         # 创建隐藏的aign组件（原版需要）
@@ -683,7 +683,7 @@ def create_gradio5_original_app():
                     "user_idea": default_values.get("user_idea", ""),
                     "user_requirements": default_values.get("user_requirements", ""),
                     "embellishment_idea": default_values.get("embellishment_idea", ""),
-                    "target_chapters": 20
+                    "target_chapters": 100
                 }
             except Exception as e:
                 print(f"⚠️ 获取界面初始化数据失败: {e}")
@@ -709,7 +709,7 @@ def create_gradio5_original_app():
                 "user_idea": "",
                 "user_requirements": "",
                 "embellishment_idea": "",
-                "target_chapters": 20
+                "target_chapters": 100
             }
         
         loaded_data = get_loaded_data_values()
@@ -2485,7 +2485,7 @@ def create_gradio5_original_app():
                                     cache_display = f"{cache_stats}"
                             
                             # 计算预计总字数（基于实际平均值）
-                            target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
+                            target_chapters = getattr(aign_instance, 'target_chapter_count', 100)
                             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
                             current_chars = content_stats.get('total_chars', 0)
                             
@@ -2565,7 +2565,7 @@ def create_gradio5_original_app():
                                 auto_save_info = "检查失败"
 
                             # 计算预计总字数（简化版，基于实际平均值）
-                            target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
+                            target_chapters = getattr(aign_instance, 'target_chapter_count', 100)
                             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
                             
                             # 基于已生成内容计算实际平均字数
@@ -2665,7 +2665,7 @@ def create_gradio5_original_app():
                                 getattr(aign_instance, 'novel_title', '') or '',    # novel_title_text
                                 getattr(aign_instance, 'character_list', '') or '', # character_list_text
                                 getattr(aign_instance, 'detailed_outline', '') or '', # detailed_outline_text
-                                getattr(aign_instance, 'target_chapter_count', 20),  # target_chapters_slider
+                                getattr(aign_instance, 'target_chapter_count', 100),  # target_chapters_slider
                                 format_storyline_display(getattr(aign_instance, 'storyline', None)) if hasattr(aign_instance, 'storyline') and aign_instance.storyline else "暂无故事线内容"  # storyline_text
                             ]
                         else:
@@ -3222,7 +3222,7 @@ def create_gradio5_original_app():
                         
                         # 获取剧情紧凑度设置
                         chapters_per_plot = getattr(aign_instance, 'chapters_per_plot', 5)
-                        num_climaxes = getattr(aign_instance, 'num_climaxes', 5)
+                        num_climaxes = getattr(aign_instance, 'num_climaxes', 10)
                         print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
 
                         # 返回合并的结果，包含按钮状态和剧情紧凑度设置

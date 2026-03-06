@@ -345,7 +345,7 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
         components['target_chapters_slider'] = gr.Slider(
             minimum=5, 
             maximum=500, 
-            value=loaded_data.get("target_chapters", 20), 
+            value=loaded_data.get("target_chapters", 100), 
             step=1,
             label="目标章节数", 
             interactive=True

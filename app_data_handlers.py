@@ -245,7 +245,7 @@ def import_auto_saved_data_handler(aign_state):
                 long_chapter_mode_value,
                 style_name,
                 getattr(aign_instance, 'chapters_per_plot', 5),
-                getattr(aign_instance, 'num_climaxes', 5)
+                getattr(aign_instance, 'num_climaxes', 10)
             ]
         else:
             return [

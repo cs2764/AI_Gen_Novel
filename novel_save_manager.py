@@ -230,7 +230,7 @@ class NovelSaveManager:
             "cosyvoice_mode": getattr(aign, 'cosyvoice_mode', False),
             "style_name": getattr(aign, 'style_name', "无"),
             "chapters_per_plot": getattr(aign, 'chapters_per_plot', 5),
-            "num_climaxes": getattr(aign, 'num_climaxes', 5),
+            "num_climaxes": getattr(aign, 'num_climaxes', 10),
             "use_detailed_outline": getattr(aign, 'use_detailed_outline', False)
         }
     

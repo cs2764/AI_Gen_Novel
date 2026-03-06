@@ -8,8 +8,8 @@
 ## English Documentation
 
 ### Version Information
-- **Version**: 4.5.0
-- **Release Date**: 2026-02-12
+- **Version**: 4.7.0
+- **Release Date**: 2026-03-06
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -169,8 +169,8 @@ See [LICENSE](LICENSE) for license information.
 ## 中文文档
 
 ### 版本信息
-- **版本**: 4.5.0
-- **发布日期**: 2026-02-12
+- **版本**: 4.7.0
+- **发布日期**: 2026-03-06
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -327,5 +327,5 @@ AI_Gen_Novel/
 
 ---
 
-**Last Updated / 最后更新**: 2026-02-12
-**Version / 版本**: 4.5.0
+**Last Updated / 最后更新**: 2026-03-06
+**Version / 版本**: 4.7.0

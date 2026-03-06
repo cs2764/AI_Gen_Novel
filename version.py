@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "4.6.0"
+__version__ = "4.7.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-02-19)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-03-06)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,9 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "TTS Markdown清理优化：内置strip_markdown功能，从生成流和批处理中移除Markdown格式(如**, *, #, _, ~等)，提升生成的文本在CosyVoice等TTS引擎中的语音朗读效果",
+        "流式输出修正与章节控制：修复流式输出可能导致未完成残余文本与下一段被错误合并的问题；停止生成操作后自动关闭连接并丢弃不完整的块",
+        "默认章节数调整：生成时默认章节数和对应的控制选项已优化",
         "LM Studio KV Cache自动重载：定期重载模型清空KV Cache，防止长篇生成输出异常",
         "LM Studio连续失败自动恢复：API连续失败时自动卸载重载模型后重试",
         "提供商配置标题栏实时更新：保存配置后顶部标题栏立即显示新配置",

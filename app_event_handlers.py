@@ -226,7 +226,7 @@ def create_page_load_handler(aign_instance, original_modules_loaded: bool = True
             
             # 获取剧情紧凑度设置
             chapters_per_plot = getattr(aign_inst, 'chapters_per_plot', 5)
-            num_climaxes = getattr(aign_inst, 'num_climaxes', 5)
+            num_climaxes = getattr(aign_inst, 'num_climaxes', 10)
             print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
             
             # 返回合并的结果，包含按钮状态、长章节模式和剧情紧凑度设置
