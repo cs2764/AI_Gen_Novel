@@ -269,6 +269,10 @@ class AIGN:
             }
         }
         
+        # 伏笔/反转相关属性
+        self.foreshadowing = ""
+        self.foreshadowing_count = 3  # 默认伏笔数量
+        
         # 故事线和人物列表相关属性
         self.character_list = ""
         self.storyline = {}
@@ -523,6 +527,15 @@ class AIGN:
             name="DetailedOutlineGenerator",
             temperature=provider_temperature,
         )
+        
+        # 伏笔/反转生成器
+        from AIGN_Prompt_Enhanced import foreshadowing_generator_prompt
+        self.foreshadowing_generator = MarkdownAgent(
+            chatLLM=self.chatLLM,
+            sys_prompt=foreshadowing_generator_prompt,
+            name="ForeshadowingGenerator",
+            temperature=0.95,
+        )
 
         # 为所有Agent设置parent_aign引用，用于流式输出跟踪
         agents = [
@@ -530,7 +543,7 @@ class AIGN:
             self.novel_embellisher, self.novel_writer_compact, self.novel_embellisher_compact,
             self.memory_maker, self.title_generator, self.title_generator_json, self.ending_writer, 
             self.ending_embellisher, self.storyline_generator, self.character_generator, self.chapter_summary_generator, 
-            self.detailed_outline_generator
+            self.detailed_outline_generator, self.foreshadowing_generator
         ]
         for agent in agents:
             agent.parent_aign = self
@@ -589,6 +602,7 @@ class AIGN:
                 (self.character_generator, '人物生成器'),
                 (self.chapter_summary_generator, '章节总结生成器'),
                 (self.detailed_outline_generator, '详细大纲生成器'),
+                (self.foreshadowing_generator, '伏笔生成器'),
                 # 分段生成相关
                 (getattr(self, 'novel_writer_seg1', None), '分段Writer1'),
                 (getattr(self, 'novel_writer_seg2', None), '分段Writer2'),
@@ -757,6 +771,22 @@ class AIGN:
         except Exception:
             return base_prompt
 
+    def _inject_foreshadowing_to_inputs(self, inputs: dict) -> dict:
+        """将伏笔设定注入到writer/embellisher的输入字典中
+        
+        如果存在伏笔设定且非空，自动添加到inputs中。
+        返回修改后的inputs（原地修改）。
+        
+        Args:
+            inputs: writer或embellisher的输入字典
+        Returns:
+            修改后的inputs字典
+        """
+        foreshadowing = getattr(self, 'foreshadowing', '')
+        if foreshadowing:
+            inputs["伏笔设定"] = foreshadowing
+        return inputs
+
     def _save_to_local(self, data_type: str, **kwargs):
         """保存数据到本地文件"""
         try:
@@ -824,6 +854,8 @@ class AIGN:
                 )
             elif data_type == "user_settings":
                 return self.auto_save_manager.save_user_settings(kwargs.get("settings", {}))
+            elif data_type == "foreshadowing":
+                return self.auto_save_manager.save_foreshadowing(kwargs.get("foreshadowing", ""))
             else:
                 print(f"⚠️ 未知的数据类型: {data_type}")
                 return False
@@ -885,6 +917,13 @@ class AIGN:
                 self.character_list = char_data.get("character_list", "")
                 if self.character_list:
                     loaded_items.append(f"人物列表 ({len(self.character_list)}字符)")
+            
+            # 加载伏笔设定
+            if all_data.get("foreshadowing"):
+                foreshadowing_data = all_data["foreshadowing"]
+                self.foreshadowing = foreshadowing_data.get("foreshadowing", "")
+                if self.foreshadowing:
+                    loaded_items.append(f"伏笔设定 ({len(self.foreshadowing)}字符)")
             
             # 加载详细大纲
             if all_data["detailed_outline"]:
@@ -1537,6 +1576,7 @@ class AIGN:
                         "用户想法": self.user_idea,
                         "写作要求": self.user_requirements,
                         "风格参考": rag_references,
+                        "伏笔设定": getattr(self, 'foreshadowing', ''),
                     },
                     output_keys=["人物列表"]
                 )
@@ -1652,6 +1692,12 @@ class AIGN:
         # 如果已有人物列表，也加入输入
         if self.character_list:
             inputs["人物列表"] = self.character_list
+        
+        # 如果已有伏笔设定，也加入输入
+        foreshadowing = getattr(self, 'foreshadowing', '')
+        if foreshadowing:
+            inputs["伏笔设定"] = foreshadowing
+            print(f"🔮 已加入伏笔设定上下文 ({len(foreshadowing)} 字符)")
             
         resp = self.detailed_outline_generator.invoke(
             inputs=inputs,
@@ -2892,7 +2938,7 @@ class AIGN:
                         "上一章原文": enhanced_context["last_chapter_content"] if not getattr(self, 'compact_mode', False) else "",
                         "风格参考": rag_references,
                     }
-                seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定"])
+                seg_resp = writer_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(seg_inputs), output_keys=["段落", "计划", "临时设定"])
                 seg_text = seg_resp["段落"]
                 last_plan = seg_resp.get("计划", last_plan)
                 last_setting = seg_resp.get("临时设定", last_setting)
@@ -2930,7 +2976,7 @@ class AIGN:
                         "本章故事线": str(first_chapter_storyline),
                         "当前分段": current_seg_text,
                     }
-                emb_resp = emb_agent.invoke(inputs=emb_inputs, output_keys=["润色结果"])
+                emb_resp = emb_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(emb_inputs), output_keys=["润色结果"])
                 final_seg = emb_resp["润色结果"]
                 parts.append(final_seg)
 
@@ -2940,16 +2986,16 @@ class AIGN:
             print(f"✅ 开头分段生成完成，长度：{len(beginning)}字符")
         else:
             # 原始单段开头生成流程
+            # 注入伏笔到开头生成输入
             resp = self.novel_beginning_writer.invoke(
-                inputs={
+                inputs=self._inject_foreshadowing_to_inputs({
                     "用户想法": self.user_idea,
                     "小说大纲": current_outline,
                     "写作要求": self.user_requirements,
                     "人物列表": self.character_list if self.character_list else "暂无人物列表",
-                    "人物列表": self.character_list if self.character_list else "暂无人物列表",
                     "故事线": storyline_for_beginning,
                     "风格参考": rag_references,
-                },
+                }),
                 output_keys=["开头", "计划", "临时设定", "关键元素"],
             )
             beginning = resp["开头"]
@@ -2990,7 +3036,7 @@ class AIGN:
                     print(f"   📚 RAG(开头润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
             
             resp = self.novel_embellisher.invoke(
-                inputs=emb_inputs,
+                inputs=self._inject_foreshadowing_to_inputs(emb_inputs),
                 output_keys=["润色结果"],
             )
             beginning = resp["润色结果"]
@@ -4092,7 +4138,7 @@ class AIGN:
                         "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
                 # 写作
-                seg_resp = writer_agent.invoke(inputs=seg_inputs, output_keys=["段落", "计划", "临时设定"])
+                seg_resp = writer_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(seg_inputs), output_keys=["段落", "计划", "临时设定"])
                 seg_text = seg_resp["段落"]
                 seg_key_elements = seg_resp.get("关键元素", "")
                 last_plan = seg_resp.get("计划", last_plan)
@@ -4171,7 +4217,7 @@ class AIGN:
                         else:
                             emb_inputs["上一段原文"] = prev_seg
                             print(f"   📎 已添加上一段原文({len(prev_seg)}字符)以确保段落衔接")
-                emb_resp = emb_agent.invoke(inputs=emb_inputs, output_keys=["润色结果"])
+                emb_resp = emb_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(emb_inputs), output_keys=["润色结果"])
                 final_seg = emb_resp["润色结果"]
                 parts.append(final_seg)
 
@@ -4181,7 +4227,7 @@ class AIGN:
             next_temp_setting = last_setting
         else:
             resp = writer.invoke(
-                inputs=inputs,
+                inputs=self._inject_foreshadowing_to_inputs(inputs),
                 output_keys=["段落", "计划", "临时设定"],
             )
             next_paragraph = resp["段落"]
@@ -4356,7 +4402,7 @@ class AIGN:
                 embellisher = self.novel_embellisher_compact  # 非精简模式也使用相同提示词
             
             resp = embellisher.invoke(
-                inputs=embellish_inputs,
+                inputs=self._inject_foreshadowing_to_inputs(embellish_inputs),
                 output_keys=["润色结果"],
             )
             next_paragraph = resp["润色结果"]

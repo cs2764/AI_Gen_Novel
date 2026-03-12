@@ -78,6 +78,7 @@ class OutlineGenerator:
             inputs = {
                 "用户想法": self.aign.user_idea,
                 "写作要求": getattr(self.aign, 'user_requirements', ''),
+                "目标章节数": str(getattr(self.aign, 'target_chapter_count', 100)),
                 "风格参考": rag_references,
             }
             resp = self.novel_outline_writer.invoke(
@@ -308,6 +309,76 @@ class OutlineGenerator:
         
         return self.aign.novel_title
     
+    def generate_foreshadowing(self):
+        """生成伏笔/反转设定
+        
+        在大纲和标题生成之后、人物列表生成之前调用。
+        生成的伏笔不包含具体人名（因为人物列表尚未生成）。
+        
+        Returns:
+            str: 生成的伏笔设定内容
+        """
+        # 获取当前大纲
+        if hasattr(self.aign, 'getCurrentOutline'):
+            current_outline = self.aign.getCurrentOutline()
+        else:
+            current_outline = getattr(self.aign, 'novel_outline', '')
+        
+        if not current_outline:
+            print("❌ 缺少大纲，无法生成伏笔")
+            self.aign.foreshadowing = ""
+            return ""
+        
+        foreshadowing_count = getattr(self.aign, 'foreshadowing_count', 3)
+        if foreshadowing_count <= 0:
+            print("ℹ️ 伏笔数量为0，跳过伏笔生成")
+            self.aign.foreshadowing = ""
+            return ""
+        
+        print(f"🔮 正在生成{foreshadowing_count}个伏笔/反转...")
+        
+        if hasattr(self.aign, 'log_message'):
+            self.aign.log_message(f"🔮 正在生成{foreshadowing_count}个伏笔/反转...")
+        
+        # RAG: 获取风格参考（伏笔生成阶段）
+        rag_references = ""
+        if hasattr(self.aign, '_is_rag_enabled') and self.aign._is_rag_enabled():
+            print("📚 RAG (伏笔生成): 正在检索风格参考...")
+            rag_query = getattr(self.aign, 'user_idea', '')
+            rag_top_k = getattr(self.aign, 'rag_top_k', 10)
+            rag_references = self.aign._get_rag_references(rag_query, top_k=rag_top_k, for_embellishment=False)
+            if rag_references:
+                print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
+        
+        try:
+            resp = self.aign.foreshadowing_generator.invoke(
+                inputs={
+                    "大纲": current_outline,
+                    "用户想法": getattr(self.aign, 'user_idea', ''),
+                    "写作要求": getattr(self.aign, 'user_requirements', ''),
+                    "伏笔数量": str(foreshadowing_count),
+                    "风格参考": rag_references,
+                },
+                output_keys=["伏笔与反转设定"]
+            )
+            self.aign.foreshadowing = resp["伏笔与反转设定"]
+            print(f"✅ 伏笔生成完成，长度：{len(self.aign.foreshadowing)}字符")
+            
+            if hasattr(self.aign, 'log_message'):
+                self.aign.log_message(f"✅ 伏笔生成完成（{foreshadowing_count}个）")
+            
+            # 自动保存伏笔到本地文件
+            if hasattr(self.aign, '_save_to_local'):
+                self.aign._save_to_local("foreshadowing", foreshadowing=self.aign.foreshadowing)
+            
+        except Exception as e:
+            print(f"❌ 伏笔生成失败: {e}")
+            self.aign.foreshadowing = ""
+            if hasattr(self.aign, 'log_message'):
+                self.aign.log_message(f"⚠️ 伏笔生成失败: {e}，将继续后续流程")
+        
+        return self.aign.foreshadowing
+    
     def generate_character_list(self, max_retries=2):
         """生成人物列表，支持重试机制，失败时不影响后续流程
         
@@ -343,6 +414,20 @@ class OutlineGenerator:
             else:
                 print("📚 RAG: 未检索到相关参考")
         
+        # 准备输入，包含伏笔设定
+        base_inputs = {
+            "大纲": current_outline,
+            "用户想法": self.aign.user_idea,
+            "写作要求": getattr(self.aign, 'user_requirements', ''),
+            "风格参考": rag_references,
+        }
+        
+        # 如果有伏笔设定，加入输入
+        foreshadowing = getattr(self.aign, 'foreshadowing', '')
+        if foreshadowing:
+            base_inputs["伏笔设定"] = foreshadowing
+            print(f"🔮 已加入伏笔设定上下文 ({len(foreshadowing)} 字符)")
+        
         # 添加重试机制处理人物列表生成错误
         retry_count = 0
         success = False
@@ -353,12 +438,7 @@ class OutlineGenerator:
                     print(f"🔄 第{retry_count + 1}次尝试生成人物列表...")
                 
                 resp = self.character_generator.invoke(
-                    inputs={
-                        "大纲": current_outline,
-                        "用户想法": self.aign.user_idea,
-                        "写作要求": getattr(self.aign, 'user_requirements', ''),
-                        "风格参考": rag_references,
-                    },
+                    inputs=base_inputs,
                     output_keys=["人物列表"]
                 )
                 self.aign.character_list = resp["人物列表"]
@@ -524,6 +604,12 @@ class OutlineGenerator:
         # 如果已有人物列表，也加入输入
         if getattr(self.aign, 'character_list', ''):
             inputs["人物列表"] = self.aign.character_list
+        
+        # 如果已有伏笔设定，也加入输入
+        foreshadowing = getattr(self.aign, 'foreshadowing', '')
+        if foreshadowing:
+            inputs["伏笔设定"] = foreshadowing
+            print(f"🔮 已加入伏笔设定上下文 ({len(foreshadowing)} 字符)")
         
         try:
             resp = self.detailed_outline_generator.invoke(

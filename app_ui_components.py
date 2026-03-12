@@ -228,6 +228,29 @@ def create_idea_input_tab(
                     visible=False
                 )
             
+            
+            # 目标章节数设定（放在开始界面，便于在生成大纲时参考）
+            components['target_chapters_slider'] = gr.Slider(
+                minimum=5, 
+                maximum=500, 
+                value=loaded_data.get("target_chapters", 100), 
+                step=1,
+                label="📚 目标章节数", 
+                interactive=True,
+                info="设置小说目标章节数，生成大纲时AI会参考该数值安排剧情"
+            )
+            
+            # 伏笔/反转数量滑块
+            components['foreshadowing_count_slider'] = gr.Slider(
+                minimum=0, 
+                maximum=10, 
+                value=3, 
+                step=1,
+                label="🔮 伏笔/反转数量", 
+                interactive=True,
+                info="设置故事中埋设的伏笔和反转数量，0表示不生成伏笔"
+            )
+            
             components['gen_ouline_button'] = gr.Button("生成大纲")
         else:
             components['user_idea_text'] = gr.Textbox(
@@ -277,6 +300,21 @@ def create_idea_input_tab(
                     size="sm",
                     interactive=False
                 )
+            
+            # 目标章节数设定（API未配置时禁用）
+            components['target_chapters_slider'] = gr.Slider(
+                minimum=5, maximum=500, value=100, step=1,
+                label="📚 目标章节数", interactive=False,
+                info="设置小说目标章节数"
+            )
+            
+            # 伏笔/反转数量滑块（API未配置时禁用）
+            components['foreshadowing_count_slider'] = gr.Slider(
+                minimum=0, maximum=10, value=3, step=1,
+                label="🔮 伏笔/反转数量", interactive=False,
+                info="设置故事中埋设的伏笔和反转数量"
+            )
+            
             components['gen_ouline_button'] = gr.Button("生成大纲", interactive=False)
     
     return components
@@ -330,10 +368,21 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             variant="secondary", 
             size="sm"
         )
+        
+        # 伏笔/反转显示区
+        components['foreshadowing_text'] = gr.Textbox(
+            loaded_data.get("foreshadowing", ""),
+            label="🔮 伏笔/反转设定", 
+            lines=12, 
+            max_lines=20,
+            interactive=True
+        )
+        
         components['character_list_text'] = gr.Textbox(
             loaded_data.get("character_list", ""),
             label="人物列表", 
             lines=16, 
+            max_lines=25,
             interactive=True
         )
         # 人物列表重新生成按钮
@@ -341,14 +390,6 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             "🔄 重新生成人物", 
             variant="secondary", 
             size="sm"
-        )
-        components['target_chapters_slider'] = gr.Slider(
-            minimum=5, 
-            maximum=500, 
-            value=loaded_data.get("target_chapters", 100), 
-            step=1,
-            label="目标章节数", 
-            interactive=True
         )
         # 长章节功能下拉菜单（支持关闭、2段、3段、4段合并）
         components['long_chapter_mode_dropdown'] = gr.Dropdown(

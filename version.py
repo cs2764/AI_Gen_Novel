@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "4.7.0"
+__version__ = "4.8.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-03-06)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-03-12)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,10 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "伏笔/反转生成系统：全新伏笔设计专家智能体，根据大纲自动生成伏笔和反转，支持0-10个伏笔数量调节，伏笔上下文注入到人物、详细大纲和故事线生成中",
+        "实时文本框同步：写作想法、写作要求、润色要求每次API调用都从WebUI文本框实时读取，支持生成过程中随时调整参数",
+        "目标章节数引导大纲：目标章节数滑块移至创意输入面板，AI生成大纲时参考目标章节数合理安排剧情节奏",
+        "Humanizer去AI味规则增强：基于Humanizer项目最新模式更新去AI写作痕迹规则，提升文本自然度",
         "TTS Markdown清理优化：内置strip_markdown功能，从生成流和批处理中移除Markdown格式(如**, *, #, _, ~等)，提升生成的文本在CosyVoice等TTS引擎中的语音朗读效果",
         "流式输出修正与章节控制：修复流式输出可能导致未完成残余文本与下一段被错误合并的问题；停止生成操作后自动关闭连接并丢弃不完整的块",
         "默认章节数调整：生成时默认章节数和对应的控制选项已优化",

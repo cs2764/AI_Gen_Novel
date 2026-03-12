@@ -230,6 +230,9 @@ cosyvoice_test.txt
 temp_pdf_content.txt
 test_token_display.md
 
+# Reference/SKILL files (not project code)
+*_SKILL.md
+
 # Chinese temporary documents
 保存加载功能验证完成.md
 儿童故事风格添加完成.md

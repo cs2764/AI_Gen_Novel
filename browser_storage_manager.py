@@ -23,6 +23,7 @@ class BrowserStorageManager:
             "outline": f"{self.prefix}outline",
             "title": f"{self.prefix}title",
             "character_list": f"{self.prefix}character_list",
+            "foreshadowing": f"{self.prefix}foreshadowing",
             "detailed_outline": f"{self.prefix}detailed_outline",
             "storyline": f"{self.prefix}storyline",
             "user_settings": f"{self.prefix}user_settings",

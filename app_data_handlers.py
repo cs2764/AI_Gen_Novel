@@ -176,7 +176,7 @@ def import_auto_saved_data_handler(aign_state):
         
     Returns:
         list: [导入结果消息, 用户想法, 写作要求, 润色要求, 目标章节数,
-               大纲, 标题, 人物列表, 详细大纲, 故事线, 长章节模式, 风格, 剧情节奏, 高潮数量]
+               大纲, 标题, 人物列表, 伏笔设定, 详细大纲, 故事线, 长章节模式, 风格, 剧情节奏, 高潮数量, 伏笔数量]
                
     说明:
         - 自动从State对象中提取AIGN实例
@@ -193,7 +193,7 @@ def import_auto_saved_data_handler(aign_state):
         if not (hasattr(__main__, 'ORIGINAL_MODULES_LOADED') and __main__.ORIGINAL_MODULES_LOADED) or not aign_instance:
             return [
                 gr.update(visible=True, value="❌ 系统未初始化，无法导入数据"),
-                "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
+                "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5, 3
             ]
         
         # 调用AIGN实例的加载方法
@@ -240,23 +240,25 @@ def import_auto_saved_data_handler(aign_state):
                 getattr(aign_instance, 'novel_outline', '') or '',
                 getattr(aign_instance, 'novel_title', '') or '',
                 getattr(aign_instance, 'character_list', '') or '',
+                getattr(aign_instance, 'foreshadowing', '') or '',
                 getattr(aign_instance, 'detailed_outline', '') or '',
                 storyline_display,
                 long_chapter_mode_value,
                 style_name,
                 getattr(aign_instance, 'chapters_per_plot', 5),
-                getattr(aign_instance, 'num_climaxes', 10)
+                getattr(aign_instance, 'num_climaxes', 10),
+                getattr(aign_instance, 'foreshadowing_count', 3)
             ]
         else:
             return [
                 gr.update(visible=True, value="⚠️ 未找到可导入的自动保存数据"),
-                "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
+                "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5, 3
             ]
             
     except Exception as e:
         return [
             gr.update(visible=True, value=f"❌ 导入失败: {str(e)}"),
-            "", "", "", 20, "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5
+            "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5, 3
         ]
 
 

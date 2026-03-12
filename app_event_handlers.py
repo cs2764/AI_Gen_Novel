@@ -229,11 +229,15 @@ def create_page_load_handler(aign_instance, original_modules_loaded: bool = True
             num_climaxes = getattr(aign_inst, 'num_climaxes', 10)
             print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
             
-            # 返回合并的结果，包含按钮状态、长章节模式和剧情紧凑度设置
-            return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, long_chapter_mode_value, chapters_per_plot, num_climaxes]
+            # 获取伏笔数量设置
+            foreshadowing_count = getattr(aign_inst, 'foreshadowing_count', 3)
+            print(f"🔮 页面加载：伏笔数量 = {foreshadowing_count}")
+            
+            # 返回合并的结果，包含按钮状态、长章节模式、剧情紧凑度和伏笔数量设置
+            return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, long_chapter_mode_value, chapters_per_plot, num_climaxes, foreshadowing_count]
         except Exception as e:
             print(f"⚠️ 合并页面加载失败: {e}")
-            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), "关闭", 5, 5]
+            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), "关闭", 5, 5, 3]
     
     return combined_page_load
 
@@ -329,8 +333,8 @@ def bind_main_events(
         novel_content_text = components.get('novel_content_text')
         
         # 绑定大纲生成按钮（使用生成器包装函数支持实时状态更新）
-        def _wrap_gen_outline(aign_state, user_idea, user_requirements, embellishment_idea):
-            """生成大纲（生成器版本，支持分步实时状态更新：大纲→标题→人物列表）"""
+        def _wrap_gen_outline(aign_state, user_idea, user_requirements, embellishment_idea, foreshadowing_count, target_chapters):
+            """生成大纲（生成器版本，支持分步实时状态更新：大纲→标题→伏笔→人物列表）"""
             import threading
             import time
             from datetime import datetime
@@ -344,6 +348,9 @@ def bind_main_events(
                 a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 
+                # 同步目标章节数
+                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 100)
+                
                 # 初始化状态历史
                 if not hasattr(a, 'global_status_history'):
                     a.global_status_history = []
@@ -355,7 +362,10 @@ def bind_main_events(
                 start_timestamp = generation_start_time.strftime("%H:%M:%S")
                 
                 # 添加开始状态
-                status_history.append(["系统", "🚀 开始生成大纲、标题和人物列表...", start_timestamp, generation_start_time])
+                # 同步伏笔数量设置
+                a.foreshadowing_count = int(foreshadowing_count) if foreshadowing_count else 3
+                
+                status_history.append(["系统", "🚀 开始生成大纲、标题、伏笔和人物列表...", start_timestamp, generation_start_time])
                 
                 # ========== 第一阶段：生成大纲 ==========
                 def generate_outline_only():
@@ -397,6 +407,7 @@ def bind_main_events(
                             format_status_output(status_history),
                             "生成中...",
                             "等待大纲完成...",
+                            "",
                             "等待大纲完成...",
                             ""
                         )
@@ -417,6 +428,7 @@ def bind_main_events(
                         format_status_output(status_history),
                         a.novel_outline,
                         "准备生成标题...",
+                        "",
                         "等待标题完成...",
                         ""
                     )
@@ -424,7 +436,7 @@ def bind_main_events(
                     err = "❌ 大纲生成失败"
                     error_timestamp = datetime.now().strftime("%H:%M:%S")
                     status_history.append(["系统", err, error_timestamp, generation_start_time])
-                    yield (format_status_output(status_history), err, "生成失败", "生成失败", "")
+                    yield (format_status_output(status_history), err, "生成失败", "", "生成失败", "")
                     return
                 
                 # ========== 第二阶段：生成标题 ==========
@@ -465,6 +477,7 @@ def bind_main_events(
                             format_status_output(status_history),
                             a.novel_outline,
                             "生成中...",
+                            "",
                             "等待标题完成...",
                             ""
                         )
@@ -487,11 +500,86 @@ def bind_main_events(
                     format_status_output(status_history),
                     a.novel_outline,
                     a.novel_title,
+                    "",
+                    "准备生成伏笔...",
+                    ""
+                )
+                
+                # ========== 第三阶段：生成伏笔/反转 ==========
+                foreshadowing_start_time = time.time()
+                
+                if a.foreshadowing_count > 0:
+                    def generate_foreshadowing_only():
+                        try:
+                            from aign_outline_generator import OutlineGenerator
+                            outline_gen = OutlineGenerator(a)
+                            outline_gen.generate_foreshadowing()
+                        except Exception as e:
+                            print(f"⚠️ 伏笔生成失败: {e}")
+                            a.foreshadowing = ""
+                    
+                    gen_foreshadowing_thread = threading.Thread(target=generate_foreshadowing_only)
+                    gen_foreshadowing_thread.start()
+                    
+                    update_counter = 0
+                    while gen_foreshadowing_thread.is_alive():
+                        if time.time() - foreshadowing_start_time > 300:
+                            break
+                        
+                        if update_counter % 2 == 0:
+                            elapsed_time = int(time.time() - start_time)
+                            current_timestamp = datetime.now().strftime("%H:%M:%S")
+                            foreshadowing_chars = len(a.foreshadowing) if a.foreshadowing else 0
+                            
+                            stage_key = "伏笔生成进度"
+                            status_text = f"🔮 正在生成伏笔/反转...\n   • 大纲: {len(a.novel_outline)} 字符 ✅\n   • 标题: 《{a.novel_title}》 ✅\n   • 伏笔目标: {a.foreshadowing_count}个\n   • 已生成: {foreshadowing_chars} 字符\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                            
+                            stage_found = False
+                            for i, item in enumerate(status_history):
+                                if len(item) >= 2 and item[0] == stage_key:
+                                    status_history[i] = [stage_key, status_text, current_timestamp, generation_start_time]
+                                    stage_found = True
+                                    break
+                            if not stage_found:
+                                status_history.append([stage_key, status_text, current_timestamp, generation_start_time])
+                            
+                            yield (
+                                format_status_output(status_history),
+                                a.novel_outline,
+                                a.novel_title,
+                                "生成中...",
+                                "等待伏笔完成...",
+                                ""
+                            )
+                        
+                        update_counter += 1
+                        time.sleep(0.5)
+                    
+                    gen_foreshadowing_thread.join(timeout=30)
+                    
+                    # 伏笔生成完成
+                    foreshadowing_timestamp = datetime.now().strftime("%H:%M:%S")
+                    foreshadowing_elapsed = int(time.time() - foreshadowing_start_time)
+                    if a.foreshadowing:
+                        status_history.append(["伏笔生成", f"✅ 伏笔生成完成\n   • 字数: {len(a.foreshadowing)} 字\n   • 耗时: {format_time_duration(foreshadowing_elapsed, include_seconds=True)}", foreshadowing_timestamp, generation_start_time])
+                    else:
+                        status_history.append(["伏笔生成", "⚠️ 伏笔生成失败，继续后续流程", foreshadowing_timestamp, generation_start_time])
+                else:
+                    # 用户选择不生成伏笔
+                    a.foreshadowing = ""
+                    foreshadowing_timestamp = datetime.now().strftime("%H:%M:%S")
+                    status_history.append(["伏笔生成", "ℹ️ 用户选择不生成伏笔（数量为0）", foreshadowing_timestamp, generation_start_time])
+                
+                yield (
+                    format_status_output(status_history),
+                    a.novel_outline,
+                    a.novel_title,
+                    a.foreshadowing,
                     "准备生成人物列表...",
                     ""
                 )
                 
-                # ========== 第三阶段：生成人物列表 ==========
+                # ========== 第四阶段：生成人物列表 ==========
                 character_start_time = time.time()
                 
                 def generate_character_only():
@@ -530,6 +618,7 @@ def bind_main_events(
                             format_status_output(status_history),
                             a.novel_outline,
                             a.novel_title,
+                            a.foreshadowing,
                             "生成中...",
                             ""
                         )
@@ -556,6 +645,8 @@ def bind_main_events(
                 summary_text += f"📊 生成统计：\n"
                 summary_text += f"   • 大纲: {len(a.novel_outline)} 字\n"
                 summary_text += f"   • 标题: 《{a.novel_title}》\n"
+                if a.foreshadowing:
+                    summary_text += f"   • 伏笔: {len(a.foreshadowing)} 字\n"
                 character_count = len(a.character_list.split('\n')) if a.character_list else 0
                 summary_text += f"   • 人物: 约{character_count}个\n"
                 summary_text += f"   • 总耗时: {format_time_duration(total_elapsed, include_seconds=True)}"
@@ -565,19 +656,24 @@ def bind_main_events(
                     format_status_output(status_history),
                     a.novel_outline,
                     a.novel_title,
+                    a.foreshadowing,
                     a.character_list,
                     getattr(a, 'detailed_outline', '') or ''
                 )
             
             except Exception as e:
                 err = f"❌ 大纲生成失败: {e}"
-                yield (err, err, "生成失败", "生成失败", "")
+                yield (err, err, "生成失败", "", "生成失败", "")
 
         if gen_ouline_button and hasattr(AIGN, 'genNovelOutline'):
+            # 获取伏笔滑块组件
+            foreshadowing_count_slider = components.get('foreshadowing_count_slider')
+            foreshadowing_text = components.get('foreshadowing_text')
+            
             gen_ouline_button.click(
                 fn=_wrap_gen_outline,
-                inputs=[aign, user_idea_text, user_requirements_text, embellishment_idea_text],
-                outputs=[components.get('status_output'), novel_outline_text, novel_title_text, character_list_text, detailed_outline_text]
+                inputs=[aign, user_idea_text, user_requirements_text, embellishment_idea_text, foreshadowing_count_slider, components.get('target_chapters_slider')],
+                outputs=[components.get('status_output'), novel_outline_text, novel_title_text, foreshadowing_text, character_list_text, detailed_outline_text]
             )
         
         # ========== 绑定单独重新生成按钮 ==========
@@ -741,7 +837,7 @@ def bind_main_events(
                 yield (err, "")
         
         # 重新生成人物列表
-        def _regenerate_character_only(aign_state, outline):
+        def _regenerate_character_only(aign_state, outline, foreshadowing, user_idea, user_requirements, embellishment_idea):
             """仅重新生成人物列表（生成器版本，支持实时状态更新）"""
             import threading
             import time
@@ -753,6 +849,16 @@ def bind_main_events(
                 
                 # 同步大纲（确保使用最新的大纲生成人物列表）
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
+                
+                # 同步伏笔设定（确保使用最新的伏笔设定）
+                if foreshadowing is not None:
+                    a.foreshadowing = foreshadowing
+                    print(f"🔮 DEBUG: 人物列表生成 - 伏笔设定同步: '{foreshadowing[:50] if foreshadowing else '(空)'}...' ({len(foreshadowing) if foreshadowing else 0} 字符)")
+                
+                # 同步写作想法、写作要求和润色要求
+                a.user_idea = user_idea or getattr(a, 'user_idea', '')
+                a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
+                a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 
                 if not a.novel_outline:
                     yield ("⚠️ 请先生成或输入大纲后再生成人物列表", "")
@@ -843,7 +949,7 @@ def bind_main_events(
         if regen_character_btn:
             regen_character_btn.click(
                 fn=_regenerate_character_only,
-                inputs=[aign, novel_outline_text],
+                inputs=[aign, novel_outline_text, components.get('foreshadowing_text'), user_idea_text, user_requirements_text, embellishment_idea_text],
                 outputs=[components.get('status_output'), character_list_text]
             )
         
@@ -920,7 +1026,7 @@ def bind_main_events(
 
         # 绑定其他生成按钮（如果存在）
         # 生成故事线包装（生成器版本）
-        def _wrap_gen_storyline(aign_state, user_idea, user_requirements, outline, character_list, target_chapters, long_chapter_feature):
+        def _wrap_gen_storyline(aign_state, user_idea, user_requirements, outline, character_list, target_chapters, long_chapter_feature, foreshadowing, embellishment_idea):
             """生成故事线（生成器版本，支持实时状态更新）"""
             import threading
             import time
@@ -934,9 +1040,14 @@ def bind_main_events(
                 # 同步UI数据
                 a.user_idea = user_idea or getattr(a, 'user_idea', '')
                 a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
+                a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
                 a.character_list = character_list or getattr(a, 'character_list', '')
                 a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
+                # 同步伏笔设定
+                if foreshadowing is not None:
+                    a.foreshadowing = foreshadowing
+                    print(f"🔮 DEBUG: 故事线生成 - 伏笔设定同步: '{foreshadowing[:50] if foreshadowing else '(空)'}...' ({len(foreshadowing) if foreshadowing else 0} 字符)")
                 
                 # 同步长章节模式设置（从下拉菜单）
                 sync_long_chapter_mode_from_ui(a, long_chapter_feature, "生成故事线")
@@ -1101,7 +1212,7 @@ def bind_main_events(
                 yield (err, err, "生成失败")
 
         # 生成故事线包装（带状态组件版本）
-        def _wrap_gen_storyline_with_status(aign_state, user_idea, user_requirements, outline, character_list, target_chapters, long_chapter_feature):
+        def _wrap_gen_storyline_with_status(aign_state, user_idea, user_requirements, outline, character_list, target_chapters, long_chapter_feature, foreshadowing, embellishment_idea):
             """生成故事线（带状态组件，输出3个值）"""
             import threading
             import time
@@ -1115,10 +1226,14 @@ def bind_main_events(
                 # 同步UI数据
                 a.user_idea = user_idea or getattr(a, 'user_idea', '')
                 a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
+                a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
                 a.character_list = character_list or getattr(a, 'character_list', '')
                 a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
-                
+                # 同步伏笔设定
+                if foreshadowing is not None:
+                    a.foreshadowing = foreshadowing
+                    print(f"🔮 DEBUG: 故事线生成(带状态) - 伏笔设定同步: '{foreshadowing[:50] if foreshadowing else '(空)'}...' ({len(foreshadowing) if foreshadowing else 0} 字符)")
                 # 同步长章节模式设置（从下拉菜单）
                 sync_long_chapter_mode_from_ui(a, long_chapter_feature, "生成故事线")
                 
@@ -1290,7 +1405,9 @@ def bind_main_events(
                         novel_outline_text,
                         character_list_text,
                         components.get('target_chapters_slider'),
-                        components.get('long_chapter_mode_dropdown')
+                        components.get('long_chapter_mode_dropdown'),
+                        components.get('foreshadowing_text'),
+                        embellishment_idea_text
                     ],
                     outputs=[components.get('status_output'), storyline_text, components.get('gen_storyline_status')]
                 )
@@ -1305,7 +1422,9 @@ def bind_main_events(
                         novel_outline_text,
                         character_list_text,
                         components.get('target_chapters_slider'),
-                        components.get('long_chapter_mode_dropdown')
+                        components.get('long_chapter_mode_dropdown'),
+                        components.get('foreshadowing_text'),
+                        embellishment_idea_text
                     ],
                     outputs=[components.get('status_output'), storyline_text, progress_text]
                 )
@@ -1550,7 +1669,7 @@ def bind_main_events(
             )
             print("✅ 修复重复章节按钮绑定完成")
 
-        def _wrap_gen_beginning(aign_state, outline, user_requirements, embellishment_idea, enable_chapters, enable_ending, novel_title, character_list):
+        def _wrap_gen_beginning(aign_state, outline, user_idea, user_requirements, embellishment_idea, enable_chapters, enable_ending, novel_title, character_list):
             """生成开头（生成器版本，支持实时状态更新）"""
             import threading
             import time
@@ -1561,6 +1680,7 @@ def bind_main_events(
             try:
                 a = aign_state.value if hasattr(aign_state, 'value') else aign_state
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
+                a.user_idea = user_idea or getattr(a, 'user_idea', '')
                 a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.enable_chapters = bool(enable_chapters)
@@ -1653,6 +1773,7 @@ def bind_main_events(
                 inputs=[
                     aign,
                     novel_outline_text,
+                    user_idea_text,
                     user_requirements_text,
                     embellishment_idea_text,
                     components.get('enable_chapters_checkbox'),
@@ -1789,7 +1910,7 @@ def bind_main_events(
             )
         
         # 详细大纲（生成器版本）
-        def _wrap_gen_detailed_outline(aign_state, user_idea, user_requirements, embellishment_idea, novel_outline, target_chapters):
+        def _wrap_gen_detailed_outline(aign_state, user_idea, user_requirements, embellishment_idea, novel_outline, target_chapters, foreshadowing):
             """生成详细大纲（生成器版本，支持实时状态更新）"""
             import threading
             import time
@@ -1803,6 +1924,10 @@ def bind_main_events(
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.novel_outline = novel_outline or getattr(a, 'novel_outline', '')
                 a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
+                # 同步伏笔设定
+                if foreshadowing is not None:
+                    a.foreshadowing = foreshadowing
+                    print(f"🔮 DEBUG: 详细大纲生成 - 伏笔设定同步: '{foreshadowing[:50] if foreshadowing else '(空)'}...' ({len(foreshadowing) if foreshadowing else 0} 字符)")
                 
                 if not hasattr(a, 'global_status_history'):
                     a.global_status_history = []
@@ -1884,16 +2009,21 @@ def bind_main_events(
                     user_requirements_text,
                     embellishment_idea_text,
                     novel_outline_text,
-                    components.get('target_chapters_slider')
+                    components.get('target_chapters_slider'),
+                    components.get('foreshadowing_text')
                 ],
                 outputs=[components.get('status_output'), detailed_outline_text]
             )
         
         # 结尾（如果界面存在该按钮）
         if 'gen_ending_button' in components and hasattr(AIGN, 'genEnding'):
-            def _wrap_gen_ending(aign_state):
+            def _wrap_gen_ending(aign_state, user_idea, user_requirements, embellishment_idea):
                 try:
                     a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    # 同步最新的UI文本框值
+                    a.user_idea = user_idea or getattr(a, 'user_idea', '')
+                    a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
+                    a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                     a.genEnding()
                     progress_info = update_progress(a)
                     return (progress_info[0], getattr(a, 'current_output_file', '') or '', getattr(a, 'novel_content', '') or '')
@@ -1901,7 +2031,7 @@ def bind_main_events(
                     return (f"❌ 结尾生成失败: {e}", '', '')
             components['gen_ending_button'].click(
                 fn=_wrap_gen_ending,
-                inputs=[aign],
+                inputs=[aign, user_idea_text, user_requirements_text, embellishment_idea_text],
                 outputs=[progress_text, output_file_text, components.get('novel_content_text')]
             )
         
@@ -1918,12 +2048,14 @@ def bind_main_events(
                     novel_outline_text,
                     novel_title_text,
                     character_list_text,
+                    components.get('foreshadowing_text'),
                     detailed_outline_text,
                     storyline_text,
                     components.get('long_chapter_mode_dropdown'),
                     components.get('style_dropdown'),
                     components.get('chapters_per_plot_slider'),
-                    components.get('num_climaxes_slider')
+                    components.get('num_climaxes_slider'),
+                    components.get('foreshadowing_count_slider')
                 ]
             )
         
@@ -1947,7 +2079,7 @@ def bind_main_events(
                 print(f"✅ 自动生成输入组件已找到: {name}")
         
         if 'auto_generate_button' in components and hasattr(AIGN, 'autoGenerate'):
-            def _wrap_auto_generate(aign_state, target_chapters, enable_chapters, enable_ending, user_requirements, embellishment_idea, compact_mode, long_chapter_feature):
+            def _wrap_auto_generate(aign_state, target_chapters, enable_chapters, enable_ending, user_idea, user_requirements, embellishment_idea, compact_mode, long_chapter_feature):
                 """自动生成包装函数"""
                 print("\n" + "="*80)
                 print("🔴 自动生成按钮被点击！")
@@ -1967,12 +2099,14 @@ def bind_main_events(
                     a.compact_mode = bool(compact_mode)
                     sync_long_chapter_mode_from_ui(a, long_chapter_feature, "自动生成")
                     
-                    # 设置写作要求和润色要求到AIGN实例
+                    # 设置写作想法、写作要求和润色要求到AIGN实例
+                    a.user_idea = user_idea or getattr(a, 'user_idea', '')
                     a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
                     a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                     
                     # 初始化WebUI实时设置缓存（供后台线程读取最新的WebUI值）
                     a._webui_live_settings = {
+                        'user_idea': a.user_idea,
                         'user_requirements': a.user_requirements,
                         'embellishment_idea': a.embellishment_idea
                     }
@@ -2021,6 +2155,7 @@ def bind_main_events(
                  components.get('target_chapters_slider'), 
                  components.get('enable_chapters_checkbox'), 
                  components.get('enable_ending_checkbox'),
+                 user_idea_text,
                  user_requirements_text, 
                  embellishment_idea_text, 
                  components.get('compact_mode_checkbox'), 
@@ -2364,6 +2499,25 @@ def bind_main_events(
             )
             print("✅ 剧情节奏滑块事件绑定成功")
         
+        # 绑定伏笔数量滑块 - 同步到AIGN实例
+        if components.get('foreshadowing_count_slider'):
+            def on_foreshadowing_count_change(value, aign_state):
+                """伏笔数量滑块变化时同步到AIGN实例"""
+                try:
+                    a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                    if hasattr(a, 'foreshadowing_count'):
+                        a.foreshadowing_count = int(value)
+                        print(f"🔮 伏笔数量已更新为: {a.foreshadowing_count}")
+                except Exception as e:
+                    print(f"⚠️ 伏笔数量更新失败: {e}")
+            
+            components['foreshadowing_count_slider'].change(
+                fn=on_foreshadowing_count_change,
+                inputs=[components['foreshadowing_count_slider'], aign],
+                outputs=[]
+            )
+            print("✅ 伏笔数量滑块事件绑定成功")
+        
         if components.get('num_climaxes_slider'):
             def on_num_climaxes_change(value, aign_state):
                 """高潮数量滑块变化时同步到AIGN实例"""
@@ -2460,7 +2614,8 @@ def bind_page_load_events(
             components['import_auto_saved_button'],
             components['long_chapter_mode_dropdown'],
             components['chapters_per_plot_slider'],
-            components['num_climaxes_slider']
+            components['num_climaxes_slider'],
+            components['foreshadowing_count_slider']
         ]
         
         if original_modules_loaded:

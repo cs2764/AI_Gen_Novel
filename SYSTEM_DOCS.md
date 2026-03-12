@@ -8,8 +8,8 @@
 ## English Documentation
 
 ### Version Information
-- **Version**: 4.7.0
-- **Release Date**: 2026-03-06
+- **Version**: 4.8.0
+- **Release Date**: 2026-03-12
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -30,10 +30,11 @@
    - Auto-save and data management
 
 3. **uniai/** - AI Provider Layer
-   - Unified interface for 10 AI providers
+   - Unified interface for 12 AI providers
    - OpenRouter, Claude, Gemini, DeepSeek
    - LM Studio, 智谱AI, 阿里云
    - Fireworks, Grok, Lambda
+   - SiliconFlow, NVIDIA
 
 4. **Configuration System**
    - config_manager.py - Configuration management
@@ -58,11 +59,12 @@ The AIGN engine uses specialized agents:
 - **MemoryMaker** - Context compression
 - **StorylineGenerator** - Chapter planning
 - **CharacterGenerator** - Character profiles
+- **ForeshadowingGenerator** - Foreshadowing and plot twist design
 
 ### Key Features
 
 1. **Multi-AI Provider Support**
-   - 10 major AI providers integrated
+   - 12 major AI providers integrated
    - Unified API interface
    - Easy provider switching
 
@@ -169,8 +171,8 @@ See [LICENSE](LICENSE) for license information.
 ## 中文文档
 
 ### 版本信息
-- **版本**: 4.7.0
-- **发布日期**: 2026-03-06
+- **版本**: 4.8.0
+- **发布日期**: 2026-03-12
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -191,10 +193,11 @@ See [LICENSE](LICENSE) for license information.
    - 自动保存和数据管理
 
 3. **uniai/** - AI提供商层
-   - 10个AI提供商的统一接口
+   - 12个AI提供商的统一接口
    - OpenRouter、Claude、Gemini、DeepSeek
    - LM Studio、智谱AI、阿里云
    - Fireworks、Grok、Lambda
+   - SiliconFlow、NVIDIA
 
 4. **配置系统**
    - config_manager.py - 配置管理
@@ -219,11 +222,12 @@ AIGN引擎使用专业化智能体:
 - **MemoryMaker** - 上下文压缩
 - **StorylineGenerator** - 章节规划
 - **CharacterGenerator** - 角色档案
+- **ForeshadowingGenerator** - 伏笔与反转设计
 
 ### 主要功能
 
 1. **多AI提供商支持**
-   - 集成10个主流AI提供商
+   - 集成12个主流AI提供商
    - 统一API接口
    - 轻松切换提供商
 
@@ -327,5 +331,5 @@ AI_Gen_Novel/
 
 ---
 
-**Last Updated / 最后更新**: 2026-03-06
-**Version / 版本**: 4.7.0
+**Last Updated / 最后更新**: 2026-03-12
+**Version / 版本**: 4.8.0

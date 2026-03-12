@@ -166,6 +166,12 @@ class StorylineManager:
                 "章节范围": f"{start_chapter}-{end_chapter}章"
             }
             
+            # 如果有伏笔设定，加入上下文
+            foreshadowing = getattr(self.aign, 'foreshadowing', '')
+            if foreshadowing:
+                inputs["伏笔设定"] = foreshadowing
+                print(f"🔮 已加入伏笔设定上下文 ({len(foreshadowing)} 字符)")
+            
             # 如果有详细大纲，也一同发送给AI提供更多上下文
             if getattr(self.aign, 'detailed_outline', '') and self.aign.detailed_outline != getattr(self.aign, 'novel_outline', ''):
                 inputs["详细大纲"] = self.aign.detailed_outline
@@ -434,6 +440,9 @@ class StorylineManager:
         
         if inputs.get('详细大纲'):
             prompt += f"**详细大纲:**\n{inputs['详细大纲']}\n\n"
+        
+        if inputs.get('伏笔设定'):
+            prompt += f"**伏笔设定（请在故事线中安排埋设和揭示）:**\n{inputs['伏笔设定']}\n\n"
         
         # 明确JSON格式要求和章节数量要求
         expected_count = end_chapter - start_chapter + 1

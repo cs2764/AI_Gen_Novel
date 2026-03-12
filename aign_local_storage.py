@@ -255,9 +255,11 @@ class LocalStorageManager:
                     self.aign.chapters_per_plot = settings["chapters_per_plot"]
                 if "num_climaxes" in settings:
                     self.aign.num_climaxes = settings["num_climaxes"]
+                if "foreshadowing_count" in settings:
+                    self.aign.foreshadowing_count = settings["foreshadowing_count"]
                 # 如果加载了剧情紧凑度设置，添加到加载项列表
-                if "chapters_per_plot" in settings or "num_climaxes" in settings:
-                    loaded_items.append(f"剧情紧凑度: {self.aign.chapters_per_plot}章/剧情, {self.aign.num_climaxes}个高潮")
+                if "chapters_per_plot" in settings or "num_climaxes" in settings or "foreshadowing_count" in settings:
+                    loaded_items.append(f"剧情紧凑度: {self.aign.chapters_per_plot}章/剧情, {self.aign.num_climaxes}个高潮, {getattr(self.aign, 'foreshadowing_count', 3)}个伏笔")
             
             if loaded_items:
                 print(f"✅ 本地数据加载完成，已加载 {len(loaded_items)} 项:")
@@ -340,7 +342,8 @@ class LocalStorageManager:
                 "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', 0),
                 "cosyvoice_mode": getattr(self.aign, 'cosyvoice_mode', False),
                 "chapters_per_plot": getattr(self.aign, 'chapters_per_plot', 5),
-                "num_climaxes": getattr(self.aign, 'num_climaxes', 10)
+                "num_climaxes": getattr(self.aign, 'num_climaxes', 10),
+                "foreshadowing_count": getattr(self.aign, 'foreshadowing_count', 3)
             }
             
             result = self.save_to_local("user_settings", settings=settings)

@@ -1,10 +1,42 @@
-﻿# 🤖 AI Novel Generator v4.7.0 | AI 网络小说生成器
+# 🤖 AI Novel Generator v4.8.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.7.0 (2026-03-06)
+## 🎉 What's New in v4.8.0 (2026-03-12)
+
+**🔮 Foreshadowing System & Real-time Sync!** AI-powered foreshadowing/plot-twist generation with real-time WebUI parameter adjustment during novel creation.
+
+### ✨ New Features | 新功能
+
+#### 🔮 Foreshadowing/Plot-Twist Generation System | 伏笔/反转生成系统
+- **Foreshadowing Designer Agent**: Analyzes outline and designs foreshadowing elements with setup/reveal timing
+- **伏笔设计专家智能体**: 分析大纲并设计伏笔和反转，规划埋设与揭示时机
+- **Adjustable Count**: WebUI slider (0–10) to control foreshadowing/plot-twist count
+- **可调数量**: WebUI滑块（0-10）控制伏笔/反转数量
+- **Context Injection**: Foreshadowing auto-injected into character, detailed outline, and storyline generation
+- **上下文注入**: 伏笔自动注入到人物、详细大纲和故事线生成中
+
+#### 📝 Real-time Textbox Sync | 实时文本框同步
+- **Live Parameter Reading**: Writing ideas, requirements, and polish settings read from WebUI for every API call
+- **实时参数读取**: 写作想法、写作要求、润色要求每次API调用都从文本框实时读取
+- **Mid-generation Adjustment**: Adjust parameters in real-time during generation without restarting
+- **生成中调整**: 生成过程中可实时调整参数，无需重启
+
+### 🔧 Improvements | 功能改进
+
+#### 📊 Target Chapters Guides Outline | 目标章节数引导大纲
+- **Slider Relocation**: Target chapters slider moved to idea input panel; AI references it during outline generation
+- **滑块移动**: 目标章节数滑块移至创意输入面板，AI生成大纲时参考该值
+
+#### 🛡️ Humanizer Rules Enhancement | Humanizer规则增强
+- **Updated Patterns**: De-AI rules updated based on the latest patterns from the [Humanizer](https://github.com/blader/humanizer) project
+- **更新模式**: 基于 [Humanizer](https://github.com/blader/humanizer) 项目最新模式更新了去AI写作痕迹规则
+
+---
+
+## 📚 Previous Version: v4.7.0 (2026-03-06)
 
 **✨ TTS Markdown Cleanup & Streaming Fixes!** Automatic removal of Markdown tags to improve compatibility with Text-to-Speech engines like CosyVoice, combined with comprehensive streaming output fixes preventing chunk leakage.
 
@@ -487,7 +519,7 @@ python github_upload_ready.py
 
 #### 🤖 Multi-AI Provider Support
 
-Support for 11 mainstream AI providers to meet different needs:
+Support for 12 mainstream AI providers to meet different needs:
 
 | Provider | Features | Recommended Use |
 |----------|----------|-----------------|
@@ -701,6 +733,12 @@ TEMPERATURE_SETTINGS = {
 ```
 
 ## 🆕 Version History | 版本历史
+
+### v4.8.0 (2026-03-12) 🎉
+- 🔮 **伏笔/反转生成系统**：全新伏笔设计专家智能体，根据大纲自动生成伏笔和反转，支持0-10个伏笔数量调节
+- 📝 **实时文本框同步**：写作想法、写作要求、润色要求每次API调用都从文本框实时读取
+- 📊 **目标章节数引导大纲**：目标章节数滑块移至创意输入面板，AI参考章节数规划剧情节奏
+- 🛡️ **Humanizer去AI味规则增强**：基于[Humanizer](https://github.com/blader/humanizer)项目更新去AI写作痕迹规则
 
 ### v4.7.0 (2026-03-06) 🎉
 - 🎙️ **TTS Markdown清理**：内置`strip_markdown`管线模块，自动移除Markdown标签以优化CosyVoice等引擎的朗读体验

@@ -2,6 +2,57 @@
 
 [中文版本](#中文版本)
 
+## [4.8.0] - 2026-03-12 🔮 Foreshadowing System & Real-time Sync | 伏笔系统与实时同步
+
+### ✨ Core New Features | 核心新功能
+
+#### 🔮 Foreshadowing/Plot-Twist Generation System | 伏笔/反转生成系统
+- **Foreshadowing Designer Agent**: New specialized agent that analyzes the outline and designs foreshadowing elements and plot twists with proper setup and reveal timing
+- **伏笔设计专家智能体**: 全新专业智能体，分析大纲并设计伏笔和反转，规划埋设与揭示时机
+- **Adjustable Count**: WebUI slider (0–10, default 3) to control the number of foreshadowing/plot-twist elements generated
+- **可调数量**: WebUI滑块（0-10，默认3）控制生成的伏笔/反转元素数量
+- **Context Injection**: Foreshadowing context automatically injected into character list, detailed outline, and storyline generation for narrative coherence
+- **上下文注入**: 伏笔上下文自动注入到人物列表、详细大纲和故事线生成中，保持叙事连贯性
+- **Editable in WebUI**: Foreshadowing settings displayed in a dedicated textbox in the outline tab, fully editable before generation
+- **WebUI中可编辑**: 伏笔设定显示在大纲标签页的专用文本框中，生成前可自由编辑
+
+#### 📝 Real-time Textbox Sync | 实时文本框同步
+- **Live Parameter Reading**: Writing ideas (`写作想法`), writing requirements (`写作要求`), and polish requirements (`润色要求`) are now read directly from WebUI textboxes for every API call
+- **实时参数读取**: 写作想法、写作要求、润色要求每次API调用都从WebUI文本框实时读取
+- **Mid-generation Adjustment**: Users can adjust creative parameters in real-time during the generation process without restarting
+- **生成中调整**: 用户可在生成过程中实时调整创作参数，无需重启
+
+#### 📊 Target Chapters Guides Outline | 目标章节数引导大纲
+- **Slider Relocation**: Target chapters slider moved from outline tab to the idea input panel for earlier access
+- **滑块移动**: 目标章节数滑块从大纲标签移至创意输入面板，更早可用
+- **AI-Aware Planning**: AI now references the target chapter count during outline generation to plan pacing and plot distribution accordingly
+- **AI感知规划**: AI在生成大纲时参考目标章节数，据此规划节奏和剧情分布
+
+### 🔧 Improvements | 功能改进
+
+#### 🛡️ Humanizer Rules Enhancement | Humanizer规则增强
+- **Updated Patterns**: Humanizer de-AI rules updated based on the latest patterns from the [Humanizer](https://github.com/blader/humanizer) project
+- **更新模式**: 基于 [Humanizer](https://github.com/blader/humanizer) 项目的最新模式更新了去AI写作痕迹规则
+- **Improved Detection**: Enhanced AI writing pattern detection and removal for more natural-sounding text
+- **改进检测**: 增强了AI写作模式检测和移除，使文本更加自然
+
+### 📝 Modified Files | 修改文件
+- `prompts/common/foreshadowing_prompt.py`: Foreshadowing designer agent prompt (new)
+- `AIGN.py`: Foreshadowing generation flow, context injection, real-time sync
+- `aign_outline_generator.py`: Foreshadowing generation, target chapters in outline, context injection into character/detailed-outline
+- `aign_storyline_manager.py`: Foreshadowing context injection into storyline generation
+- `app_event_handlers.py`: Real-time textbox sync for all generation handlers, foreshadowing UI bindings
+- `app_ui_components.py`: Foreshadowing count slider, target chapters relocation, foreshadowing textbox
+- `app_data_handlers.py`: Foreshadowing data persistence
+- `auto_save_manager.py`: Foreshadowing auto-save support
+- `prompts/common/humanizer_rules.py`: Updated humanizer patterns
+- `prompts/common/outline_prompt.py`: Target chapters integration
+- `prompts/common/character_prompt.py`: Foreshadowing context support
+- `prompts/common/detailed_outline_prompt.py`: Foreshadowing context support
+- `prompts/common/storyline_prompt.py`: Foreshadowing context support
+
+---
+
 ## [4.7.0] - 2026-03-06 ✨ TTS Markdown Cleanup & Streaming Fix | TTS Markdown格式清理与流式输出修复
 
 ### ✨ Core New Features | 核心新功能

@@ -25,6 +25,7 @@ class AutoSaveManager:
             "outline": self.save_dir / "outline.json",
             "title": self.save_dir / "title.json", 
             "character_list": self.save_dir / "character_list.json",
+            "foreshadowing": self.save_dir / "foreshadowing.json",
             "detailed_outline": self.save_dir / "detailed_outline.json",
             "storyline": self.save_dir / "storyline.json",
             "user_settings": self.save_dir / "user_settings.json",
@@ -93,6 +94,24 @@ class AutoSaveManager:
             return True
         except Exception as e:
             print(f"❌ 人物列表保存失败: {e}")
+            return False
+    
+    def save_foreshadowing(self, foreshadowing: str) -> bool:
+        """保存伏笔设定"""
+        try:
+            data = {
+                "foreshadowing": foreshadowing,
+                "timestamp": time.time(),
+                "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            with open(self.files["foreshadowing"], 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 伏笔设定已自动保存 ({len(foreshadowing)}字符)")
+            return True
+        except Exception as e:
+            print(f"❌ 伏笔保存失败: {e}")
             return False
     
     def save_detailed_outline(self, detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", style_name: str = "无") -> bool:
@@ -217,6 +236,18 @@ class AutoSaveManager:
             print(f"❌ 人物列表加载失败: {e}")
         return None
     
+    def load_foreshadowing(self) -> Optional[Dict[str, Any]]:
+        """加载伏笔设定"""
+        try:
+            if self.files["foreshadowing"].exists():
+                with open(self.files["foreshadowing"], 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                print(f"📚 伏笔设定已自动加载 ({len(data.get('foreshadowing', ''))}字符, {data.get('readable_time', 'unknown time')})")
+                return data
+        except Exception as e:
+            print(f"❌ 伏笔加载失败: {e}")
+        return None
+    
     def load_detailed_outline(self) -> Optional[Dict[str, Any]]:
         """加载详细大纲"""
         try:
@@ -263,6 +294,7 @@ class AutoSaveManager:
             "outline": self.load_outline(),
             "title": self.load_title(),
             "character_list": self.load_character_list(),
+            "foreshadowing": self.load_foreshadowing(),
             "detailed_outline": self.load_detailed_outline(),
             "storyline": self.load_storyline(),
             "user_settings": self.load_user_settings()
@@ -270,7 +302,7 @@ class AutoSaveManager:
         
         # 统计加载的数据
         loaded_count = sum(1 for v in result.values() if v is not None)
-        print(f"✅ 自动保存数据加载完成，成功加载 {loaded_count}/6 项")
+        print(f"✅ 自动保存数据加载完成，成功加载 {loaded_count}/7 项")
         
         return result
     
@@ -499,6 +531,7 @@ class AutoSaveManager:
             "outline": self.files["outline"].exists(),
             "title": self.files["title"].exists(), 
             "character_list": self.files["character_list"].exists(),
+            "foreshadowing": self.files["foreshadowing"].exists(),
             "detailed_outline": self.files["detailed_outline"].exists(),
             "storyline": self.files["storyline"].exists(),
             "user_settings": self.files["user_settings"].exists()

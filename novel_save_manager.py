@@ -231,7 +231,8 @@ class NovelSaveManager:
             "style_name": getattr(aign, 'style_name', "无"),
             "chapters_per_plot": getattr(aign, 'chapters_per_plot', 5),
             "num_climaxes": getattr(aign, 'num_climaxes', 10),
-            "use_detailed_outline": getattr(aign, 'use_detailed_outline', False)
+            "use_detailed_outline": getattr(aign, 'use_detailed_outline', False),
+            "foreshadowing_count": getattr(aign, 'foreshadowing_count', 3)
         }
     
     def _extract_user_inputs(self, aign) -> Dict[str, Any]:
@@ -249,6 +250,7 @@ class NovelSaveManager:
             "novel_outline": getattr(aign, 'novel_outline', ""),
             "detailed_outline": getattr(aign, 'detailed_outline', ""),
             "character_list": getattr(aign, 'character_list', ""),
+            "foreshadowing": getattr(aign, 'foreshadowing', ""),
             "storyline": getattr(aign, 'storyline', {})
         }
     
@@ -278,6 +280,7 @@ class NovelSaveManager:
         aign.chapters_per_plot = settings.get("chapters_per_plot", 5)
         aign.num_climaxes = settings.get("num_climaxes", 5)
         aign.use_detailed_outline = settings.get("use_detailed_outline", False)
+        aign.foreshadowing_count = settings.get("foreshadowing_count", 3)
         
         print(f"✅ 设置已恢复")
         print(f"   • 目标章节: {aign.target_chapter_count}章")
@@ -306,6 +309,7 @@ class NovelSaveManager:
         aign.novel_outline = content.get("novel_outline", "")
         aign.detailed_outline = content.get("detailed_outline", "")
         aign.character_list = content.get("character_list", "")
+        aign.foreshadowing = content.get("foreshadowing", "")
         aign.storyline = content.get("storyline", {})
         
         content_items = []
@@ -317,6 +321,8 @@ class NovelSaveManager:
             content_items.append(f"详细大纲 ({len(aign.detailed_outline)}字符)")
         if aign.character_list:
             content_items.append(f"人物列表 ({len(aign.character_list)}字符)")
+        if aign.foreshadowing:
+            content_items.append(f"伏笔设定 ({len(aign.foreshadowing)}字符)")
         if aign.storyline and isinstance(aign.storyline, dict):
             chapters = aign.storyline.get("chapters", [])
             if chapters:
