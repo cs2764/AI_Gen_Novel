@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "4.8.0"
+__version__ = "4.9.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-03-12)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-03-15)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,9 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "润色截断检测与重试系统：全新embellish_truncation_detector模块，通过===EMBELLISH_COMPLETE===完成标识、句子完整性和长度比率三重检测润色内容是否被截断，支持3次自动重试",
+        "标题长度严格限制：标题字数从不超过15字收紧为严格不超过10字，最佳长度4-8字",
+        "发送长度检测移除：清理冗余的overlength content检测代码，简化状态显示",
         "伏笔/反转生成系统：全新伏笔设计专家智能体，根据大纲自动生成伏笔和反转，支持0-10个伏笔数量调节，伏笔上下文注入到人物、详细大纲和故事线生成中",
         "实时文本框同步：写作想法、写作要求、润色要求每次API调用都从WebUI文本框实时读取，支持生成过程中随时调整参数",
         "目标章节数引导大纲：目标章节数滑块移至创意输入面板，AI生成大纲时参考目标章节数合理安排剧情节奏",

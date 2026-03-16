@@ -141,41 +141,7 @@ class AIGN:
         self.detailed_outline = ""
         self.use_detailed_outline = False
         
-        # 过长内容检测统计系统
-        # 接收的内容统计
-        self.overlength_statistics_received = {
-            "记忆": 0,
-            "正文": 0,
-            "润色": 0,
-            "大纲": 0,
-            "故事线": 0,
-            "人物": 0,
-            "标题": 0,
-            "开头": 0,
-            "结尾": 0,
-            "其他": 0
-        }
-        # 发送的提示词统计
-        self.overlength_statistics_sent = {
-            "记忆": 0,
-            "正文": 0,
-            "润色": 0,
-            "大纲": 0,
-            "故事线": 0,
-            "人物": 0,
-            "标题": 0,
-            "开头": 0,
-            "结尾": 0,
-            "其他": 0
-        }
-        self.overlength_threshold = 30000  # 超长阈值：30000字符
-        
-        # 确保metadata/overlength目录存在
-        import os
-        os.makedirs("metadata/overlength", exist_ok=True)
-        
         # Token累积统计系统（用于自动生成过程中的Token消耗追踪）
-        # 与overlength_statistics独立，专注于追踪API调用的Token消耗
         self.token_accumulation_stats = {
             "enabled": False,  # 统计开关，仅在autoGenerate期间启用
             "sent": {  # 发送给API的Token统计
@@ -1268,6 +1234,10 @@ class AIGN:
             content = re.sub(r'^[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*', '', content, flags=re.M)
             content = re.sub(r'[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*$', '', content, flags=re.M)
             
+            # 0.4) 删除大模型生成的***段落/场景分隔符
+            # 匹配仅由星号(*)和可选空格组成的行，如 ***、* * *、*****等
+            content = re.sub(r'^\s*\*[\s*]*\*[\s*]*\*[\s*]*$', '', content, flags=re.M)
+            
             # 1) 删除整行结构化括注
             pattern_full_line = re.compile(r"^\s*[（(【\[\uff3b\uff08][^\n\r]{0,120}?(场景|冲突|阻碍|结果|反应|心理|对话|推进|铺垫|伏笔|反转|结构|动作|分解|延伸|Scene|Sequel)[^\n\r]{0,200}?[）)】\]\uff3d\uff09]\s*$", re.M)
             content = pattern_full_line.sub("", content)
@@ -1328,6 +1298,170 @@ class AIGN:
             # 出错时返回原文本
             print(f"⚠️ 文本清理失败: {e}")
             return text
+
+    def _detect_embellish_truncation(
+        self,
+        polished_content: str,
+        raw_response: str = "",
+        original_content: str = "",
+        chapter_number: int = 0,
+        context_label: str = "润色",
+    ) -> dict:
+        """检查润色内容是否被截断，输出警告日志，返回检测结果。
+        
+        Returns:
+            dict: 检测结果（is_truncated, confidence, reasons, details）
+                  如果检测模块不可用则返回 {"is_truncated": False}
+        """
+        try:
+            from embellish_truncation_detector import detect_truncation, format_truncation_warning
+            
+            result = detect_truncation(
+                polished_content=polished_content,
+                raw_response=raw_response,
+                original_content=original_content,
+                chapter_number=chapter_number,
+            )
+            
+            if result["is_truncated"]:
+                warning_text = format_truncation_warning(result, chapter_number)
+                if warning_text:
+                    print(warning_text)
+                
+                confidence = result["confidence"].upper()
+                reasons_str = "; ".join(result["reasons"])
+                log_msg = f"⚠️ [{context_label}] 第{chapter_number}章润色截断检测: {confidence}置信度 - {reasons_str}"
+                self.log_message(log_msg)
+            else:
+                print(f"✅ [{context_label}] 截断检测: 内容完整")
+            
+            return result
+                
+        except ImportError:
+            print(f"⚠️ 截断检测模块未找到，跳过检测")
+            return {"is_truncated": False, "confidence": "none", "reasons": [], "details": {}}
+        except Exception as e:
+            print(f"⚠️ 截断检测出错: {e}")
+            return {"is_truncated": False, "confidence": "none", "reasons": [], "details": {}}
+
+    def _embellish_with_retry(
+        self,
+        embellisher,
+        embellish_inputs: dict,
+        original_content: str,
+        chapter_number: int = 0,
+        context_label: str = "章节润色",
+        output_key: str = "润色结果",
+        use_foreshadowing: bool = True,
+    ) -> str:
+        """带截断自动重试的润色调用。
+        
+        重试策略：
+        1. 第1次：正常润色
+        2. 截断→第2次：直接重试
+        3. 仍截断→第3次：加入长度控制指令（控制润色后内容长度不超过原文的指定倍数）
+        4. 仍截断→回退到润色前原文
+        
+        Args:
+            embellisher: 润色器Agent实例
+            embellish_inputs: 润色输入字典
+            original_content: 润色前的原文（用于截断检测和回退）
+            chapter_number: 当前章节号
+            context_label: 上下文标签
+            output_key: 输出键名（默认 "润色结果"）
+            use_foreshadowing: 是否注入伏笔信息
+            
+        Returns:
+            str: 润色后的内容（或回退到原文）
+        """
+        max_attempts = 3
+        
+        for attempt in range(1, max_attempts + 1):
+            attempt_label = f"{context_label}-尝试{attempt}"
+            
+            # 准备输入
+            current_inputs = dict(embellish_inputs)
+            
+            if attempt == 3:
+                # 第3次尝试：加入长度控制指令
+                original_len = len(original_content)
+                # 计算建议的润色后最大字数（原文的2.5倍，但最多8000字）
+                max_len = min(int(original_len * 2.5), 8000)
+                length_hint = (
+                    f"\n\n【⚠️ 长度控制要求】此章节原文较长（{original_len}字），"
+                    f"为确保完整输出，润色后内容请控制在{max_len}字以内。"
+                    f"优先保证内容完整性，可以适当减少扩展比例，"
+                    f"但必须完整输出所有原文的对应内容，不可省略或截断。"
+                )
+                # 将长度提示附加到润色要求中
+                if "润色要求" in current_inputs:
+                    current_inputs["润色要求"] = str(current_inputs["润色要求"]) + length_hint
+                else:
+                    current_inputs["润色要求"] = length_hint
+                
+                print(f"📏 [{attempt_label}] 第3次尝试: 加入长度控制指令（原文{original_len}字，限制{max_len}字）")
+                self.log_message(f"📏 第{chapter_number}章 润色重试(第3次): 添加长度控制指令")
+            elif attempt == 2:
+                print(f"🔄 [{attempt_label}] 第2次尝试: 直接重试润色")
+                self.log_message(f"🔄 第{chapter_number}章 检测到润色截断，正在重试...")
+            
+            try:
+                # 执行润色
+                if use_foreshadowing:
+                    invoke_inputs = self._inject_foreshadowing_to_inputs(current_inputs)
+                else:
+                    invoke_inputs = current_inputs
+                    
+                resp = embellisher.invoke(
+                    inputs=invoke_inputs,
+                    output_keys=[output_key],
+                )
+                polished = resp[output_key]
+                raw_response = resp.get("_raw_response", "")
+                
+                print(f"✅ [{attempt_label}] 润色完成，长度：{len(polished)}字符")
+                
+                # 截断检测
+                result = self._detect_embellish_truncation(
+                    polished_content=polished,
+                    raw_response=raw_response,
+                    original_content=original_content,
+                    chapter_number=chapter_number,
+                    context_label=attempt_label,
+                )
+                
+                if not result["is_truncated"]:
+                    # 未截断，返回结果
+                    if attempt > 1:
+                        print(f"✅ [{attempt_label}] 重试成功！内容完整")
+                        self.log_message(f"✅ 第{chapter_number}章 润色重试成功（第{attempt}次），内容完整")
+                    return polished
+                
+                # 截断了，判断是否继续重试
+                if attempt < max_attempts:
+                    print(f"⚠️ [{attempt_label}] 检测到截断，将进行第{attempt + 1}次尝试...")
+                else:
+                    # 所有尝试都失败了，回退到原文
+                    print(f"\n{'='*70}")
+                    print(f"🚨🚨🚨 [{context_label}] 第{chapter_number}章 润色3次均截断，回退使用原文 🚨🚨🚨")
+                    print(f"{'='*70}\n")
+                    self.log_message(
+                        f"🚨 第{chapter_number}章 润色3次均截断，已回退使用润色前的原文。"
+                        f"原因可能是该章节正文过长（{len(original_content)}字），"
+                        f"超出了大模型的输出长度限制。"
+                    )
+                    return original_content
+                    
+            except Exception as e:
+                print(f"❌ [{attempt_label}] 润色调用出错: {e}")
+                if attempt == max_attempts:
+                    print(f"🚨 所有重试失败，回退到原文")
+                    self.log_message(f"🚨 第{chapter_number}章 润色失败（{e}），已回退使用原文")
+                    return original_content
+                # 非最后一次尝试，继续重试
+        
+        # 理论上不会到这里
+        return original_content
 
     def genNovelOutline(self, user_idea=None):
         # 在生成前刷新chatLLM以确保使用最新配置
@@ -2976,8 +3110,14 @@ class AIGN:
                         "本章故事线": str(first_chapter_storyline),
                         "当前分段": current_seg_text,
                     }
-                emb_resp = emb_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(emb_inputs), output_keys=["润色结果"])
-                final_seg = emb_resp["润色结果"]
+                final_seg = self._embellish_with_retry(
+                    embellisher=emb_agent,
+                    embellish_inputs=emb_inputs,
+                    original_content=seg_text,
+                    chapter_number=self.chapter_count + 1,
+                    context_label=f"分段{seg_index}",
+                )
+                
                 parts.append(final_seg)
 
             beginning = "\n\n".join(parts)
@@ -3035,12 +3175,13 @@ class AIGN:
                     emb_inputs["风格参考"] = rag_refs_emb
                     print(f"   📚 RAG(开头润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
             
-            resp = self.novel_embellisher.invoke(
-                inputs=self._inject_foreshadowing_to_inputs(emb_inputs),
-                output_keys=["润色结果"],
+            beginning = self._embellish_with_retry(
+                embellisher=self.novel_embellisher,
+                embellish_inputs=emb_inputs,
+                original_content=emb_inputs.get("要润色的内容", ""),
+                chapter_number=1,
+                context_label="开头润色",
             )
-            beginning = resp["润色结果"]
-            print(f"✅ 开头润色完成，最终长度：{len(beginning)}字符")
             # 清理可能混入的结构化标签或非正文括注
             beginning = self.sanitize_generated_text(beginning)
         
@@ -4401,12 +4542,14 @@ class AIGN:
                 print("📦 使用精简版润色器（非精简模式：前三章原文+章节总结）")
                 embellisher = self.novel_embellisher_compact  # 非精简模式也使用相同提示词
             
-            resp = embellisher.invoke(
-                inputs=self._inject_foreshadowing_to_inputs(embellish_inputs),
-                output_keys=["润色结果"],
+            next_paragraph = self._embellish_with_retry(
+                embellisher=embellisher,
+                embellish_inputs=embellish_inputs,
+                original_content=embellish_inputs.get("要润色的内容", "") or embellish_inputs.get("要润色的结尾内容", ""),
+                chapter_number=self.chapter_count + 1,
+                context_label="章节润色",
             )
-            next_paragraph = resp["润色结果"]
-            print(f"✅ 段落润色完成，最终长度：{len(next_paragraph)}字符")
+            
             # 清理可能混入的结构化标签或非正文括注
             next_paragraph = self.sanitize_generated_text(next_paragraph)
         
@@ -5917,9 +6060,6 @@ class AIGN:
         progress_message = getattr(self, 'progress_message', f"📊 进度: {self.chapter_count}/{self.target_chapter_count} ({progress_percent:.1f}%)")
         time_message = getattr(self, 'time_message', "")
         
-        # 获取过长内容统计信息
-        overlength_stats = self.get_overlength_statistics_display()
-        
         return {
             "current_chapter": self.chapter_count,
             "target_chapters": self.target_chapter_count,
@@ -5929,64 +6069,10 @@ class AIGN:
             "output_file": self.current_output_file,
             "progress_message": progress_message,
             "time_message": time_message,
-            "overlength_statistics": overlength_stats,
             "stream_content": self.get_current_stream_content()
         }
     
-    def check_and_handle_overlength_content(self, content, content_type, agent_name="", direction="received"):
-        """检测并处理过长内容
-        direction: "sent" (发送的提示词) 或 "received" (接收的响应内容)
-        只在console中提示，不保存内容到文件
-        """
-        if not content or len(content) <= self.overlength_threshold:
-            return content
-        
-        # 选择对应的统计字典
-        if direction == "sent":
-            stats_dict = self.overlength_statistics_sent
-        else:
-            stats_dict = self.overlength_statistics_received
-        
-        # 统计计数
-        if content_type in stats_dict:
-            stats_dict[content_type] += 1
-        else:
-            stats_dict["其他"] += 1
-        
-        # 方向标签
-        direction_label = "发送" if direction == "sent" else "接收"
-        
-        # 只在console中输出警告信息
-        print(f"⚠️ 检测到过长{direction_label}内容: {content_type} ({len(content)}字符) [智能体: {agent_name}]")
-            
-        return content
-    
-    def get_overlength_statistics_display(self):
-        """获取过长内容统计信息的显示字符串"""
-        sent_stats = []
-        received_stats = []
-        
-        # 统计发送的过长内容
-        for content_type, count in self.overlength_statistics_sent.items():
-            if count > 0:
-                sent_stats.append(f"{content_type}:{count}次")
-                
-        # 统计接收的过长内容
-        for content_type, count in self.overlength_statistics_received.items():
-            if count > 0:
-                received_stats.append(f"{content_type}:{count}次")
-        
-        # 构建显示字符串
-        display_parts = []
-        if sent_stats:
-            display_parts.append("📤 发送过长: " + ", ".join(sent_stats))
-        if received_stats:
-            display_parts.append("📥 接收过长: " + ", ".join(received_stats))
-            
-        if display_parts:
-            return "⚠️ " + " | ".join(display_parts)
-        else:
-            return ""
+
     
     # ========== Token累积统计方法 ==========
     
@@ -6568,27 +6654,7 @@ class AIGN:
         
         return "\n".join(lines)
     
-    def test_overlength_detection(self):
-        """测试过长内容检测机制"""
-        # 创建测试用的长内容
-        test_sent_content = "发送测试内容" * 3000  # 创建18000字符的发送内容
-        test_received_content = "接收测试内容" * 4000  # 创建20000字符的接收内容
-        
-        print("🧪 开始测试过长内容检测机制...")
-        print(f"🚩 检测阈值: {self.overlength_threshold} 字符")
-        
-        # 测试发送内容检测
-        print(f"📤 测试发送内容长度: {len(test_sent_content)} 字符")
-        self.check_and_handle_overlength_content(test_sent_content, "测试", "TestAgent", direction="sent")
-        
-        # 测试接收内容检测
-        print(f"📥 测试接收内容长度: {len(test_received_content)} 字符")
-        self.check_and_handle_overlength_content(test_received_content, "测试", "TestAgent", direction="received")
-        
-        # 显示统计结果
-        stats = self.get_overlength_statistics_display()
-        print(f"📊 统计结果: {stats if stats else '无过长内容'}")
-        print("✅ 过长内容检测机制测试完成")
+
     
     def test_realtime_stream(self):
         """测试实时数据流功能"""

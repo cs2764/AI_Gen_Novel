@@ -32,7 +32,6 @@ def update_progress(aign_instance):
         - 优先使用AIGN的get_detailed_status()方法获取详细信息
         - 回退到基础属性检查
         - 包含自动保存状态检查
-        - 包含过长内容统计
     """
     try:
         if hasattr(aign_instance, 'get_detailed_status'):
@@ -53,13 +52,6 @@ def update_progress(aign_instance):
             # 检查自动保存状态
             auto_save_info = _check_auto_save_status()
 
-            # 获取过长内容统计信息
-            overlength_display = ""
-            if hasattr(aign_instance, 'get_overlength_statistics_display'):
-                overlength_stats = aign_instance.get_overlength_statistics_display()
-                if overlength_stats:
-                    overlength_display = f"\n\n{overlength_stats}"
-            
             # 计算预计总字数（基于实际平均值）
             target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
@@ -102,7 +94,7 @@ def update_progress(aign_instance):
 • CosyVoice2: {'🎙️ 已启用' if hasattr(aign_instance, 'cosyvoice_mode') and aign_instance.cosyvoice_mode else '🔇 未启用'}
 
 💾 增强型自动保存: {auto_save_info}
-• 保存内容：用户想法、写作要求、润色要求、所有生成内容{overlength_display}
+• 保存内容：用户想法、写作要求、润色要求、所有生成内容
 
 📝 最新操作日志:
 {log_text}"""

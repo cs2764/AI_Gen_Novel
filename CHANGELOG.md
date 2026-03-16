@@ -2,6 +2,53 @@
 
 [中文版本](#中文版本)
 
+## [4.9.0] - 2026-03-15 🛡️ Embellish Truncation Detection & Retry | 润色截断检测与重试
+
+### ✨ Core New Features | 核心新功能
+
+#### 🛡️ Embellish Truncation Detection & Auto-Retry System | 润色截断检测与自动重试系统
+- **Truncation Detector**: New `embellish_truncation_detector.py` module detects if LLM output was truncated during embellishment via three-layer detection: `===EMBELLISH_COMPLETE===` completion marker, sentence completeness (ending punctuation check), and polished-to-original length ratio analysis
+- **截断检测器**: 全新`embellish_truncation_detector.py`模块，通过三层检测判断润色输出是否被大模型截断：`===EMBELLISH_COMPLETE===`完成标识、句子完整性（末尾标点检查）和润色后/原文长度比率分析
+- **3-Attempt Auto-Retry**: New `_embellish_with_retry()` method in AIGN engine with progressive retry strategy — Attempt 1: standard generation, Attempt 2: retry, Attempt 3: retry with added length control instructions, Fallback: use original unembellished content
+- **3次自动重试**: AIGN引擎新增`_embellish_with_retry()`方法，采用渐进式重试策略——第1次：标准生成，第2次：重试，第3次：添加长度控制指令重试，兜底：使用未润色的原文
+- **Completion Markers**: All embellisher prompts (standard, compact, ending, CosyVoice) now include `===EMBELLISH_COMPLETE===` marker requirement and anti-truncation instructions
+- **完成标识**: 所有润色提示词（标准、精简、结尾、CosyVoice模式）现在都包含`===EMBELLISH_COMPLETE===`标记要求和防截断指令
+
+### 🔧 Improvements | 功能改进
+
+#### 📏 Title Length Constraint Tightened | 标题长度限制收紧
+- **Stricter Limit**: Title length constraint tightened from ≤15 characters to strictly ≤10 characters, with optimal length 4-8 characters
+- **更严格限制**: 标题字数限制从不超过15字收紧为严格不超过10字，最佳长度4-8字
+
+#### 🧹 Send Length Detection Removal | 发送长度检测移除
+- **Code Cleanup**: Removed redundant overlength content detection system (~65 lines) from `AIGN.py` and `aign_agents.py`, simplifying status display
+- **代码清理**: 从`AIGN.py`和`aign_agents.py`中移除冗余的过长内容检测系统（约65行），简化状态显示
+
+#### 📝 Raw Response Preservation | 原始响应保留
+- **For Truncation Detection**: Agent output now includes `_raw_response` key preserving the full API response text, enabling the truncation detector to check for completion markers in the raw response
+- **用于截断检测**: 智能体输出现在包含`_raw_response`键保留完整API响应文本，使截断检测器可以在原始响应中检查完成标识
+
+### 📄 Documentation | 文档
+- **Code Structure Optimization Analysis**: Added comprehensive `docs/CODE_STRUCTURE_OPTIMIZATION.md` (604 lines) analyzing potential refactoring of large files (AIGN.py 6929 lines → ~800 lines via Mixin pattern)
+- **代码结构优化分析**: 新增`docs/CODE_STRUCTURE_OPTIMIZATION.md`（604行），分析大文件的潜在重构方案（AIGN.py 6929行 → 通过Mixin模式缩减至约800行）
+
+### 📝 Modified Files | 修改文件
+- `embellish_truncation_detector.py`: Truncation detection module (new)
+- `docs/CODE_STRUCTURE_OPTIMIZATION.md`: Code structure optimization analysis (new)
+- `AIGN.py`: Embellish retry mechanism, overlength detection removal
+- `aign_agents.py`: Raw response preservation, send length detection removal
+- `AIGN_CosyVoice_Prompt.py`: Added EMBELLISH_COMPLETE marker
+- `AIGN_Prompt.py`: Minor prompt adjustments
+- `aign_utilities.py`: Minor utility additions
+- `app.py`: Status display simplification
+- `app_data_handlers.py`: Data handler cleanup
+- `prompts/common/title_prompt.py`: Title length constraint
+- `prompts/compact/base_embellisher_template.py`: Anti-truncation instructions + completion marker
+- `prompts/standard/embellisher_prompt.py`: Anti-truncation instructions + completion marker
+- `prompts/standard/ending_prompt.py`: Anti-truncation instructions + completion marker
+
+---
+
 ## [4.8.0] - 2026-03-12 🔮 Foreshadowing System & Real-time Sync | 伏笔系统与实时同步
 
 ### ✨ Core New Features | 核心新功能

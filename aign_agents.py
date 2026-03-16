@@ -616,34 +616,6 @@ class MarkdownAgent:
             if input_parts_summary:
                 print(f"   📝 {' | '.join(input_parts_summary)}")
         
-        # 检测发送提示词长度是否过长
-        if hasattr(self, 'parent_aign') and self.parent_aign and total_prompt_length > self.parent_aign.overlength_threshold:
-            # 构建完整提示词内容用于保存
-            full_prompt_content = "\n" + "="*50 + "\n"
-            for i, msg in enumerate(full_messages):
-                role_name = {"system": "系统", "user": "用户", "assistant": "助手"}.get(msg["role"], msg["role"])
-                full_prompt_content += f"[{role_name}消息 {i+1}]\n"
-                full_prompt_content += f"{msg['content']}\n"
-                full_prompt_content += "="*50 + "\n"
-            
-            # 根据智能体名称映射到内容类型
-            content_type_mapping = {
-                "MemoryMaker": "记忆",
-                "NovelWriter": "正文",
-                "NovelWriterCompact": "正文", 
-                "NovelEmbellisher": "润色",
-                "NovelEmbellisherCompact": "润色",
-                "NovelOutlineGenerator": "大纲",
-                "StorylineGenerator": "故事线",
-                "CharacterGenerator": "人物",
-                "TitleGenerator": "标题",
-                "NovelBeginningWriter": "开头",
-                "EndingWriter": "结尾"
-            }
-            content_type = content_type_mapping.get(self.name, "其他")
-            self.parent_aign.check_and_handle_overlength_content(
-                full_prompt_content, content_type, self.name, direction="sent"
-            )
         
         # 默认使用流式输出，但NVIDIA API使用非流式模式以避免流式问题
         use_stream = True
@@ -897,27 +869,6 @@ class MarkdownAgent:
                 # 记录日志
                 self.parent_aign.log_message(f"✅ {self.name}生成完成: {len(response_content)}字符，Token使用: {token_count}（非流式模式）")
         
-        # 检测过长内容并处理
-        response_content = resp.get("content", "")
-        if response_content and hasattr(self, 'parent_aign') and self.parent_aign:
-            # 根据智能体名称映射到内容类型
-            content_type_mapping = {
-                "MemoryMaker": "记忆",
-                "NovelWriter": "正文",
-                "NovelWriterCompact": "正文", 
-                "NovelEmbellisher": "润色",
-                "NovelEmbellisherCompact": "润色",
-                "NovelOutlineGenerator": "大纲",
-                "StorylineGenerator": "故事线",
-                "CharacterGenerator": "人物",
-                "TitleGenerator": "标题",
-                "NovelBeginningWriter": "开头",
-                "EndingWriter": "结尾"
-            }
-            content_type = content_type_mapping.get(self.name, "其他")
-            self.parent_aign.check_and_handle_overlength_content(
-                response_content, content_type, self.name, direction="received"
-            )
         
         # 显示API响应统计信息（紧凑格式）
         if debug_level in ['1', '2']:
@@ -1178,6 +1129,9 @@ class MarkdownAgent:
 
                     truncated_output = output[:100] + "..." if len(output) > 100 else output
                     raise ValueError(f"fail to parse {k} in output (length: {len(output)}):\n{truncated_output}\n\n")
+
+        # 保存原始响应文本，供截断检测器检查完成标识
+        sections["_raw_response"] = raw_content
 
         return sections
 

@@ -1,10 +1,34 @@
-# 🤖 AI Novel Generator v4.8.0 | AI 网络小说生成器
+# 🤖 AI Novel Generator v4.9.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.8.0 (2026-03-12)
+## 🎉 What's New in v4.9.0 (2026-03-15)
+
+**🛡️ Embellish Truncation Detection & Retry!** Automatic detection of truncated LLM embellisher output with 3-attempt progressive retry, plus tighter title length control.
+
+### ✨ New Features | 新功能
+
+#### 🛡️ Embellish Truncation Detection & Auto-Retry | 润色截断检测与自动重试
+- **Truncation Detector**: New `embellish_truncation_detector.py` with three-layer detection: `===EMBELLISH_COMPLETE===` marker, sentence completeness, and length ratio analysis
+- **截断检测器**: 全新`embellish_truncation_detector.py`，通过完成标识、句子完整性和长度比率三重检测
+- **3-Attempt Auto-Retry**: Progressive retry — standard → retry → retry with length control → fallback to original
+- **3次自动重试**: 渐进式重试——标准生成→重试→添加长度控制指令重试→回退使用原文
+
+### 🔧 Improvements | 功能改进
+
+#### 📏 Title Length Constraint Tightened | 标题长度限制收紧
+- **Stricter Limit**: Title length tightened from ≤15 to strictly ≤10 characters, optimal 4-8 characters
+- **更严格限制**: 标题字数从不超过15字收紧为严格不超过10字
+
+#### 🧹 Code Cleanup | 代码清理
+- **Send Length Detection Removal**: Removed ~65 lines of redundant overlength content detection code from `AIGN.py` and `aign_agents.py`
+- **发送长度检测移除**: 从`AIGN.py`和`aign_agents.py`中移除约65行冗余的过长内容检测代码
+
+---
+
+## 📚 Previous Version: v4.8.0 (2026-03-12)
 
 **🔮 Foreshadowing System & Real-time Sync!** AI-powered foreshadowing/plot-twist generation with real-time WebUI parameter adjustment during novel creation.
 
@@ -733,6 +757,11 @@ TEMPERATURE_SETTINGS = {
 ```
 
 ## 🆕 Version History | 版本历史
+
+### v4.9.0 (2026-03-15) 🎉
+- 🛡️ **润色截断检测与重试系统**：全新embellish_truncation_detector模块，通过完成标识、句子完整性和长度比率三重检测，支持3次自动重试
+- 📏 **标题长度严格限制**：标题字数从不超过15字收紧为严格不超过10字，最佳长度4-8字
+- 🧹 **发送长度检测移除**：清理约65行冗余的overlength content检测代码
 
 ### v4.8.0 (2026-03-12) 🎉
 - 🔮 **伏笔/反转生成系统**：全新伏笔设计专家智能体，根据大纲自动生成伏笔和反转，支持0-10个伏笔数量调节

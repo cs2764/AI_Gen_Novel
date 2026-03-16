@@ -8,8 +8,8 @@
 ## English Documentation
 
 ### Version Information
-- **Version**: 4.8.0
-- **Release Date**: 2026-03-12
+- **Version**: 4.9.0
+- **Release Date**: 2026-03-15
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -60,6 +60,7 @@ The AIGN engine uses specialized agents:
 - **StorylineGenerator** - Chapter planning
 - **CharacterGenerator** - Character profiles
 - **ForeshadowingGenerator** - Foreshadowing and plot twist design
+- **EmbellishTruncationDetector** - Embellish output truncation detection and retry
 
 ### Key Features
 
@@ -171,8 +172,8 @@ See [LICENSE](LICENSE) for license information.
 ## 中文文档
 
 ### 版本信息
-- **版本**: 4.8.0
-- **发布日期**: 2026-03-12
+- **版本**: 4.9.0
+- **发布日期**: 2026-03-15
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -223,6 +224,7 @@ AIGN引擎使用专业化智能体:
 - **StorylineGenerator** - 章节规划
 - **CharacterGenerator** - 角色档案
 - **ForeshadowingGenerator** - 伏笔与反转设计
+- **EmbellishTruncationDetector** - 润色输出截断检测与重试
 
 ### 主要功能
 
@@ -331,5 +333,5 @@ AI_Gen_Novel/
 
 ---
 
-**Last Updated / 最后更新**: 2026-03-12
-**Version / 版本**: 4.8.0
+**Last Updated / 最后更新**: 2026-03-15
+**Version / 版本**: 4.9.0

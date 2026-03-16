@@ -107,6 +107,10 @@ class AIGNUtilities:
             content = re.sub(r'^[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*', '', content, flags=re.M)
             content = re.sub(r'[\s]*[★☆●○◆◇■□▲△▼▽♦♠♣♥♡◎※]+[\s]*$', '', content, flags=re.M)
             
+            # 0.4) 删除大模型生成的***段落/场景分隔符
+            # 匹配仅由星号(*)和可选空格组成的行，如 ***、* * *、*****等
+            content = re.sub(r'^\s*\*[\s*]*\*[\s*]*\*[\s*]*$', '', content, flags=re.M)
+            
             # 1) 删除整行结构化括注
             pattern_full_line = re.compile(
                 r"^\s*[（(【\[\uff3b\uff08][^\n\r]{0,120}?"

@@ -77,6 +77,7 @@ novel_embellisher_cosyvoice_prompt = """
 ===润色结果===
 多段话，不需要标题，不少于2500字，包含CosyVoice2控制标记。
 ===END===
+===EMBELLISH_COMPLETE===
 ```
 
 **长度要求说明：**
@@ -181,6 +182,11 @@ novel_embellisher_cosyvoice_prompt = """
 
 ## 语言要求：所有输出必须使用简体中文。
 
+**🚨 完整输出强制要求**：
+- 必须输出完整的润色章节内容，从头到尾，不可以提前截断或省略任何部分
+- 如果内容较长，也必须完整输出，绝不可以因为长度原因而中途停止
+- 输出必须以===EMBELLISH_COMPLETE===标记结尾，缺少此标记视为输出不完整
+
 ## Example（有效标记版）:
 ```
 ===润色结果===
@@ -202,6 +208,7 @@ novel_embellisher_cosyvoice_prompt = """
 
 **注意：程序会自动在最终章末尾添加"（全文完）"标记**
 ===END===
+===EMBELLISH_COMPLETE===
 ```
 """
 
@@ -259,6 +266,7 @@ novel_embellisher_cosyvoice_compact_prompt = """
 ===润色结果===
 润色后的内容，不少于3500字，包含CosyVoice2控制标记。**注意：不要添加"（全文完）"标记，程序会自动处理**
 ===END===
+===EMBELLISH_COMPLETE===
 ```
 
 **长度要求说明：**
@@ -309,6 +317,11 @@ novel_embellisher_cosyvoice_compact_prompt = """
 - 专注于内容润色和语音标记添加
 
 ## 语言要求：所有输出必须使用简体中文。
+
+**🚨 完整输出强制要求**：
+- 必须输出完整的润色章节内容，从头到尾，不可以提前截断或省略任何部分
+- 如果内容较长，也必须完整输出，绝不可以因为长度原因而中途停止
+- 输出必须以===EMBELLISH_COMPLETE===标记结尾，缺少此标记视为输出不完整
 
 ## init:
 我会提供相关内容，请完全理解后进行润色并添加CosyVoice2标记。
@@ -374,6 +387,7 @@ ending_embellisher_cosyvoice_prompt = """
 ===润色结果===
 多段话，不需要标题，不少于3000字，包含CosyVoice2控制标记。**注意：不要添加"（全文完）"标记，程序会自动处理**
 ===END===
+===EMBELLISH_COMPLETE===
 ```
 
 **长度与风格说明：**
@@ -430,4 +444,9 @@ ending_embellisher_cosyvoice_prompt = """
 ## init:
 接下来，我会提供相关内容，请根据结尾剧情发展阶段进行润色并添加CosyVoice2标记。
 你如果明白的话，就回复我明白了。
+
+**🚨 完整输出强制要求**：
+- 必须输出完整的润色章节内容，从头到尾，不可以提前截断或省略任何部分
+- 如果内容较长，也必须完整输出，绝不可以因为长度原因而中途停止
+- 输出必须以===EMBELLISH_COMPLETE===标记结尾，缺少此标记视为输出不完整
 """

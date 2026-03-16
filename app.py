@@ -2456,12 +2456,6 @@ def create_gradio5_original_app():
                             except:
                                 auto_save_info = "检查失败"
 
-                            # 获取过长内容统计信息
-                            overlength_display = ""
-                            if hasattr(aign_instance, 'get_overlength_statistics_display'):
-                                overlength_stats = aign_instance.get_overlength_statistics_display()
-                                if overlength_stats:
-                                    overlength_display = f"\n\n{overlength_stats}"
                             
                             # 获取Token累积统计信息
                             token_display = ""
@@ -2524,7 +2518,7 @@ def create_gradio5_original_app():
 • CosyVoice2: {'🎙️ 已启用' if hasattr(aign_instance, 'cosyvoice_mode') and aign_instance.cosyvoice_mode else '🔇 未启用'}
 
 💾 增强型自动保存: {auto_save_info}
-• 保存内容：用户想法、写作要求、润色要求、所有生成内容{overlength_display}
+• 保存内容：用户想法、写作要求、润色要求、所有生成内容
 
 📝 最新操作日志（最近5条）:
 {log_text}"""
