@@ -72,9 +72,21 @@ def deepseekChatLLM(model_name="deepseek-chat", api_key=None, system_prompt=""):
 
             def respGenerator():
                 content = ""
+                reasoning_content = ""  # 用于累积思考内容
                 for response in responses:
+                    # 处理思考内容（reasoning_content，用于deepseek-reasoner模型）
+                    delta = response.choices[0].delta
+                    if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                        new_reasoning = delta.reasoning_content
+                        reasoning_content += new_reasoning
+                        yield {
+                            "content": content,
+                            "reasoning_content": reasoning_content,
+                            "total_tokens": None,
+                        }
+                    
                     # 处理流式输出，delta.content 可能为 None
-                    delta_content = response.choices[0].delta.content
+                    delta_content = delta.content
                     if delta_content:
                         content += delta_content
 
@@ -85,8 +97,12 @@ def deepseekChatLLM(model_name="deepseek-chat", api_key=None, system_prompt=""):
 
                     yield {
                         "content": content,
+                        "reasoning_content": reasoning_content,
                         "total_tokens": total_tokens,
                     }
+                
+                if reasoning_content:
+                    print(f"\n🧠 思考过程总长度: {len(reasoning_content)} 字符")
 
             return respGenerator()
 

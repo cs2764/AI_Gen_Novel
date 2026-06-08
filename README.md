@@ -1,30 +1,38 @@
-# 🤖 AI Novel Generator v4.9.0 | AI 网络小说生成器
+# 🤖 AI Novel Generator v5.0.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v4.9.0 (2026-03-15)
+## 🎉 What's New in v5.0.0 (2026-06-08)
+
+**🚀 Style Template System & New AI Providers!** Major release featuring 132 style-specific prompt templates, 2 new AI providers (oMLX + ZenMux), storyline Markdown parser, and more.
+
+### ✨ Core New Features | 核心新功能
+
+#### 🌐 New AI Providers | 新AI提供商
+- **oMLX**: Mac-optimized local LLM inference server, OpenAI-compatible API
+- **ZenMux**: Unified AI model routing with reasoning effort control and provider routing
+
+#### 📝 Style Template System | 风格模板系统
+- **132 new prompt files**: 33 styles × 4 types (writer/embellisher/beginning/ending) with base template inheritance
+- **132个新提示词文件**: 33种风格×4种类型，基于base模板继承
+
+#### 📖 Storyline Markdown Parser | 故事线Markdown解析器
+- **Bidirectional conversion**: Markdown ↔ dict with YAML front matter metadata support
+- **双向转换**: Markdown↔dict，支持YAML front matter元数据
+
+---
+
+## 📚 Previous Version: v4.9.1 (2026-03-16)
+
+**🔧 JSON Repair Enhancement & WebUI Progress Fix!** Integrated [json_repair](https://github.com/mangiucugna/json_repair) library for robust JSON parsing, improved WebUI storyline progress tracking, and fixed LM Studio API compatibility.
+
+---
+
+## 📚 Previous Version: v4.9.0 (2026-03-15)
 
 **🛡️ Embellish Truncation Detection & Retry!** Automatic detection of truncated LLM embellisher output with 3-attempt progressive retry, plus tighter title length control.
-
-### ✨ New Features | 新功能
-
-#### 🛡️ Embellish Truncation Detection & Auto-Retry | 润色截断检测与自动重试
-- **Truncation Detector**: New `embellish_truncation_detector.py` with three-layer detection: `===EMBELLISH_COMPLETE===` marker, sentence completeness, and length ratio analysis
-- **截断检测器**: 全新`embellish_truncation_detector.py`，通过完成标识、句子完整性和长度比率三重检测
-- **3-Attempt Auto-Retry**: Progressive retry — standard → retry → retry with length control → fallback to original
-- **3次自动重试**: 渐进式重试——标准生成→重试→添加长度控制指令重试→回退使用原文
-
-### 🔧 Improvements | 功能改进
-
-#### 📏 Title Length Constraint Tightened | 标题长度限制收紧
-- **Stricter Limit**: Title length tightened from ≤15 to strictly ≤10 characters, optimal 4-8 characters
-- **更严格限制**: 标题字数从不超过15字收紧为严格不超过10字
-
-#### 🧹 Code Cleanup | 代码清理
-- **Send Length Detection Removal**: Removed ~65 lines of redundant overlength content detection code from `AIGN.py` and `aign_agents.py`
-- **发送长度检测移除**: 从`AIGN.py`和`aign_agents.py`中移除约65行冗余的过长内容检测代码
 
 ---
 
@@ -543,7 +551,7 @@ python github_upload_ready.py
 
 #### 🤖 Multi-AI Provider Support
 
-Support for 12 mainstream AI providers to meet different needs:
+Support for 14 mainstream AI providers to meet different needs:
 
 | Provider | Features | Recommended Use |
 |----------|----------|-----------------|
@@ -558,6 +566,9 @@ Support for 12 mainstream AI providers to meet different needs:
 | **🤖 Grok** | xAI, innovative thinking | Creative writing |
 | **⚡ Lambda** | Low cost, multi-model selection | Budget creation |
 | **🌊 SiliconFlow** | Domestic GPU, fast inference | Cost-effective creation |
+| **💻 NVIDIA** | NVIDIA models, reliable performance | General creation |
+| **🍎 oMLX** | Mac-optimized local LLM | Mac offline creation |
+| **🔀 ZenMux** | Unified model routing, reasoning control | Multi-provider routing |
 
 #### 💾 Intelligent Data Management
 - **Local Storage**: Data securely saved in local files
@@ -757,6 +768,20 @@ TEMPERATURE_SETTINGS = {
 ```
 
 ## 🆕 Version History | 版本历史
+
+### v5.0.0 (2026-06-08) 🚀
+- 📝 **风格专属提示词模板系统**：33种写作风格×4种提示词类型=132个风格专用提示词文件，基于base模板继承
+- 🌐 **oMLX AI提供商**：Mac优化本地LLM推理服务器支持，OpenAI兼容API
+- 🌐 **ZenMux AI提供商**：统一AI模型路由服务，支持reasoning_effort思考强度控制和提供商路由
+- 📖 **故事线Markdown解析器**：新增storyline_markdown_parser.py，支持Markdown↔dict双向转换，YAML front matter元数据
+- 🔧 **需求扩展提示词重构**：代码精简优化
+- 🔧 **故事线提示词改进**：提升生成质量
+- 🚧 **Fish Audio S2语气标记功能**：实验性功能，已包含在代码中但UI中暂时隐藏
+
+### v4.9.1 (2026-03-16) 🎉
+- 🔧 **JSON修复增强**：集成json_repair库替代手写正则修复，大幅提升JSON解析成功率
+- 📊 **WebUI故事线进度改进**：修复假超时问题（批次级进度追踪），完成后显示章节标题预览和失败统计
+- 🛠️ **LM Studio tool_choice修复**：修正tool_choice参数格式，兼容LM Studio API
 
 ### v4.9.0 (2026-03-15) 🎉
 - 🛡️ **润色截断检测与重试系统**：全新embellish_truncation_detector模块，通过完成标识、句子完整性和长度比率三重检测，支持3次自动重试

@@ -133,20 +133,38 @@ def openrouterChatLLM(model_name="openai/gpt-4", api_key=None, system_prompt="",
 
                 def respGenerator():
                     content = ""
+                    reasoning_content = ""  # 用于累积思考内容
                     total_tokens = 0
                     
                     for response in responses:
-                        if response.choices and response.choices[0].delta.content:
-                            delta = response.choices[0].delta.content
-                            content += delta
+                        if response.choices:
+                            delta = response.choices[0].delta
                             
-                            # OpenRouter可能不提供流式的token统计，所以我们估算
-                            total_tokens = len(content.split()) * 1.3
+                            # 处理思考内容（reasoning_content）
+                            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                new_reasoning = delta.reasoning_content
+                                reasoning_content += new_reasoning
+                                yield {
+                                    "content": content,
+                                    "reasoning_content": reasoning_content,
+                                    "total_tokens": int(total_tokens),
+                                }
                             
-                            yield {
-                                "content": content,
-                                "total_tokens": int(total_tokens),
-                            }
+                            # 处理正文内容
+                            if delta.content:
+                                content += delta.content
+                                
+                                # OpenRouter可能不提供流式的token统计，所以我们估算
+                                total_tokens = len(content.split()) * 1.3
+                                
+                                yield {
+                                    "content": content,
+                                    "reasoning_content": reasoning_content,
+                                    "total_tokens": int(total_tokens),
+                                }
+                    
+                    if reasoning_content:
+                        print(f"\n🧠 思考过程总长度: {len(reasoning_content)} 字符")
 
                 return respGenerator()
                 

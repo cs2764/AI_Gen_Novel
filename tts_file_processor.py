@@ -3,7 +3,7 @@
 
 """
 TTS文件处理模块
-用于为TXT文件添加CosyVoice2语音合成标记
+用于为TXT文件添加Fish Audio S2语气标记
 """
 
 import os
@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import List, Tuple, Generator, Optional
 from dynamic_config_manager import get_config_manager
 from config_manager import get_chatllm
-from AIGN_CosyVoice_Prompt import novel_embellisher_cosyvoice_compact_prompt
+from AIGN_FishAudio_Prompt import FISHAUDIO_ADDON_INSTRUCTIONS
 
 
 class TTSFileProcessor:
@@ -189,8 +189,8 @@ class TTSFileProcessor:
         
         return segments
     
-    def add_cosyvoice_markers(self, text_segment: str, tts_model: str = "cosyvoice2") -> str:
-        """为文本段添加CosyVoice2标记"""
+    def add_fishaudio_markers(self, text_segment: str, tts_model: str = "fishaudio_s2") -> str:
+        """为文本段添加Fish Audio S2语气标记"""
         try:
             # 获取有效的TTS配置
             effective_provider, effective_model = self.config_manager.get_effective_tts_config()
@@ -200,15 +200,15 @@ class TTSFileProcessor:
             if not chatllm:
                 return f"❌ 无法获取AI模型实例"
             
-            # 使用默认的细粒度标记提示词
-            prompt = f"""使用以下指南为文本添加CosyVoice2语音标记：
+            # 使用Fish Audio S2标记指令
+            prompt = f"""使用以下指南为文本添加Fish Audio S2语气标记：
 
-{novel_embellisher_cosyvoice_compact_prompt}
+{FISHAUDIO_ADDON_INSTRUCTIONS}
 
 需要处理的文本：
 {text_segment}
 
-请为上述文本添加CosyVoice2标记，整理格式，删除多余空格和空行，但不要修改原文内容。"""
+请为上述文本添加Fish Audio S2语气标记，整理格式，删除多余空格和空行，但不要修改原文内容。"""
             
             # 获取配置的 temperature
             config_temperature = 0.7  # 默认值
@@ -261,7 +261,7 @@ class TTSFileProcessor:
         except Exception as e:
             return f"❌ 处理文本段时出错: {str(e)}"
     
-    def process_single_file(self, file_path: str, tts_model: str = "cosyvoice2") -> Generator[str, None, None]:
+    def process_single_file(self, file_path: str, tts_model: str = "fishaudio_s2") -> Generator[str, None, None]:
         """处理单个文件"""
         try:
             file_name = Path(file_path).name
@@ -297,8 +297,8 @@ class TTSFileProcessor:
                 
                 yield f"🎙️ 正在处理第 {i}/{len(segments)} 段..."
                 
-                # 添加CosyVoice标记
-                processed_segment = self.add_cosyvoice_markers(segment, tts_model)
+                # 添加Fish Audio S2语气标记
+                processed_segment = self.add_fishaudio_markers(segment, tts_model)
                 
                 if processed_segment.startswith("❌"):
                     yield f"❌ 第 {i} 段处理失败: {processed_segment}"
@@ -316,7 +316,7 @@ class TTSFileProcessor:
             output_dir.mkdir(exist_ok=True)
             
             original_name = Path(file_path).stem
-            output_file = output_dir / f"{original_name}_cosyvoice.txt"
+            output_file = output_dir / f"{original_name}_fishaudio.txt"
             
             # 保存文件（统一使用UTF-8编码确保兼容性）
             try:
@@ -331,7 +331,7 @@ class TTSFileProcessor:
         except Exception as e:
             yield f"❌ 处理文件 {file_path} 时出错: {str(e)}"
     
-    def process_files(self, file_paths: List[str], tts_model: str = "cosyvoice2") -> Generator[str, None, None]:
+    def process_files(self, file_paths: List[str], tts_model: str = "fishaudio_s2") -> Generator[str, None, None]:
         """处理多个文件"""
         try:
             self.is_processing = True

@@ -227,8 +227,15 @@ PasteImage/
 WARP.md
 document_date_check_report.md
 cosyvoice_test.txt
+fishaudio_test.txt
 temp_pdf_content.txt
 test_token_display.md
+
+# EPUB files (user-generated content)
+*.epub
+
+# LLM Novel Guide (separate sub-project, not part of main upload)
+LLM_Novel_Guide/
 
 # Reference/SKILL files (not project code)
 *_SKILL.md

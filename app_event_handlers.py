@@ -1076,14 +1076,15 @@ def bind_main_events(
                 # 改进的超时机制：基于进度停滞而非累积时间
                 # 动态计算最大等待时间：基础时间 + 每章额外时间
                 base_wait_time = 600  # 基础等待时间10分钟
-                per_chapter_time = 30  # 每章额外30秒
+                per_chapter_time = 60  # 每章额外60秒（批次API调用可能很慢）
                 max_wait_time = base_wait_time + (a.target_chapter_count * per_chapter_time)
-                max_wait_time = min(max_wait_time, 7200)  # 上限2小时
+                max_wait_time = min(max_wait_time, 14400)  # 上限4小时
                 
-                # 进度停滞超时：如果10分钟内没有新章节生成，才认为超时
-                stall_timeout = 600  # 10分钟无进度则超时
+                # 进度停滞超时：如果15分钟内没有任何进度（章节或批次），才认为超时
+                stall_timeout = 900  # 15分钟无进度则超时
                 last_progress_time = time.time()  # 最后一次有进度的时间
                 last_chapter_count = 0
+                last_batch_num = 0  # 跟踪批次变化
                 is_timeout = False  # 标记是否因超时退出循环
                 
                 print(f"📊 超时设置: 动态最大等待={max_wait_time}秒, 停滞超时={stall_timeout}秒")
@@ -1093,10 +1094,19 @@ def bind_main_events(
                     storyline_dict = getattr(a, 'storyline', {}) or {}
                     current_chapter_count = len(storyline_dict.get('chapters', [])) if storyline_dict else 0
                     
-                    # 如果章节数有变化，重置停滞计时器
+                    # 检测进度变化：章节数变化 或 批次号变化
+                    current_batch = 0
+                    gen_status = getattr(a, 'current_generation_status', None)
+                    if gen_status and isinstance(gen_status, dict):
+                        current_batch = gen_status.get('current_batch', 0)
+                    
                     if current_chapter_count > last_chapter_count:
                         last_progress_time = time.time()
                         print(f"📈 进度更新: {last_chapter_count} -> {current_chapter_count} 章")
+                    elif current_batch > last_batch_num:
+                        last_progress_time = time.time()
+                        print(f"📈 批次进度更新: 批次 {last_batch_num} -> {current_batch}")
+                        last_batch_num = current_batch
                     
                     # 检查是否停滞超时
                     time_since_last_progress = time.time() - last_progress_time
@@ -1184,14 +1194,40 @@ def bind_main_events(
                         storyline_display = format_storyline_display(storyline_dict, is_generating=True, show_recent_only=False)
                         progress_status = f"⏳ 后台生成中... {chapter_count}/{a.target_chapter_count}章"
                     else:
-                        # 正常完成
-                        summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
+                        # 正常完成 - 包含详细信息
+                        total_elapsed = format_time_duration(time.time() - start_time, include_seconds=True)
+                        summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {total_elapsed}"
+                        
+                        # 添加失败批次信息
+                        failed_batches = getattr(a, 'failed_batches', [])
+                        if failed_batches:
+                            failed_count = sum(b['end_chapter'] - b['start_chapter'] + 1 for b in failed_batches)
+                            summary_text += f"\n   • ⚠️ 失败章节: {failed_count}章 ({len(failed_batches)}个批次)"
+                        
+                        # 添加章节标题预览（前5章）
+                        chapters_list = storyline_dict.get('chapters', [])
+                        if chapters_list:
+                            preview_count = min(5, len(chapters_list))
+                            summary_text += f"\n\n📖 章节标题预览（前{preview_count}章）："
+                            for idx in range(preview_count):
+                                ch = chapters_list[idx]
+                                ch_num = ch.get('chapter_number', idx + 1)
+                                ch_title = ch.get('title', '未知标题')
+                                summary_text += f"\n   第{ch_num}章: {ch_title}"
+                            if len(chapters_list) > 5:
+                                summary_text += f"\n   ... 还有{len(chapters_list) - 5}章"
+                        
                         status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
                         
                         # 显示全部章节，不限制
                         storyline_display = format_storyline_display(storyline_dict, is_generating=False, show_recent_only=False)
-                        progress_info = update_progress(a)
-                        progress_status = progress_info[0]
+                        
+                        # 构建完成度进度信息
+                        completion_rate = (chapter_count / a.target_chapter_count * 100) if a.target_chapter_count > 0 else 100
+                        if failed_batches:
+                            progress_status = f"✅ 已完成 {chapter_count}/{a.target_chapter_count}章 ({completion_rate:.0f}%) | ⚠️ {len(failed_batches)}批次失败"
+                        else:
+                            progress_status = f"✅ 已完成 {chapter_count}/{a.target_chapter_count}章 ({completion_rate:.0f}%)"
                     
                     yield (
                         format_status_output(status_history),
@@ -1260,14 +1296,15 @@ def bind_main_events(
                 update_counter = 0
                 # 改进的超时机制：基于进度停滞而非累积时间
                 base_wait_time = 600  # 基础等待时间10分钟
-                per_chapter_time = 30  # 每章额外30秒
+                per_chapter_time = 60  # 每章额外60秒（批次API调用可能很慢）
                 max_wait_time = base_wait_time + (a.target_chapter_count * per_chapter_time)
-                max_wait_time = min(max_wait_time, 7200)  # 上限2小时
+                max_wait_time = min(max_wait_time, 14400)  # 上限4小时
                 
-                # 进度停滞超时：如果10分钟内没有新章节生成，才认为超时
-                stall_timeout = 600  # 10分钟无进度则超时
+                # 进度停滞超时：如果15分钟内没有任何进度（章节或批次），才认为超时
+                stall_timeout = 900  # 15分钟无进度则超时
                 last_progress_time = time.time()
                 last_chapter_count = 0
+                last_batch_num = 0  # 跟踪批次变化
                 is_timeout = False  # 标记是否因超时退出循环
                 
                 print(f"📊 超时设置: 动态最大等待={max_wait_time}秒, 停滞超时={stall_timeout}秒")
@@ -1277,9 +1314,17 @@ def bind_main_events(
                     storyline_dict = getattr(a, 'storyline', {}) or {}
                     current_chapter_count = len(storyline_dict.get('chapters', [])) if storyline_dict else 0
                     
-                    # 如果章节数有变化，重置停滞计时器
+                    # 检测进度变化：章节数变化 或 批次号变化
+                    current_batch = 0
+                    gen_status = getattr(a, 'current_generation_status', None)
+                    if gen_status and isinstance(gen_status, dict):
+                        current_batch = gen_status.get('current_batch', 0)
+                    
                     if current_chapter_count > last_chapter_count:
                         last_progress_time = time.time()
+                    elif current_batch > last_batch_num:
+                        last_progress_time = time.time()
+                        last_batch_num = current_batch
                     
                     time_since_last_progress = time.time() - last_progress_time
                     if time_since_last_progress > stall_timeout:
@@ -1364,13 +1409,40 @@ def bind_main_events(
                         storyline_display = format_storyline_display(storyline_dict, is_generating=True, show_recent_only=False)
                         storyline_status = f"⏳ 后台生成中... {chapter_count}/{a.target_chapter_count}章"
                     else:
-                        # 正常完成
-                        summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {format_time_duration(time.time() - start_time, include_seconds=True)}"
+                        # 正常完成 - 包含详细信息
+                        total_elapsed = format_time_duration(time.time() - start_time, include_seconds=True)
+                        summary_text = f"✅ 故事线生成完成\n   • 章节数: {chapter_count}/{a.target_chapter_count}\n   • 总耗时: {total_elapsed}"
+                        
+                        # 添加失败批次信息
+                        failed_batches = getattr(a, 'failed_batches', [])
+                        if failed_batches:
+                            failed_count = sum(b['end_chapter'] - b['start_chapter'] + 1 for b in failed_batches)
+                            summary_text += f"\n   • ⚠️ 失败章节: {failed_count}章 ({len(failed_batches)}个批次)"
+                        
+                        # 添加章节标题预览（前5章）
+                        chapters_list = storyline_dict.get('chapters', [])
+                        if chapters_list:
+                            preview_count = min(5, len(chapters_list))
+                            summary_text += f"\n\n📖 章节标题预览（前{preview_count}章）："
+                            for idx in range(preview_count):
+                                ch = chapters_list[idx]
+                                ch_num = ch.get('chapter_number', idx + 1)
+                                ch_title = ch.get('title', '未知标题')
+                                summary_text += f"\n   第{ch_num}章: {ch_title}"
+                            if len(chapters_list) > 5:
+                                summary_text += f"\n   ... 还有{len(chapters_list) - 5}章"
+                        
                         status_history.append(["系统", summary_text, final_timestamp, generation_start_time])
                         
                         # 显示全部章节，不限制
                         storyline_display = format_storyline_display(storyline_dict, is_generating=False, show_recent_only=False)
-                        storyline_status = f"✅ 已完成 {chapter_count}/{a.target_chapter_count}章"
+                        
+                        # 构建完成度进度信息
+                        completion_rate = (chapter_count / a.target_chapter_count * 100) if a.target_chapter_count > 0 else 100
+                        if failed_batches:
+                            storyline_status = f"✅ 已完成 {chapter_count}/{a.target_chapter_count}章 ({completion_rate:.0f}%) | ⚠️ {len(failed_batches)}批次失败"
+                        else:
+                            storyline_status = f"✅ 已完成 {chapter_count}/{a.target_chapter_count}章 ({completion_rate:.0f}%)"
                     
                     yield (
                         format_status_output(status_history),

@@ -63,7 +63,7 @@ def lambdaChatLLM(model_name="llama-4-maverick-17b-128e-instruct-fp8", api_key=N
         
         # Lambda AI默认max_tokens设置为32000（确保章节内容不被截断）
         if max_tokens is None:
-            max_tokens = 40000
+            max_tokens = 60000
         
         # 如果设置了系统提示词，合并到第一个用户消息的开头
         if system_prompt and messages:

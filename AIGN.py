@@ -22,20 +22,14 @@ except ImportError:
     enhance_prompt_with_anti_repetition = None
     print("⚠️ 防重复机制模块未找到，将使用标准提示词")
 
-# 尝试导入CosyVoice2提示词
+# 导入Fish Audio S2语气标记附加指令
 try:
-    from AIGN_CosyVoice_Prompt import (
-        novel_embellisher_cosyvoice_prompt,
-        novel_embellisher_cosyvoice_compact_prompt,
-        ending_embellisher_cosyvoice_prompt
-    )
-    COSYVOICE_PROMPTS_AVAILABLE = True
+    from AIGN_FishAudio_Prompt import FISHAUDIO_ADDON_INSTRUCTIONS
+    FISHAUDIO_PROMPTS_AVAILABLE = True
 except ImportError:
-    COSYVOICE_PROMPTS_AVAILABLE = False
-    novel_embellisher_cosyvoice_prompt = None
-    novel_embellisher_cosyvoice_compact_prompt = None
-    ending_embellisher_cosyvoice_prompt = None
-    print("⚠️ CosyVoice2提示词模块未找到，将使用标准提示词")
+    FISHAUDIO_PROMPTS_AVAILABLE = False
+    FISHAUDIO_ADDON_INSTRUCTIONS = None
+    print("⚠️ Fish Audio S2提示词模块未找到，将使用标准提示词")
 
 try:
     import ebooklib
@@ -80,12 +74,13 @@ class AIGN:
         # 全局状态历史，用于保留所有生成步骤的状态信息
         self.global_status_history = []
         
-        # CosyVoice2模式标志 - 从全局配置读取
+        # Fish Audio S2语气标记模式标志 - 从全局配置读取
+        self._original_embellisher_prompts = {}  # 保存原始提示词用于恢复
         try:
             from dynamic_config_manager import get_config_manager
             config_manager = get_config_manager()
-            self.cosyvoice_mode = config_manager.get_cosyvoice_mode()
-            print(f"🎙️ CosyVoice2模式: {'已启用' if self.cosyvoice_mode else '未启用'}")
+            self.fishaudio_mode = config_manager.get_fishaudio_mode()
+            print(f"🎙️ Fish Audio S2语气标记: {'已启用' if self.fishaudio_mode else '未启用'}")
             # 读取RAG top_k配置
             try:
                 self.rag_top_k = config_manager.get_rag_top_k()
@@ -93,8 +88,8 @@ class AIGN:
             except Exception:
                 pass  # 如果配置管理器没有该方法，保持默认值
         except Exception as e:
-            print(f"⚠️ 读取CosyVoice2配置失败: {e}，使用默认值(关闭)")
-            self.cosyvoice_mode = False
+            print(f"⚠️ 读取Fish Audio S2配置失败: {e}，使用默认值(关闭)")
+            self.fishaudio_mode = False
         
         # 当前生成状态详情
         self.current_generation_status = {
@@ -333,13 +328,21 @@ class AIGN:
         )
         
         # 标准版正文生成器和润色器（应用防重复机制）
-        writer_prompt = novel_writer_prompt
-        embellisher_prompt = novel_embellisher_prompt
+        # 优先使用标准模式模板提示词（更详细，润色5000字要求）
+        try:
+            from AIGN_Prompt_Enhanced import novel_writer_standard_prompt, novel_embellisher_standard_prompt
+            writer_prompt = novel_writer_standard_prompt
+            embellisher_prompt = novel_embellisher_standard_prompt
+            print("✅ 使用标准模式模板提示词（非精简模式，更详细）")
+        except ImportError:
+            writer_prompt = novel_writer_prompt
+            embellisher_prompt = novel_embellisher_prompt
+            print("⚠️ 标准模式模板提示词不可用，使用原有标准提示词")
         
         # 如果防重复机制可用，增强提示词
         if ANTI_REPETITION_AVAILABLE and enhance_prompt_with_anti_repetition:
-            writer_prompt = enhance_prompt_with_anti_repetition(novel_writer_prompt, "writer")
-            embellisher_prompt = enhance_prompt_with_anti_repetition(novel_embellisher_prompt, "embellisher")
+            writer_prompt = enhance_prompt_with_anti_repetition(writer_prompt, "writer")
+            embellisher_prompt = enhance_prompt_with_anti_repetition(embellisher_prompt, "embellisher")
             print("✅ 已启用防重复机制增强")
         
         self.novel_writer = MarkdownAgent(
@@ -608,51 +611,41 @@ class AIGN:
             import traceback
             traceback.print_exc()
     
-    def updateEmbellishersForCosyVoice(self):
-        """根据CosyVoice模式更新润色器的提示词"""
-        if not COSYVOICE_PROMPTS_AVAILABLE:
-            print("⚠️ CosyVoice2提示词不可用，保持原有提示词")
+    def updateEmbellishersForFishAudio(self):
+        """根据Fish Audio S2模式更新润色器的提示词（Addon方式，追加指令到现有提示词末尾）"""
+        if not FISHAUDIO_PROMPTS_AVAILABLE:
+            print("⚠️ Fish Audio S2提示词不可用，保持原有提示词")
             return
             
         try:
-            if self.cosyvoice_mode:
-                print("🎙️ 切换到CosyVoice2提示词模式...")
-                # 为CosyVoice提示词也应用防重复机制
-                cosyvoice_embellisher = novel_embellisher_cosyvoice_prompt
-                cosyvoice_embellisher_compact = novel_embellisher_cosyvoice_compact_prompt
-                cosyvoice_ending = ending_embellisher_cosyvoice_prompt
+            if self.fishaudio_mode:
+                print("🎙️ 启用Fish Audio S2语气标记模式（Addon方式）...")
                 
-                if ANTI_REPETITION_AVAILABLE and enhance_prompt_with_anti_repetition:
-                    cosyvoice_embellisher = enhance_prompt_with_anti_repetition(cosyvoice_embellisher, "embellisher")
-                    cosyvoice_embellisher_compact = enhance_prompt_with_anti_repetition(cosyvoice_embellisher_compact, "embellisher")
-                    cosyvoice_ending = enhance_prompt_with_anti_repetition(cosyvoice_ending, "embellisher")
-                
-                # 更新标准润色器
-                self.novel_embellisher.sys_prompt = cosyvoice_embellisher
-                self.novel_embellisher.history[0]["content"] = cosyvoice_embellisher
-                
-                # 更新精简润色器
-                self.novel_embellisher_compact.sys_prompt = cosyvoice_embellisher_compact
-                self.novel_embellisher_compact.history[0]["content"] = cosyvoice_embellisher_compact
-                
-                # 同步分段润色器（标准/精简）
+                # 需要追加标记指令的所有润色器属性列表
+                embellisher_attrs = [
+                    'novel_embellisher', 'novel_embellisher_compact', 'ending_embellisher'
+                ]
+                # 添加分段润色器
                 for seg in [1,2,3,4]:
-                    seg_attr = f"novel_embellisher_seg{seg}"
-                    if hasattr(self, seg_attr):
-                        getattr(self, seg_attr).sys_prompt = cosyvoice_embellisher
-                        getattr(self, seg_attr).history[0]["content"] = cosyvoice_embellisher
-                    seg_attr_c = f"novel_embellisher_compact_seg{seg}"
-                    if hasattr(self, seg_attr_c):
-                        getattr(self, seg_attr_c).sys_prompt = cosyvoice_embellisher_compact
-                        getattr(self, seg_attr_c).history[0]["content"] = cosyvoice_embellisher_compact
+                    embellisher_attrs.append(f"novel_embellisher_seg{seg}")
+                    embellisher_attrs.append(f"novel_embellisher_compact_seg{seg}")
                 
-                # 更新结尾润色器
-                self.ending_embellisher.sys_prompt = cosyvoice_ending
-                self.ending_embellisher.history[0]["content"] = cosyvoice_ending
+                for attr in embellisher_attrs:
+                    if hasattr(self, attr):
+                        agent = getattr(self, attr)
+                        current_prompt = agent.sys_prompt
+                        # 保存原始提示词（如果还没保存过）
+                        if attr not in self._original_embellisher_prompts:
+                            self._original_embellisher_prompts[attr] = current_prompt
+                        # 检查是否已经追加过Fish Audio指令（避免重复追加）
+                        if FISHAUDIO_ADDON_INSTRUCTIONS not in current_prompt:
+                            new_prompt = current_prompt + FISHAUDIO_ADDON_INSTRUCTIONS
+                            agent.sys_prompt = new_prompt
+                            agent.history[0]["content"] = new_prompt
                 
-                print("✅ 已切换到CosyVoice2提示词模式（含防重复机制）")
+                print("✅ 已启用Fish Audio S2语气标记模式（已在现有提示词末尾追加标记指令）")
             else:
-                print("📝 切换回标准提示词模式...")
+                print("📝 关闭Fish Audio S2语气标记模式，恢复标准提示词...")
                 # 恢复标准提示词（已包含防重复机制）
                 standard_embellisher = novel_embellisher_prompt
                 standard_embellisher_compact = novel_embellisher_compact_prompt
@@ -984,12 +977,12 @@ class AIGN:
                     # 切换提示词以匹配加载的设置
                     if hasattr(self, 'updateWriterPromptsForLongChapter'):
                         self.updateWriterPromptsForLongChapter()
-                if "cosyvoice_mode" in settings:
-                    self.cosyvoice_mode = settings["cosyvoice_mode"]
-                    loaded_items.append(f"CosyVoice模式: {'启用' if self.cosyvoice_mode else '禁用'}")
+                if "fishaudio_mode" in settings or "cosyvoice_mode" in settings:
+                    self.fishaudio_mode = settings.get("fishaudio_mode", settings.get("cosyvoice_mode", False))
+                    loaded_items.append(f"Fish Audio S2语气标记: {'启用' if self.fishaudio_mode else '禁用'}")
                     # 更新润色器以匹配加载的设置
-                    if hasattr(self, 'updateEmbellishersForCosyVoice'):
-                        self.updateEmbellishersForCosyVoice()
+                    if hasattr(self, 'updateEmbellishersForFishAudio'):
+                        self.updateEmbellishersForFishAudio()
                 if "style_name" in settings:
                     self.style_name = settings["style_name"]
                     loaded_items.append(f"小说风格: {self.style_name}")
@@ -1053,7 +1046,7 @@ class AIGN:
                 "enable_chapters": getattr(self, 'enable_chapters', True),
                 "enable_ending": getattr(self, 'enable_ending', True),
                 "long_chapter_mode": long_chapter_mode_value,
-                "cosyvoice_mode": getattr(self, 'cosyvoice_mode', False),
+                "fishaudio_mode": getattr(self, 'fishaudio_mode', False),
                 "chapters_per_plot": getattr(self, 'chapters_per_plot', 5),
                 "num_climaxes": getattr(self, 'num_climaxes', 10)
             }
@@ -1062,7 +1055,7 @@ class AIGN:
             if result:
                 mode_desc = {0: "关闭", 2: "2段合并", 3: "3段合并", 4: "4段合并"}
                 long_chapter_desc = mode_desc.get(settings['long_chapter_mode'], "关闭")
-                print(f"💾 用户设置已自动保存 (目标章节数: {self.target_chapter_count}章, 长章节: {long_chapter_desc}, CosyVoice: {settings['cosyvoice_mode']})")
+                print(f"💾 用户设置已自动保存 (目标章节数: {self.target_chapter_count}章, 长章节: {long_chapter_desc}, FishAudio: {settings['fishaudio_mode']})")
             return result
         except Exception as e:
             print(f"❌ 保存用户设置失败: {e}")
@@ -1376,11 +1369,40 @@ class AIGN:
         """
         max_attempts = 3
         
+        # 🔍 正文过长检测：如果原文汉字数超过20000，在润色时要求精简
+        import re as _re
+        chinese_char_count = len(_re.findall(r'[\u4e00-\u9fff]', original_content))
+        content_too_long = chinese_char_count > 20000
+        if content_too_long:
+            print(f"📏 [{context_label}] 正文过长检测: {chinese_char_count}汉字 > 20000汉字，润色时将要求精简")
+            self.log_message(
+                f"📏 第{chapter_number}章 正文过长（{chinese_char_count}汉字），润色将自动精简至15000字以内"
+            )
+            condensing_hint = (
+                f"\n\n【⚠️ 正文精简要求 - 最高优先级】"
+                f"\n当前正文过长（{chinese_char_count}汉字），润色时请在保持核心剧情和关键对话不变的前提下进行适当精简："
+                f"\n1. 删除重复的描写和冗余的心理活动"
+                f"\n2. 精简流水账式的过渡段落"
+                f"\n3. 合并相似的环境描写"
+                f"\n4. 减少不必要的废话和口水话"
+                f"\n5. 保留所有关键剧情节点、重要对话和转折"
+                f"\n润色后内容必须控制在15000字以内。"
+            )
+        
         for attempt in range(1, max_attempts + 1):
             attempt_label = f"{context_label}-尝试{attempt}"
             
             # 准备输入
             current_inputs = dict(embellish_inputs)
+            
+            # 正文过长时，在润色要求中注入精简指令
+            if content_too_long:
+                if "润色要求" in current_inputs and current_inputs["润色要求"]:
+                    current_inputs["润色要求"] = str(current_inputs["润色要求"]) + condensing_hint
+                else:
+                    current_inputs["润色要求"] = condensing_hint
+                if attempt == 1:
+                    print(f"📏 [{attempt_label}] 已注入正文精简指令")
             
             if attempt == 3:
                 # 第3次尝试：加入长度控制指令
@@ -2627,7 +2649,7 @@ class AIGN:
                 # 生成修复的批次故事线
                 current_chapters = end_chapter - start_chapter + 1
                 
-                # 构建修复请求的提示词
+                # 构建修复请求的提示词（Markdown格式）
                 repair_prompt = f"""
 根据以下故事设定，重新生成第{start_chapter}到第{end_chapter}章的详细故事线：
 
@@ -2636,23 +2658,52 @@ class AIGN:
 润色要求：{self.embellishment_idea}
 总章节数：{self.target_chapter_count}
 
-请按照JSON格式生成第{start_chapter}-{end_chapter}章的故事线，每章包含：
-- chapter_number: 章节号
-- title: 章节标题
-- plot_summary: 详细剧情总结
-- key_events: 关键事件列表
-- character_development: 人物发展
-- chapter_mood: 章节氛围
+请使用Markdown格式生成第{start_chapter}-{end_chapter}章的故事线，每章格式如下：
+
+## 第X章：章节标题
+
+**剧情梗概：** 详细剧情总结
+
+**主要人物：** 人物A、人物B
+
+**关键事件：**
+- 关键事件1
+- 关键事件2
+
+**剧情目的：** 本章作用
+
+**情感基调：** 情感关键词
+
+**衔接下章：** 衔接要点
 
 注意：这是修复生成，请确保章节编号连续且符合整体故事脉络。
+必须使用Markdown格式，不要使用JSON格式。
 """
                 
-                # 调用AI生成修复内容
-                resp = self.storyline_generator.query_with_json_repair(repair_prompt)
+                # 优先尝试增强生成器
+                batch_storyline = None
+                try:
+                    from enhanced_storyline_generator import EnhancedStorylineGenerator
+                    enhanced_generator = EnhancedStorylineGenerator(self.storyline_generator.chatLLM, aign_instance=self)
+                    messages = [{"role": "user", "content": repair_prompt}]
+                    batch_storyline, generation_status = enhanced_generator.generate_storyline_batch(
+                        messages=messages, temperature=0.8,
+                        require_segments=False, segment_count=0
+                    )
+                    if batch_storyline:
+                        print(f"✅ 增强生成器修复成功: {generation_status}")
+                except ImportError:
+                    pass
                 
-                if 'parsed_json' in resp:
-                    batch_storyline = resp['parsed_json']
-                    
+                # 回退到标准方式 + Markdown解析
+                if batch_storyline is None:
+                    from storyline_markdown_parser import parse_storyline_markdown
+                    resp = self.storyline_generator.query(repair_prompt)
+                    content = resp.get('content', '')
+                    if content:
+                        batch_storyline = parse_storyline_markdown(content)
+                
+                if batch_storyline:
                     # 验证生成的故事线
                     validation_result = self._validate_storyline_batch(batch_storyline, start_chapter, end_chapter)
                     
@@ -2692,7 +2743,7 @@ class AIGN:
                     self.failed_batches.append({
                         "start_chapter": start_chapter,
                         "end_chapter": end_chapter,
-                        "error": f"修复时生成失败: {resp.get('content', '未知错误')}"
+                        "error": "修复时Markdown生成/解析失败"
                     })
                     
             except Exception as e:
@@ -2849,16 +2900,16 @@ class AIGN:
         print("🔄 小说开头生成: 刷新ChatLLM配置...")
         self.refresh_chatllm()
         
-        # 刷新CosyVoice2模式设置
+        # 刷新Fish Audio S2语气标记模式设置
         try:
             from dynamic_config_manager import get_config_manager
             config_manager = get_config_manager()
-            self.cosyvoice_mode = config_manager.get_cosyvoice_mode()
-            if hasattr(self, 'updateEmbellishersForCosyVoice'):
-                self.updateEmbellishersForCosyVoice()
-            print(f"🎙️ CosyVoice2模式: {'已启用' if self.cosyvoice_mode else '未启用'}")
+            self.fishaudio_mode = config_manager.get_fishaudio_mode()
+            if hasattr(self, 'updateEmbellishersForFishAudio'):
+                self.updateEmbellishersForFishAudio()
+            print(f"🎙️ Fish Audio S2语气标记: {'已启用' if self.fishaudio_mode else '未启用'}")
         except Exception as e:
-            print(f"⚠️ 刷新CosyVoice2配置失败: {e}")
+            print(f"⚠️ 刷新Fish Audio S2配置失败: {e}")
         
         # 应用风格提示词
         try:
@@ -2910,6 +2961,27 @@ class AIGN:
                                 agent.sys_prompt = prompts["embellisher_prompt"]
                                 agent.history[0]["content"] = prompts["embellisher_prompt"]
                     print(f"✅ 已应用风格提示词（润色）: {self.style_name}")
+                
+                # 应用到beginning writer
+                if prompts.get("beginning_prompt"):
+                    if hasattr(self, 'novel_beginning_writer'):
+                        self.novel_beginning_writer.sys_prompt = prompts["beginning_prompt"]
+                        self.novel_beginning_writer.history[0]["content"] = prompts["beginning_prompt"]
+                    print(f"✅ 已应用风格提示词（开头）: {self.style_name}")
+                
+                # 应用到ending writer
+                if prompts.get("ending_prompt"):
+                    if hasattr(self, 'ending_writer'):
+                        self.ending_writer.sys_prompt = prompts["ending_prompt"]
+                        self.ending_writer.history[0]["content"] = prompts["ending_prompt"]
+                    # 更新分段ending writer
+                    for seg in [1,2,3,4]:
+                        seg_attr = f"ending_writer_seg{seg}"
+                        if hasattr(self, seg_attr):
+                            agent = getattr(self, seg_attr)
+                            agent.sys_prompt = prompts["ending_prompt"]
+                            agent.history[0]["content"] = prompts["ending_prompt"]
+                    print(f"✅ 已应用风格提示词（结尾）: {self.style_name}")
             else:
                 print(f"ℹ️ 未设置风格或使用默认风格")
         except Exception as e:
@@ -2946,13 +3018,24 @@ class AIGN:
             plot_summary = first_chapter_storyline.get("plot_summary", "")
             key_events = first_chapter_storyline.get("key_events", [])
             
-            storyline_for_beginning = f"第1章"
+            storyline_for_beginning = f"【本章内容范围】第1章"
             if chapter_title:
                 storyline_for_beginning += f"《{chapter_title}》"
             storyline_for_beginning += f"：{plot_summary}"
             
             if key_events:
                 storyline_for_beginning += f"\n关键事件：{', '.join(key_events)}"
+            
+            # 添加第2章预告作为边界标记，明确告知AI第1章的结束位置
+            second_chapter_storyline = self.getCurrentChapterStoryline(2)
+            if second_chapter_storyline:
+                ch2_title = second_chapter_storyline.get("title", "")
+                ch2_summary = second_chapter_storyline.get("plot_summary", "")
+                storyline_for_beginning += f"\n\n【下一章预告 - 请勿写入本章】第2章"
+                if ch2_title:
+                    storyline_for_beginning += f"《{ch2_title}》"
+                storyline_for_beginning += f"：{ch2_summary}"
+                storyline_for_beginning += f"\n（以上第2章内容仅供了解边界，开头正文中不得涉及第2章的情节）"
         else:
             storyline_for_beginning = "暂无故事线"
         
@@ -3046,11 +3129,11 @@ class AIGN:
                         "前文记忆": self.writing_memory,
                         "临时设定": self.temp_setting,
                         "计划": self.writing_plan,
-                        "本章故事线": str(first_chapter_storyline),
+                        "本章故事线": storyline_for_beginning,
                         "本章分段（参考）": refs_text,
                         "当前分段": current_seg_text,
                         "前2章故事线": compact_prev_storyline,
-                        "后2章故事线": compact_next_storyline,
+                        "后2章故事线（仅供参考，不可写入本章）": compact_next_storyline,
                     }
                 else:
                     writer_agent = getattr(self, f"novel_writer_seg{seg_index}", self.novel_writer)
@@ -3064,11 +3147,11 @@ class AIGN:
                         "写作要求": self.user_requirements,
                         "润色想法": self.embellishment_idea,
                         "上文内容": self.getLastParagraph(),
-                        "本章故事线": str(first_chapter_storyline),
+                        "本章故事线": storyline_for_beginning,
                         "本章分段（参考）": refs_text,
                         "当前分段": current_seg_text,
                         "前五章总结": enhanced_context["prev_chapters_summary"] if not getattr(self, 'compact_mode', False) else "",
-                        "后五章梗概": enhanced_context["next_chapters_outline"] if not getattr(self, 'compact_mode', False) else "",
+                        "后五章梗概（仅供参考，不可写入本章）": enhanced_context["next_chapters_outline"] if not getattr(self, 'compact_mode', False) else "",
                         "上一章原文": enhanced_context["last_chapter_content"] if not getattr(self, 'compact_mode', False) else "",
                         "风格参考": rag_references,
                     }
@@ -3085,10 +3168,10 @@ class AIGN:
                         "润色要求": self.embellishment_idea,
                         "要润色的内容": seg_text,
                         "前2章故事线": compact_prev_storyline,
-                        "后2章故事线": compact_next_storyline,
-                        "本章故事线": str(first_chapter_storyline),
+                        "后2章故事线（仅供参考，不可写入本章）": compact_next_storyline,
+                        "本章故事线": storyline_for_beginning,
                         "当前分段": current_seg_text,
-                        "风格参考": rag_references,  # 润色也可以暂时共用同一批参考，或者不加
+                        "风格参考": rag_references,
                     }
                     # 为非首段添加上一段润色后的原文，确保段落衔接流畅
                     if seg_index > 1 and len(parts) > 0:
@@ -3105,9 +3188,9 @@ class AIGN:
                         "上文": self.getLastParagraph(),
                         "要润色的内容": seg_text,
                         "前五章总结": enhanced_context.get("prev_chapters_summary", "") if not getattr(self, 'compact_mode', False) else "",
-                        "后五章梗概": enhanced_context.get("next_chapters_outline", "") if not getattr(self, 'compact_mode', False) else "",
+                        "后五章梗概（仅供参考，不可写入本章）": enhanced_context.get("next_chapters_outline", "") if not getattr(self, 'compact_mode', False) else "",
                         "上一章原文": enhanced_context.get("last_chapter_content", "") if not getattr(self, 'compact_mode', False) else "",
-                        "本章故事线": str(first_chapter_storyline),
+                        "本章故事线": storyline_for_beginning,
                         "当前分段": current_seg_text,
                     }
                 final_seg = self._embellish_with_retry(
@@ -3489,10 +3572,13 @@ class AIGN:
         return context
 
     def getEnhancedContextWithFirstThreeChapters(self, chapter_number, max_summary_chapters=15):
-        """获取增强上下文：前三章完整原文 + 最近若干章节总结
+        """获取增强上下文：前三章润色后正文（不含上一章） + 上一章润色后正文 + 最近若干章节总结
         
-        非精简模式专用：发送前3章原文，加上最近若干章的故事线总结（默认15章），
-        避免随着章节增加导致token过度膨胀。
+        非精简模式专用：
+        - 前三章正文：获取当前章节之前的第N-4、N-3、N-2章润色后正文（不含上一章N-1）
+        - 上一章原文：单独获取第N-1章的润色后正文（用于衔接）
+        - 章节总结：最近若干章的故事线总结（默认15章）
+        - 前后故事线：前2章/后2章的故事线
         
         Args:
             chapter_number: 当前正在生成的章节号
@@ -3500,32 +3586,56 @@ class AIGN:
             
         Returns:
             dict: 包含以下键的字典
-                - first_three_chapters_content: 前三章完整原文
-                - chapter_summaries: 最近若干章的总结（从第4章起最多max_summary_chapters章）
+                - first_three_chapters_content: 前三章润色后正文（第N-4、N-3、N-2章，不含上一章N-1）
+                - last_chapter_content: 上一章（第N-1章）的润色后正文
+                - chapter_summaries: 最近若干章的总结（最多max_summary_chapters章）
                 - prev_storyline: 前2章故事线（与精简模式一致）
                 - next_storyline: 后2章故事线（与精简模式一致）
         """
         context = {
-            "first_three_chapters_content": "",  # 前三章完整原文
+            "first_three_chapters_content": "",  # 前三章润色后正文（不含上一章）
+            "last_chapter_content": "",           # 上一章润色后正文
             "chapter_summaries": "",              # 最近若干章的总结
             "prev_storyline": "",                 # 前2章故事线
             "next_storyline": ""                  # 后2章故事线
         }
         
-        # 1. 获取前三章完整原文
-        first_three_content = []
-        for i in range(1, min(4, chapter_number)):  # 最多获取前3章
-            for paragraph in self.paragraph_list:
-                if f"第{i}章" in paragraph:
-                    first_three_content.append(paragraph)
-                    break
-        if first_three_content:
-            context["first_three_chapters_content"] = "\n\n---\n\n".join(first_three_content)
-            print(f"📖 非精简模式：已获取前{len(first_three_content)}章完整原文（共{len(context['first_three_chapters_content'])}字符）")
+        # 1. 获取前三章润色后正文（不含上一章）
+        # 当前章为N，获取 N-4, N-3, N-2 章的润色后正文
+        # 上一章(N-1)由 last_chapter_content 单独提供，避免重复
+        prev_three_start = max(1, chapter_number - 4)  # 从N-4开始
+        prev_three_end = max(1, chapter_number - 1)    # 到N-2结束（不含N-1）
         
-        # 2. 获取最近若干章的总结（从第4章起，但限制最多max_summary_chapters章）
-        # 计算总结范围：从 max(4, chapter_number - max_summary_chapters) 到 chapter_number - 1
-        summary_start = max(4, chapter_number - max_summary_chapters)
+        prev_three_content = []
+        if prev_three_start < prev_three_end:
+            for i in range(prev_three_start, prev_three_end):
+                for paragraph in self.paragraph_list:
+                    if f"第{i}章" in paragraph:
+                        prev_three_content.append(paragraph)
+                        break
+        if prev_three_content:
+            context["first_three_chapters_content"] = "\n\n---\n\n".join(prev_three_content)
+            chapter_nums = list(range(prev_three_start, prev_three_end))
+            print(f"📖 非精简模式：已获取前三章正文（第{chapter_nums}章，不含上一章第{chapter_number-1}章），共{len(context['first_three_chapters_content'])}字符")
+        
+        # 2. 获取上一章(N-1)的润色后正文
+        if chapter_number > 1 and self.paragraph_list:
+            # paragraph_list 中按顺序存储润色后的章节内容
+            # 在生成当前章节时，paragraph_list[-1] 就是上一章的润色后内容
+            prev_chapter_idx = chapter_number - 2  # 0-indexed: 第N-1章的索引为N-2
+            if prev_chapter_idx < len(self.paragraph_list):
+                last_chapter = self.paragraph_list[prev_chapter_idx]
+                # 限制长度，避免token过度膨胀
+                if len(last_chapter) > 3000:
+                    context["last_chapter_content"] = last_chapter[-3000:]
+                    print(f"📖 非精简模式：已获取上一章（第{chapter_number-1}章）润色后正文（截取3000/{len(last_chapter)}字符）")
+                else:
+                    context["last_chapter_content"] = last_chapter
+                    print(f"📖 非精简模式：已获取上一章（第{chapter_number-1}章）润色后正文（{len(last_chapter)}字符）")
+        
+        # 3. 获取最近若干章的总结（限制最多max_summary_chapters章）
+        # 计算总结范围：从 max(1, chapter_number - max_summary_chapters) 到 chapter_number - 1
+        summary_start = max(1, chapter_number - max_summary_chapters)
         summary_end = chapter_number  # range不包含结束值
         
         summaries = []
@@ -3542,12 +3652,12 @@ class AIGN:
                     break
         if summaries:
             context["chapter_summaries"] = "\n".join(summaries)
-            if summary_start > 4:
+            if summary_start > 1:
                 print(f"📋 非精简模式：已获取第{summary_start}-{chapter_number-1}章的总结（最近{len(summaries)}章，限制了早期章节以控制token）")
             else:
                 print(f"📋 非精简模式：已获取第{summary_start}-{chapter_number-1}章的总结（{len(summaries)}章）")
         
-        # 3. 获取前2章/后2章故事线（与精简模式一致的格式）
+        # 4. 获取前2章/后2章故事线（与精简模式一致的格式）
         prev_storyline, next_storyline = self.getCompactStorylines(chapter_number)
         context["prev_storyline"] = prev_storyline
         context["next_storyline"] = next_storyline
@@ -3700,16 +3810,16 @@ class AIGN:
         print("🔄 段落生成: 刷新ChatLLM配置...")
         self.refresh_chatllm()
         
-        # 刷新CosyVoice2模式设置
+        # 刷新Fish Audio S2语气标记模式设置
         try:
             from dynamic_config_manager import get_config_manager
             config_manager = get_config_manager()
-            self.cosyvoice_mode = config_manager.get_cosyvoice_mode()
-            if hasattr(self, 'updateEmbellishersForCosyVoice'):
-                self.updateEmbellishersForCosyVoice()
-            print(f"🎙️ CosyVoice2模式: {'已启用' if self.cosyvoice_mode else '未启用'}")
+            self.fishaudio_mode = config_manager.get_fishaudio_mode()
+            if hasattr(self, 'updateEmbellishersForFishAudio'):
+                self.updateEmbellishersForFishAudio()
+            print(f"🎙️ Fish Audio S2语气标记: {'已启用' if self.fishaudio_mode else '未启用'}")
         except Exception as e:
-            print(f"⚠️ 刷新CosyVoice2配置失败: {e}")
+            print(f"⚠️ 刷新Fish Audio S2配置失败: {e}")
         
         # 应用风格提示词
         try:
@@ -3761,6 +3871,20 @@ class AIGN:
                                 agent.sys_prompt = prompts["embellisher_prompt"]
                                 agent.history[0]["content"] = prompts["embellisher_prompt"]
                     print(f"✅ 已应用风格提示词（润色）: {self.style_name}")
+                
+                # 应用到ending writer（段落生成中也可能进入结尾阶段）
+                if prompts.get("ending_prompt"):
+                    if hasattr(self, 'ending_writer'):
+                        self.ending_writer.sys_prompt = prompts["ending_prompt"]
+                        self.ending_writer.history[0]["content"] = prompts["ending_prompt"]
+                    # 更新分段ending writer
+                    for seg in [1,2,3,4]:
+                        seg_attr = f"ending_writer_seg{seg}"
+                        if hasattr(self, seg_attr):
+                            agent = getattr(self, seg_attr)
+                            agent.sys_prompt = prompts["ending_prompt"]
+                            agent.history[0]["content"] = prompts["ending_prompt"]
+                    print(f"✅ 已应用风格提示词（结尾）: {self.style_name}")
             else:
                 print(f"ℹ️ 未设置风格或使用默认风格")
         except Exception as e:
@@ -3999,7 +4123,7 @@ class AIGN:
                 print("📦 使用精简版正文生成器（精简模式）")
                 writer = self.novel_writer_compact
             else:
-                print("📦 使用精简版正文生成器（非精简模式：前三章原文+章节总结）")
+                print("📦 使用精简版正文生成器（非精简模式：前三章正文（不含上一章）+章节总结）")
                 writer = self.novel_writer_compact  # 非精简模式也使用相同提示词
             
             # 获取当前章节和前后章节的故事线
@@ -4064,12 +4188,12 @@ class AIGN:
                     else:
                         print(f"   • 后2章故事线：无")
             else:
-                # 非精简模式：使用前三章原文 + 章节总结
+                # 非精简模式：使用前三章正文（不含上一章） + 章节总结
                 enhanced_context_v2 = self.getEnhancedContextWithFirstThreeChapters(self.chapter_count + 1)
                 
                 # 显示非精简模式上下文信息
                 if debug_level >= 2:
-                    print(f"📖 上下文信息（非精简模式：前三章原文+章节总结）：")
+                    print(f"📖 上下文信息（非精简模式：前三章正文（不含上一章）+章节总结）：")
                     if current_chapter_storyline:
                         if isinstance(current_chapter_storyline, dict):
                             ch_title = current_chapter_storyline.get("title", "无标题")
@@ -4077,7 +4201,7 @@ class AIGN:
                         else:
                             print(f"   • 当前章节：第{self.chapter_count + 1}章")
                     if enhanced_context_v2["first_three_chapters_content"]:
-                        print(f"   • 前三章原文：{len(enhanced_context_v2['first_three_chapters_content'])}字符")
+                        print(f"   • 前三章正文（不含上一章）：{len(enhanced_context_v2['first_three_chapters_content'])}字符")
                     if enhanced_context_v2["chapter_summaries"]:
                         print(f"   • 最近章节总结：{len(enhanced_context_v2['chapter_summaries'])}字符")
                 else:
@@ -4089,7 +4213,7 @@ class AIGN:
                         else:
                             print(f"   • 当前章节：第{self.chapter_count + 1}章")
                     if enhanced_context_v2["first_three_chapters_content"]:
-                        print(f"   • 前三章原文：已加载")
+                        print(f"   • 前三章正文（不含上一章）：已加载")
                     if enhanced_context_v2["chapter_summaries"]:
                         print(f"   • 最近章节总结：已加载")
             
@@ -4113,12 +4237,12 @@ class AIGN:
                     "后2章故事线": compact_next_storyline,
                 }
             else:
-                # 非精简模式：使用与精简模式相同的输入结构，但添加前三章原文
-                print("📦 使用非精简模式生成正文（前三章原文+最近15章总结）...")
+                # 非精简模式：使用与精简模式相同的输入结构，但添加前三章正文（不含上一章）
+                print("📦 使用非精简模式生成正文（前三章正文（不含上一章）+最近15章总结）...")
                 segment_count = getattr(self, 'long_chapter_mode', 0)
                 if segment_count > 0:
                     mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
-                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}）：传递前三章原文+最近章节总结")
+                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}）：传递前三章正文（不含上一章）+最近章节总结")
                 inputs = {
                     "大纲": self.getCurrentOutline(),
                     "写作要求": self.user_requirements,
@@ -4128,8 +4252,9 @@ class AIGN:
                     "本章故事线": str(current_chapter_storyline),
                     "前2章故事线": enhanced_context_v2["prev_storyline"],
                     "后2章故事线": enhanced_context_v2["next_storyline"],
-                    # 非精简模式额外上下文：前三章原文 + 最近章节总结（限制最多15章）
-                    "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                    # 非精简模式额外上下文：前三章正文（不含上一章） + 上一章原文 + 最近章节总结（限制最多15章）
+                    "前三章正文（不含上一章）": enhanced_context_v2["first_three_chapters_content"],
+                    "上一章原文": enhanced_context_v2["last_chapter_content"],
                     "最近章节总结": enhanced_context_v2["chapter_summaries"],
                 }
             
@@ -4251,7 +4376,7 @@ class AIGN:
                         "后2章故事线": compact_next_storyline,
                     }
                 else:
-                    # 非精简模式分段：使用精简模式agent，但添加前三章原文
+                    # 非精简模式分段：使用精简模式agent，但添加前三章正文（不含上一章）
                     if is_ending_phase or is_final_chapter:
                         writer_agent = getattr(self, f"ending_writer_seg{seg_index}", self.ending_writer)
                     else:
@@ -4261,7 +4386,7 @@ class AIGN:
                     segment_count_val = getattr(self, 'long_chapter_mode', 0)
                     if segment_count_val > 0:
                         mode_desc = {2: "2段", 3: "3段", 4: "4段"}
-                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段{seg_index}）：传递前三章原文+最近章节总结")
+                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段{seg_index}）：传递前三章正文（不含上一章）+最近章节总结")
                     seg_inputs = {
                         "大纲": self.getCurrentOutline(),
                         "写作要求": self.user_requirements,
@@ -4275,7 +4400,8 @@ class AIGN:
                         "前2章故事线": enhanced_context_v2["prev_storyline"],
                         "后2章故事线": enhanced_context_v2["next_storyline"],
                         # 非精简模式额外上下文
-                        "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                        "前三章正文（不含上一章）": enhanced_context_v2["first_three_chapters_content"],
+                        "上一章原文": enhanced_context_v2["last_chapter_content"],
                         "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
                 # 写作
@@ -4322,12 +4448,12 @@ class AIGN:
                             emb_inputs["上一段原文"] = prev_seg
                             print(f"   📎 已添加上一段原文({len(prev_seg)}字符)以确保段落衔接")
                 else:
-                    # 非精简模式分段润色：使用精简模式agent，但添加前三章原文
+                    # 非精简模式分段润色：使用精简模式agent，但添加前三章正文（不含上一章）
                     emb_agent = getattr(self, f"novel_embellisher_compact_seg{seg_index}", self.novel_embellisher_compact)  # 使用精简模式agent
                     segment_count_val = getattr(self, 'long_chapter_mode', 0)
                     if segment_count_val > 0:
                         mode_desc = {2: "2段", 3: "3段", 4: "4段"}
-                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段润色{seg_index}）：传递前三章原文+最近章节总结")
+                        print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段润色{seg_index}）：传递前三章正文（不含上一章）+最近章节总结")
                     emb_inputs = {
                         "大纲": self.getCurrentOutline(),
                         "润色要求": self.embellishment_idea,
@@ -4337,7 +4463,8 @@ class AIGN:
                         "本章故事线": str(current_story),
                         "当前分段": current_seg_text,
                         # 非精简模式额外上下文
-                        "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                        "前三章正文（不含上一章）": enhanced_context_v2["first_three_chapters_content"],
+                        "上一章原文": enhanced_context_v2["last_chapter_content"],
                         "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
 
@@ -4430,16 +4557,14 @@ class AIGN:
                     embellish_inputs["上一段原文"] = last_para
                     print(f"   📎 已添加上一段原文({len(last_para)}字符)以确保段落衔接")
             else:
-                # 非精简模式：使用与精简模式相同的输入结构，但添加前三章原文
-                print("📦 使用非精简模式润色（前三章原文+章节总结）...")
+                # 非精简模式：使用与精简模式相同的输入结构，但添加前三章正文（不含上一章）
+                print("📦 使用非精简模式润色（前三章正文（不含上一章）+章节总结）...")
                 segment_count = getattr(self, 'long_chapter_mode', 0)
                 if segment_count > 0:
                     mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
-                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}润色）：传递前三章原文+最近章节总结")
+                    print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}润色）：传递前三章正文（不含上一章）+最近章节总结")
                 
-                # 获取上一段落的原文（用于确保段落衔接）
-                last_para = self.getLastParagraph()
-                
+                # 注意：非精简模式已通过 "上一章原文" 传入上一章润色后正文，无需再额外添加 "上一段原文"
                 embellish_inputs = {
                     "大纲": self.getCurrentOutline(),
                     "润色要求": self.embellishment_idea,
@@ -4448,7 +4573,8 @@ class AIGN:
                     "后2章故事线": enhanced_context_v2["next_storyline"],
                     "本章故事线": str(current_chapter_storyline),
                     # 非精简模式额外上下文
-                    "前三章原文": enhanced_context_v2["first_three_chapters_content"],
+                    "前三章正文（不含上一章）": enhanced_context_v2["first_three_chapters_content"],
+                    "上一章原文": enhanced_context_v2["last_chapter_content"],
                     "最近章节总结": enhanced_context_v2["chapter_summaries"],
                 }
 
@@ -4460,11 +4586,6 @@ class AIGN:
                     if rag_refs_emb:
                         embellish_inputs["风格参考"] = rag_refs_emb
                         print(f"📚 RAG(润色): 已注入风格参考 ({len(rag_refs_emb)}字符)")
-                
-                # 添加上一段原文（如果存在），用于确保段落衔接流畅
-                if last_para:
-                    embellish_inputs["上一段原文"] = last_para
-                    print(f"   📎 已添加上一段原文({len(last_para)}字符)以确保段落衔接")
             
             # 调试信息：显示润色阶段的关键输入参数
             try:
@@ -4539,7 +4660,7 @@ class AIGN:
                 print("📦 使用精简版润色器（精简模式）")
                 embellisher = self.novel_embellisher_compact
             else:
-                print("📦 使用精简版润色器（非精简模式：前三章原文+章节总结）")
+                print("📦 使用精简版润色器（非精简模式：前三章正文（不含上一章）+章节总结）")
                 embellisher = self.novel_embellisher_compact  # 非精简模式也使用相同提示词
             
             next_paragraph = self._embellish_with_retry(
@@ -4554,16 +4675,18 @@ class AIGN:
             next_paragraph = self.sanitize_generated_text(next_paragraph)
         
         # 添加章节标题（如果开启章节功能）
+        # 🔧 使用临时变量，延迟到内容实际提交后再更新 chapter_count
+        new_chapter_count = self.chapter_count  # 默认不变
         if self.enable_chapters and not next_paragraph.startswith("第"):
-            self.chapter_count += 1
+            new_chapter_count = self.chapter_count + 1
             
             # 尝试从故事线获取章节标题
-            current_storyline = self.getCurrentChapterStoryline(self.chapter_count)
+            current_storyline = self.getCurrentChapterStoryline(new_chapter_count)
             if current_storyline and isinstance(current_storyline, dict) and current_storyline.get("title"):
                 story_title = current_storyline.get("title", "")
-                chapter_title = f"第{self.chapter_count}章：{story_title}"
+                chapter_title = f"第{new_chapter_count}章：{story_title}"
             else:
-                chapter_title = f"第{self.chapter_count}章"
+                chapter_title = f"第{new_chapter_count}章"
             
             next_paragraph = f"{chapter_title}\n\n{next_paragraph}"
             print(f"📖 已生成 {chapter_title}")
@@ -4590,6 +4713,8 @@ class AIGN:
             raise InterruptedError("用户停止了生成")
         
         self.paragraph_list.append(next_paragraph)
+        # 🔧 在内容实际提交后才更新 chapter_count（防止中断时计数不一致）
+        self.chapter_count = new_chapter_count
         self.writing_plan = next_writing_plan
         self.temp_setting = next_temp_setting
 
@@ -4699,19 +4824,19 @@ class AIGN:
             return
             
         try:
-            # 检查是否启用了CosyVoice模式
-            if self.cosyvoice_mode:
-                # 保存包含CosyVoice标记的版本
-                cosyvoice_file = self.current_output_file.replace('.txt', '_cosyvoice.txt')
-                with open(cosyvoice_file, "w", encoding="utf-8") as f:
+            # 检查是否启用了Fish Audio S2语气标记模式
+            if self.fishaudio_mode:
+                # 保存包含Fish Audio标记的版本
+                fishaudio_file = self.current_output_file.replace('.txt', '_fishaudio.txt')
+                with open(fishaudio_file, "w", encoding="utf-8") as f:
                     f.write(self._get_file_header())
                     f.write(self.novel_content)
-                print(f"🎙️ 已保存CosyVoice2版本: {cosyvoice_file}")
+                print(f"🎙️ 已保存Fish Audio S2标记版本: {fishaudio_file}")
                 
-                # 清理CosyVoice标记，生成纯净版本
+                # 清理Fish Audio标记，生成纯净版本
                 try:
-                    from cosyvoice_cleaner import CosyVoiceTextCleaner
-                    cleaner = CosyVoiceTextCleaner()
+                    from fishaudio_cleaner import FishAudioTextCleaner
+                    cleaner = FishAudioTextCleaner()
                     cleaned_content = cleaner.clean_text(self.novel_content)
                     
                     # 保存清理后的版本（常规文件）
@@ -4721,21 +4846,21 @@ class AIGN:
                     print(f"📖 已保存纯净版本: {self.current_output_file}")
                     
                     # 提取并显示标记统计
-                    markers = cleaner.extract_cosyvoice_markers(self.novel_content)
+                    markers = cleaner.extract_fishaudio_markers(self.novel_content)
                     if markers['total_count'] > 0:
-                        print(f"📊 CosyVoice2标记统计:")
-                        print(f"   • 风格控制: {len(markers['style_controls'])}个")
-                        print(f"   • 细粒度控制: {sum(count for _, count in markers['fine_controls'])}个")
-                        print(f"   • 强调词汇: {len(markers['emphasis'])}个")
+                        print(f"📊 Fish Audio S2标记统计:")
+                        for category, count in markers['by_category'].items():
+                            if count > 0:
+                                print(f"   • {category}: {count}个")
                         
                 except ImportError:
-                    print("⚠️ CosyVoice清理器不可用，保存原始版本")
+                    print("⚠️ Fish Audio清理器不可用，保存原始版本")
                     with open(self.current_output_file, "w", encoding="utf-8") as f:
                         f.write(self._get_file_header())
                         f.write(self.novel_content)
                     print(f"💾 已保存到文件: {self.current_output_file}")
             else:
-                # 非CosyVoice模式，正常保存
+                # 非Fish Audio模式，正常保存
                 with open(self.current_output_file, "w", encoding="utf-8") as f:
                     f.write(self._get_file_header())
                     f.write(self.novel_content)
@@ -4757,19 +4882,19 @@ class AIGN:
             return
             
         try:
-            # 检查是否启用了CosyVoice模式
-            if self.cosyvoice_mode:
-                # 保存包含CosyVoice标记的版本
-                cosyvoice_file = self.current_output_file.replace('.txt', '_cosyvoice.txt')
-                with open(cosyvoice_file, "w", encoding="utf-8") as f:
+            # 检查是否启用了Fish Audio S2语气标记模式
+            if self.fishaudio_mode:
+                # 保存包含Fish Audio标记的版本
+                fishaudio_file = self.current_output_file.replace('.txt', '_fishaudio.txt')
+                with open(fishaudio_file, "w", encoding="utf-8") as f:
                     f.write(self._get_file_header())
                     f.write(self.novel_content)
-                print(f"🎙️ 已保存CosyVoice2版本: {cosyvoice_file}")
+                print(f"🎙️ 已保存Fish Audio S2标记版本: {fishaudio_file}")
                 
                 # 清理并保存纯净版本
                 try:
-                    from cosyvoice_cleaner import CosyVoiceTextCleaner
-                    cleaner = CosyVoiceTextCleaner()
+                    from fishaudio_cleaner import FishAudioTextCleaner
+                    cleaner = FishAudioTextCleaner()
                     cleaned_content = cleaner.clean_text(self.novel_content)
                     
                     with open(self.current_output_file, "w", encoding="utf-8") as f:
@@ -4784,7 +4909,7 @@ class AIGN:
                         f.write(self.novel_content)
                     print(f"📖 已保存小说文件: {self.current_output_file}")
             else:
-                # 非CosyVoice模式，正常保存
+                # 非Fish Audio模式，正常保存
                 with open(self.current_output_file, "w", encoding="utf-8") as f:
                     f.write(self._get_file_header())
                     f.write(self.novel_content)
@@ -5132,6 +5257,60 @@ class AIGN:
                 print("❌ 未能解析到任何章节内容")
                 print(f"   • 小说内容预览: {self.novel_content[:200] if self.novel_content else 'None'}...")
                 return
+            
+            # 🔧 检查解析到的章节数是否与目标一致，报告缺失的章节
+            if hasattr(self, 'target_chapter_count') and self.target_chapter_count > 0:
+                parsed_count = len(chapters)
+                target_count = self.target_chapter_count
+                if parsed_count < target_count:
+                    print(f"\n{'='*60}")
+                    print(f"⚠️ 章节数量不匹配: 解析到 {parsed_count} 章，目标 {target_count} 章")
+                    print(f"📋 缺失章节检测:")
+                    
+                    # 从章节标题中提取已有的章节号
+                    import re
+                    found_chapter_numbers = set()
+                    for title, _ in chapters:
+                        # 匹配 "第X章" 格式中的数字
+                        match = re.search(r'第(\d+)章', title)
+                        if match:
+                            found_chapter_numbers.add(int(match.group(1)))
+                    
+                    # 找出缺失的章节号
+                    expected_chapters = set(range(1, target_count + 1))
+                    missing_chapters = sorted(expected_chapters - found_chapter_numbers)
+                    
+                    if missing_chapters:
+                        # 将连续的章节号合并显示，如 [5,6,7,10] → "第5-7章, 第10章"
+                        missing_ranges = []
+                        range_start = missing_chapters[0]
+                        range_end = missing_chapters[0]
+                        
+                        for ch_num in missing_chapters[1:]:
+                            if ch_num == range_end + 1:
+                                range_end = ch_num
+                            else:
+                                if range_start == range_end:
+                                    missing_ranges.append(f"第{range_start}章")
+                                else:
+                                    missing_ranges.append(f"第{range_start}-{range_end}章")
+                                range_start = ch_num
+                                range_end = ch_num
+                        # 添加最后一组
+                        if range_start == range_end:
+                            missing_ranges.append(f"第{range_start}章")
+                        else:
+                            missing_ranges.append(f"第{range_start}-{range_end}章")
+                        
+                        print(f"   ❌ 缺失章节: {', '.join(missing_ranges)}")
+                        print(f"   💡 可以通过继续生成来修复缺失的章节")
+                    else:
+                        # 章节号都在但总数不对，可能是解析问题
+                        print(f"   ⚠️ 章节号解析异常，请检查章节标题格式")
+                    
+                    print(f"{'='*60}\n")
+                elif parsed_count == target_count:
+                    print(f"✅ 章节数量验证通过: {parsed_count}/{target_count} 章")
             
             # 添加基本CSS样式
             style = '''
@@ -5625,6 +5804,15 @@ class AIGN:
                         error_msg = f"❌ 生成第{next_chapter_num}章时出错: {e}"
                         print(error_msg)
                         
+                        # 🔧 关键修复：检查 chapter_count 是否被提前递增但内容未提交
+                        # genBeginning 将开头作为第1章（chapter_count=1），所以 paragraph_list 长度应 == chapter_count
+                        actual_paragraphs = len(self.paragraph_list)
+                        expected_paragraphs = self.chapter_count  # 开头=第1章，paragraph_list长度应等于chapter_count
+                        if actual_paragraphs < expected_paragraphs:
+                            old_count = self.chapter_count
+                            self.chapter_count = max(actual_paragraphs, 0)
+                            print(f"🔧 修正章节计数: {old_count} → {self.chapter_count}（内容未成功提交）")
+                        
                         # 发生了未被Retryer捕获或Retryer耗尽后的异常
                         # 此时意味着已经重试了多次仍然失败，应立即停止
                         
@@ -5645,7 +5833,28 @@ class AIGN:
                         break
                 
                 total_time = time.time() - start_time
-                if self.chapter_count >= self.target_chapter_count:
+                # 🔧 验证章节确实全部生成：chapter_count 和 paragraph_list 都要达到目标
+                actual_paragraphs = len(self.paragraph_list)
+                chapters_complete = self.chapter_count >= self.target_chapter_count
+                # genBeginning 将开头作为第1章（chapter_count=1），所以 paragraph_list 长度应 == chapter_count
+                content_complete = actual_paragraphs >= self.target_chapter_count
+                
+                if not chapters_complete and not content_complete:
+                    # 两项指标都不满足，打印警告
+                    pass  # 会走到 else 分支
+                elif chapters_complete and not content_complete:
+                    # chapter_count 达标但内容不足，修正计数但仍然生成EPUB
+                    old_count = self.chapter_count
+                    self.chapter_count = max(actual_paragraphs, 0)
+                    print(f"⚠️ 检测到章节计数异常: chapter_count={old_count} 但实际段落数={actual_paragraphs}")
+                    print(f"🔧 已修正章节计数为 {self.chapter_count}")
+                    # 即使计数有偏差，只要内容已生成，仍视为完成并生成EPUB
+                    if actual_paragraphs > 0:
+                        chapters_complete = True
+                        content_complete = True
+                
+                if chapters_complete and content_complete:
+                    total_word_count = len(getattr(self, 'novel_content', '') or '')
                     completion_msg = f"🎉 自动生成完成！共生成 {self.chapter_count} 章，总耗时: {self.format_time_duration(total_time, include_seconds=True)}"
                     print(completion_msg)
                     self._sync_to_webui(completion_msg)
@@ -5668,18 +5877,32 @@ class AIGN:
                         print(f"⚠️ 清理存档文件失败: {e}")
                     
                     # 在EPUB保存后显示Token累积统计最终报告
+                    token_report = ""
                     if self.token_accumulation_stats.get("enabled", False):
                         token_summary = self.get_token_accumulation_final_summary()
                         if token_summary:
+                            token_report = token_summary
                             print(token_summary)
                             self._sync_to_webui("📊 Token消耗统计已生成，请查看终端输出")
                     
                     # 显示API时间和费用统计最终报告
+                    time_report = ""
                     if self.api_time_stats.get("enabled", False):
                         time_summary = self.get_api_time_final_summary()
                         if time_summary:
+                            time_report = time_summary
                             print(time_summary)
                             self._sync_to_webui("⏱️ 时间和费用统计已生成，请查看终端输出")
+                    
+                    # 保存完成信息，供进度监控页面显示
+                    self.generation_completion_info = {
+                        "completed": True,
+                        "chapter_count": self.chapter_count,
+                        "total_word_count": total_word_count,
+                        "total_time": self.format_time_duration(total_time, include_seconds=True),
+                        "token_report": token_report,
+                        "time_report": time_report
+                    }
                 else:
                     # 生成被停止
                     print("=" * 60)
@@ -5915,6 +6138,17 @@ class AIGN:
                     current_operation = f"正在生成第{generation_status['current_chapter'] + 1}章"
             else:
                 current_operation = f"正在生成第{generation_status['current_chapter'] + 1}章"
+        elif hasattr(self, 'generation_completion_info') and self.generation_completion_info and self.generation_completion_info.get('completed'):
+            info = self.generation_completion_info
+            total_words = info.get('total_word_count', 0)
+            # 格式化字数显示
+            if total_words >= 10000:
+                word_display = f"{total_words/10000:.1f}万字"
+            elif total_words >= 1000:
+                word_display = f"{total_words/1000:.1f}千字"
+            else:
+                word_display = f"{total_words}字"
+            current_operation = f"✅ 生成完成！共 {info.get('chapter_count', 0)} 章，{word_display}，耗时 {info.get('total_time', '未知')}"
 
         return {
             'timestamp': current_time,
@@ -5924,6 +6158,7 @@ class AIGN:
             'storyline_stats': storyline_stats,
             'time_stats': time_stats,
             'current_operation': current_operation,
+            'completion_info': getattr(self, 'generation_completion_info', None),
             'log_count': len(self.log_buffer),
             'stream_info': {
                 'chars': self.current_stream_chars,
@@ -6927,7 +7162,7 @@ class AIGN:
             print(f"📊 当前进度: {self.chapter_count}/{self.target_chapter_count}章")
             if hasattr(self, 'updateWriterPromptsForLongChapter'):
                 self.updateWriterPromptsForLongChapter()
-            if hasattr(self, 'updateEmbellishersForCosyVoice'):
-                self.updateEmbellishersForCosyVoice()
+            if hasattr(self, 'updateEmbellishersForFishAudio'):
+                self.updateEmbellishersForFishAudio()
             return True
         return False

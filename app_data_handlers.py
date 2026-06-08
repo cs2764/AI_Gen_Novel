@@ -94,7 +94,19 @@ def update_progress(aign_instance):
 • CosyVoice2: {'🎙️ 已启用' if hasattr(aign_instance, 'cosyvoice_mode') and aign_instance.cosyvoice_mode else '🔇 未启用'}
 
 💾 增强型自动保存: {auto_save_info}
-• 保存内容：用户想法、写作要求、润色要求、所有生成内容
+• 保存内容：用户想法、写作要求、润色要求、所有生成内容"""
+
+            # 如果生成已完成，追加统计报告
+            completion_info = detailed_status.get('completion_info')
+            if completion_info and completion_info.get('completed'):
+                token_report = completion_info.get('token_report', '')
+                time_report = completion_info.get('time_report', '')
+                if token_report:
+                    progress_text += f"\n\n{token_report}"
+                if time_report:
+                    progress_text += f"\n\n{time_report}"
+
+            progress_text += f"""
 
 📝 最新操作日志:
 {log_text}"""

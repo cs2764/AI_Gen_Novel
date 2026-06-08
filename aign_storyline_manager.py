@@ -1,4 +1,4 @@
-"""
+﻿"""
 AIGN故事线管理模块 - 处理故事线生成、验证、修复
 
 本模块包含:
@@ -251,19 +251,30 @@ class StorylineManager:
                 except ImportError:
                     # 回退到标准生成方式
                     print("⚠️ 增强故事线生成器不可用，使用标准生成方式")
-                    resp = self.storyline_generator.query_with_json_repair(
-                        self._build_storyline_prompt(inputs, start_chapter, end_chapter)
-                    )
+                    from storyline_markdown_parser import parse_storyline_markdown
                     
-                    if 'parsed_json' in resp:
-                        batch_storyline = resp['parsed_json']
+                    prompt_text, seg_count = self._build_storyline_prompt(inputs, start_chapter, end_chapter)
+                    resp = self.storyline_generator.query(prompt_text)
+                    resp_content = resp.get('content', '')
+                    
+                    if resp_content:
+                        batch_storyline = parse_storyline_markdown(resp_content)
+                        if not batch_storyline:
+                            error_msg = f"第{start_chapter}-{end_chapter}章故事线生成失败（Markdown解析失败）"
+                            print(f"❌ {error_msg}")
+                            self.aign.failed_batches.append({
+                                "start_chapter": start_chapter,
+                                "end_chapter": end_chapter,
+                                "error": "Markdown解析失败"
+                            })
+                            continue
                     else:
                         error_msg = f"第{start_chapter}-{end_chapter}章故事线生成失败"
                         print(f"❌ {error_msg}")
                         self.aign.failed_batches.append({
                             "start_chapter": start_chapter,
                             "end_chapter": end_chapter,
-                            "error": resp.get('content', '未知错误')
+                            "error": "未返回内容"
                         })
                         continue
                 
@@ -388,20 +399,20 @@ class StorylineManager:
                 from AIGN_Prompt_Enhanced import storyline_generator_prompt
                 base_prompt = storyline_generator_prompt
                 prompt_file_used = "AIGN_Prompt_Enhanced.py"
-                print(f"✅ 提示词版本: 长章节模式（WITH SEGMENTS）")
-                print(f"📦 分段要求: 每章包含 {segment_count} 个 plot_segments")
+                print(f"📝 提示词版本: 长章节模式（WITH SEGMENTS）")
+                print(f"📦 分段要求: 每章包含 {segment_count} 段")
                 print(f"📄 提示词文件: {prompt_file_used}")
-                print(f"🔧 输出格式: 包含 plot_segments 字段")
+                print(f"🔧 输出格式: Markdown（含分段）")
             else:
                 # 非长章节模式：使用简化提示词
                 try:
                     from prompts.common.storyline_prompt_simple import storyline_generator_prompt_simple
                     base_prompt = storyline_generator_prompt_simple
                     prompt_file_used = "prompts/common/storyline_prompt_simple.py"
-                    print(f"✅ 提示词版本: 简化模式（WITHOUT SEGMENTS）")
+                    print(f"📝 提示词版本: 简化模式（WITHOUT SEGMENTS）")
                     print(f"📦 分段要求: 无分段，仅梗概")
                     print(f"📄 提示词文件: {prompt_file_used}")
-                    print(f"🔧 输出格式: 不包含 plot_segments 字段")
+                    print(f"🔧 输出格式: Markdown（无分段）")
                 except ImportError:
                     # 如果简化提示词不存在，使用标准提示词
                     from AIGN_Prompt_Enhanced import storyline_generator_prompt
@@ -410,7 +421,7 @@ class StorylineManager:
                     print(f"⚠️ 提示词版本: 标准模式（回退）")
                     print(f"⚠️ 简化提示词不可用，使用标准提示词")
                     print(f"📄 提示词文件: {prompt_file_used}")
-                    print(f"🔧 输出格式: 可能包含 plot_segments 字段")
+                    print(f"🔧 输出格式: Markdown")
         except ImportError:
             base_prompt = "请根据以下信息生成故事线："
             prompt_file_used = "内置默认字符串"
@@ -444,83 +455,71 @@ class StorylineManager:
         if inputs.get('伏笔设定'):
             prompt += f"**伏笔设定（请在故事线中安排埋设和揭示）:**\n{inputs['伏笔设定']}\n\n"
         
-        # 明确JSON格式要求和章节数量要求
+        # 明确Markdown格式要求和章节数量要求
         expected_count = end_chapter - start_chapter + 1
-        prompt += f"## 生成要求:\n"
+        prompt += f"## 生成要求：\n"
         prompt += f"请为第{start_chapter}章到第{end_chapter}章生成详细的故事线。\n"
         # 注意：segment_count 已经在方法开始时转换为整数，这里直接使用
         if segment_count > 0:
-            prompt += f"每一章都必须包含 plot_segments 字段，且包含严格的{segment_count}段剧情（index=1..{segment_count}），分段内容互不重叠并首尾衔接。\n"
+            prompt += f"每一章都必须包含{segment_count}个分段（### 分段1 到 ### 分段{segment_count}），分段内容互不重叠并首尾衔接。\n"
         else:
-            prompt += f"不需要剧情分段（不含 plot_segments），仅返回每一章的梗概（plot_summary）。\n"
+            prompt += f"不需要剧情分段，仅返回每一章的梗概。\n"
             prompt += f"如上方模板存在分段要求，请忽略分段相关要求，按本次指示执行。\n"
         prompt += f"**重要：必须生成完整的{expected_count}章内容，一章都不能少！**\n"
-        prompt += f"必须严格按照JSON格式输出，不要包含任何其他文本。\n"
+        prompt += f"必须严格按照Markdown格式输出，不要使用JSON格式。\n"
         prompt += f"确保每章都有有意义的标题和详细的剧情梗概。\n\n"
 
         # 根据模式追加精简/长章节指导
         try:
             if getattr(self.aign, 'compact_mode', False):
                 prompt += "### 精简模式额外约束\n"
-                prompt += "- 信息密度与短句输出：plot_summary控制在200-350字，用动词短句描述'当章目标→冲突/阻碍→关键行动→结果/代价→承接下一章'，避免修辞与空话。\n"
-                prompt += "- 分段严格约束：plot_segments的每个segment_summary≤2句、聚焦一个核心动作或信息揭示；segment_key_events必须是可执行动作，不用抽象词。\n"
-                prompt += "- 明确承接：每章最后一段的segment_transition必须具体（下一章目标/悬念/时间或场景转换），禁止泛化表达如'推动剧情发展'。\n"
-                prompt += "- 角色焦点：main_characters不超过3人，聚焦主角与关键配角，减少并行多线。\n"
-                prompt += "- 标题策略：标题使用核心事件关键词，不含【】（）、特殊修饰符或字数说明。\n"
-                # 注意：segment_count 已经在方法开始时转换为整数，这里直接使用
+                prompt += "- 信息密度与短句输出：剧情梗概控制在200-350字，用动词短句描述'当章目标→冲突/阻碍→关键行动→结果/代价→承接下一章'，避免修辞与空话。\n"
                 if segment_count > 0:
-                    prompt += f"- 长章节优化（{segment_count}段模式）：每段更紧凑，避免并行展开；key_events给出3-5条可执行动作或信息揭示。\n"
+                    prompt += f"- 分段严格约束：每个分段内容≤2句、聚焦一个核心动作或信息揭示；关键事件必须是可执行动作，不用抽象词。\n"
+                    prompt += f"- 长章节优化（{segment_count}段模式）：每段更紧凑，避免并行展开；关键事件给出3-5条可执行动作或信息揭示。\n"
                 else:
-                    prompt += "- 标准章节优化：plot_summary建议180-260字；key_events给出2-4条。\n"
+                    prompt += "- 标准章节优化：剧情梗概建议180-260字；关键事件给出2-4条。\n"
+                prompt += "- 明确承接：衔接下章必须具体（下一章目标/悬念/时间或场景转换），禁止泛化表达如'推动剧情发展'。\n"
+                prompt += "- 角色焦点：主要人物不超过3人，聚焦主角与关键配角，减少并行多线。\n"
+                prompt += "- 标题策略：标题使用核心事件关键词，不含【】（）、特殊修饰符或字数说明。\n"
                 prompt += "\n"
         except Exception:
             pass
 
-        prompt += f"输出格式示例（必须包含所有{expected_count}章）:\n"
-        prompt += f"```json\n"
-        prompt += f'{{\n'
-        prompt += f'  "chapters": [\n'
+        # 输出格式示例（Markdown格式）
+        prompt += f"输出格式示例（必须包含所有{expected_count}章）：\n\n"
+        prompt += f"# 故事线\n\n"
         
-        # 生成多个章节的示例
-        for i in range(min(3, expected_count)):  # 最多显示3个示例章节
+        # 生成示例章节
+        for i in range(min(2, expected_count)):
             chapter_num = start_chapter + i
-            if i > 0:
-                prompt += f',\n'
-            prompt += f'    {{\n'
-            prompt += f'      "chapter_number": {chapter_num},\n'
-            prompt += f'      "title": "第{chapter_num}章标题",\n'
-            prompt += f'      "plot_summary": "第{chapter_num}章的详细剧情梗概（全章总览）",\n'
-            prompt += f'      "key_events": ["关键事件1", "关键事件2", "关键事件3"],\n'
-            prompt += f'      "character_development": "人物发展描述",\n'
-            prompt += f'      "chapter_mood": "章节情绪氛围"'
+            prompt += f"## 第{chapter_num}章：第{chapter_num}章标题\n\n"
+            prompt += f"**剧情梗概：** 第{chapter_num}章的详细剧情梗概（全章总览）\n\n"
+            prompt += f"**主要人物：** 人物A、人物B\n\n"
+            prompt += f"**关键事件：**\n"
+            prompt += f"- 关键事件1\n"
+            prompt += f"- 关键事件2\n\n"
+            prompt += f"**剧情目的：** 本章在整体故事中的作用和目的\n\n"
+            prompt += f"**情感基调：** 情感基调关键词\n\n"
+            prompt += f"**衔接下章：** 与下一章的衔接要点\n\n"
             if segment_count > 0:
-                prompt += f',\n      "plot_segments": [\n'
                 for seg_idx in range(1, segment_count + 1):
-                    next_seg = seg_idx + 1 if seg_idx < segment_count else "下一章"
-                    prompt += f'        {{"index": {seg_idx}, "segment_title": "分段{seg_idx}", "segment_summary": "分段{seg_idx}内容", "segment_key_events": ["A"], "segment_purpose": "作用", "segment_transition": "衔接{next_seg}"}}'
-                    if seg_idx < segment_count:
-                        prompt += ',\n'
-                    else:
-                        prompt += '\n'
-                prompt += f'      ]\n'
-            prompt += f'    }}'
+                    prompt += f"### 分段{seg_idx}：分段{seg_idx}标题\n"
+                    prompt += f"分段{seg_idx}的具体内容描述\n"
+                    prompt += f"- 事件A\n"
+                    prompt += f"**分段作用：** 本段的推进作用\n"
+                    next_seg = f"分段{seg_idx + 1}" if seg_idx < segment_count else "下一章"
+                    prompt += f"**衔接：** 衔接到{next_seg}\n\n"
         
         # 如果有更多章节，用省略号表示
-        if expected_count > 3:
-            prompt += f',\n    // ... 继续生成第{start_chapter + 3}章到第{end_chapter}章，总共{expected_count}章'
+        if expected_count > 2:
+            prompt += f"## 第{start_chapter + 2}章：...\n"
+            prompt += f"...（继续生成第{start_chapter + 2}章到第{end_chapter}章，总共{expected_count}章）\n\n"
         
-        prompt += f'\n  ],\n'
-        prompt += f'  "batch_info": {{\n'
-        prompt += f'    "start_chapter": {start_chapter},\n'
-        prompt += f'    "end_chapter": {end_chapter},\n'
-        prompt += f'    "total_chapters": {expected_count}\n'
-        prompt += f'  }}\n'
-        prompt += f'}}\n'
-        prompt += f"```\n\n"
         if segment_count > 0:
-            prompt += f"**再次强调：必须生成{expected_count}章完整内容，且每章必须包含{segment_count}个分段！**"
+            prompt += f"**再次强调：必须生成{expected_count}章完整内容，且每章必须包含{segment_count}个分段！使用Markdown格式输出！**"
         else:
-            prompt += f"**再次强调：必须生成{expected_count}章完整内容；本次不需要分段，只返回每章梗概！**"
+            prompt += f"**再次强调：必须生成{expected_count}章完整内容；本次不需要分段，只返回每章梗概！使用Markdown格式输出！**"
         
         # 最终总结
         print("\n" + "🔥" * 35)
@@ -930,17 +929,29 @@ class StorylineManager:
                 except ImportError:
                     # 回退到标准生成方式
                     print("⚠️ 增强故事线生成器不可用，使用标准生成方式")
-                    resp = self.storyline_generator.query_with_json_repair(repair_prompt)
+                    from storyline_markdown_parser import parse_storyline_markdown
                     
-                    if 'parsed_json' in resp:
-                        batch_storyline = resp['parsed_json']
+                    resp = self.storyline_generator.query(repair_prompt)
+                    resp_content = resp.get('content', '')
+                    
+                    if resp_content:
+                        batch_storyline = parse_storyline_markdown(resp_content)
+                        if not batch_storyline:
+                            error_msg = f"第{start_chapter}-{end_chapter}章修复失败（Markdown解析失败）"
+                            print(f"❌ {error_msg}")
+                            self.aign.failed_batches.append({
+                                "start_chapter": start_chapter,
+                                "end_chapter": end_chapter,
+                                "error": "修复时Markdown解析失败"
+                            })
+                            continue
                     else:
-                        error_msg = f"第{start_chapter}-{end_chapter}章修复生成失败"
+                        error_msg = f"第{start_chapter}-{end_chapter}章修复失败"
                         print(f"❌ {error_msg}")
                         self.aign.failed_batches.append({
                             "start_chapter": start_chapter,
                             "end_chapter": end_chapter,
-                            "error": f"修复时生成失败: {resp.get('content', '未知错误')}"
+                            "error": "修复时未返回内容"
                         })
                         continue
                 

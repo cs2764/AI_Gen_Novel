@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 模型获取器 - 从各个AI提供商API获取实时模型列表
-支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, Fireworks, Lambda, Lambda2, Lambda3, Grok, SiliconFlow, NVIDIA
+支持的提供商: OpenAI, Anthropic, DeepSeek, Alibaba Qwen, Google Gemini, OpenRouter, LM Studio, oMLX, Fireworks, Lambda, Lambda2, Lambda3, Grok, SiliconFlow, NVIDIA, ZenMux
 """
 
 import requests
@@ -51,7 +51,7 @@ class ModelFetcher:
         从指定提供商获取模型列表
         
         Args:
-            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, fireworks, lambda, lambda2, lambda3, grok, siliconflow, nvidia)
+            provider: 提供商名称 (openai, anthropic, deepseek, ali, gemini, openrouter, lmstudio, omlx, fireworks, lambda, lambda2, lambda3, grok, siliconflow, nvidia)
             api_key: API密钥
             **kwargs: 其他参数
             
@@ -77,6 +77,8 @@ class ModelFetcher:
                 return self._fetch_openrouter_models(api_key, **kwargs)
             elif provider == 'lmstudio':
                 return self._fetch_lmstudio_models(api_key, **kwargs)
+            elif provider == 'omlx':
+                return self._fetch_omlx_models(api_key, **kwargs)
             elif provider == 'fireworks':
                 return self._fetch_fireworks_models(api_key, **kwargs)
             elif provider == 'lambda':
@@ -91,6 +93,8 @@ class ModelFetcher:
                 return self._fetch_siliconflow_models(api_key, **kwargs)
             elif provider == 'nvidia':
                 return self._fetch_nvidia_models(api_key, **kwargs)
+            elif provider == 'zenmux':
+                return self._fetch_zenmux_models(api_key, **kwargs)
             else:
                 logger.warning(f"不支持的提供商: {provider}")
                 return []
@@ -348,6 +352,50 @@ class ModelFetcher:
                 name=f"错误: {str(e)}",
                 provider='lmstudio',
                 description='LM Studio模型获取失败'
+            )]
+    
+    def _fetch_omlx_models(self, api_key: str, base_url: str = "http://localhost:8000/v1") -> List[ModelInfo]:
+        """获取oMLX模型列表"""
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            response = self.session.get(f"{base_url}/models", headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            for model_data in data.get('data', []):
+                models.append(ModelInfo(
+                    id=model_data.get('id', ''),
+                    name=model_data.get('id', ''),
+                    provider='omlx',
+                    created_at=str(model_data.get('created', '')),
+                    owned_by=model_data.get('owned_by', 'local'),
+                    description='本地oMLX模型'
+                ))
+            
+            return models
+            
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"无法连接到oMLX服务器: {base_url}")
+            # 如果无法连接，返回一个默认的模型提示
+            return [ModelInfo(
+                id="请确保oMLX正在运行",
+                name="请确保oMLX正在运行并加载了模型",
+                provider='omlx',
+                description='oMLX连接失败'
+            )]
+        except Exception as e:
+            logger.error(f"获取oMLX模型列表失败: {e}")
+            return [ModelInfo(
+                id="获取模型失败",
+                name=f"错误: {str(e)}",
+                provider='omlx',
+                description='oMLX模型获取失败'
             )]
     
     def _fetch_fireworks_models(self, api_key: str, base_url: str = "https://api.fireworks.ai/inference/v1") -> List[ModelInfo]:
@@ -765,6 +813,66 @@ class ModelFetcher:
                 provider='nvidia',
                 owned_by='nvidia',
                 description='NVIDIA模型'
+            ))
+        
+        return models
+    
+    def _fetch_zenmux_models(self, api_key: str, base_url: str = "https://zenmux.ai/api/v1") -> List[ModelInfo]:
+        """获取ZenMux模型列表"""
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            response = self.session.get(f"{base_url}/models", headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = []
+            
+            for model_data in data.get('data', []):
+                model_id = model_data.get('id', '')
+                if model_id:
+                    models.append(ModelInfo(
+                        id=model_id,
+                        name=model_id,
+                        provider='zenmux',
+                        created_at=str(model_data.get('created', '')),
+                        owned_by=model_data.get('owned_by', 'zenmux'),
+                        description='ZenMux模型'
+                    ))
+            
+            if models:
+                logger.info(f"成功获取 {len(models)} 个 ZenMux 模型")
+                return models
+            else:
+                logger.warning("ZenMux API未返回模型，使用默认列表")
+                return self._get_default_zenmux_models()
+                
+        except Exception as e:
+            logger.warning(f"获取ZenMux模型列表失败: {e}，使用默认列表")
+            return self._get_default_zenmux_models()
+    
+    def _get_default_zenmux_models(self) -> List[ModelInfo]:
+        """获取ZenMux默认模型列表（当API请求失败时使用）"""
+        known_models = [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-r1",
+            "deepseek/deepseek-v3-0324",
+            "qwen/qwen3-max-preview",
+            "qwen/qwen3-32b",
+            "qwen/qwen3-235b-a22b",
+        ]
+        
+        models = []
+        for model_id in known_models:
+            models.append(ModelInfo(
+                id=model_id,
+                name=model_id,
+                provider='zenmux',
+                owned_by='zenmux',
+                description='ZenMux模型'
             ))
         
         return models

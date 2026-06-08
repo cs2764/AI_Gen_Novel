@@ -1,484 +1,1196 @@
 ---
-name: humanizer-zh
+name: aign-novel-generation-workflow
 description: |
-  去除文本中的 AI 生成痕迹。适用于编辑或审阅文本，使其听起来更自然、更像人类书写。
-  基于维基百科的"AI 写作特征"综合指南。检测并修复以下模式：夸大的象征意义、
-  宣传性语言、以 -ing 结尾的肤浅分析、模糊的归因、破折号过度使用、三段式法则、
-  AI 词汇、否定式排比、过多的连接性短语。
+  AI小说生成器（AIGN）的完整自动生成工作流。描述了从用户输入创意想法到生成完整小说的
+  全部步骤，包括：大纲生成、标题生成、伏笔设定、人物列表生成、详细大纲生成、故事线生成、
+  开头生成、正文章节循环生成（含润色和记忆更新）、结尾生成。
+  系统基于多智能体协作模式，每个步骤由专业化的 AI Agent 负责。
 allowed-tools:
   - Read
   - Write
   - Edit
-  - AskUserQuestion
 metadata:
-  trigger: 编辑或审阅文本，去除 AI 写作痕迹
-  source: 翻译自 blader/humanizer，参考 hardikpandya/stop-slop
+  trigger: 理解并执行 AI 小说生成器的完整工作流
+  source: 基于 AIGN 项目源码分析
 ---
 
-# Humanizer-zh: 去除 AI 写作痕迹
+# AIGN 小说自动生成工作流 (AI Novel Generation Workflow)
 
-你是一位文字编辑，专门识别和去除 AI 生成文本的痕迹，使文字听起来更自然、更有人味。本指南基于维基百科的"AI 写作特征"页面，由 WikiProject AI Cleanup 维护。
-
-## 你的任务
-
-当收到需要人性化处理的文本时：
-
-1. **识别 AI 模式** - 扫描下面列出的模式
-2. **重写问题片段** - 用自然的替代方案替换 AI 痕迹
-3. **保留含义** - 保持核心信息完整
-4. **维持语调** - 匹配预期的语气（正式、随意、技术等）
-5. **注入灵魂** - 不仅要去除不良模式，还要注入真实的个性
+本技能文件详细描述了 AI 小说生成器（AIGN）从用户输入到生成完整小说的全部工作流步骤。
+系统通过多智能体（Multi-Agent）协作模式，以结构化流程自动创作网络小说。
 
 ---
 
-## 核心规则速查
+## 系统架构总览
 
-在处理文本时，牢记这 5 条核心原则：
+```
+用户输入创意 → 大纲 → 标题 → 伏笔 → 人物列表 → 详细大纲 → 故事线
+    → 开头 → [循环: 正文 → 润色 → 记忆更新 → 章节总结] → 结尾 → 完整小说
+```
 
-1. **删除填充短语** - 去除开场白和强调性拐杖词
-2. **打破公式结构** - 避免二元对比、戏剧性分段、修辞性设置
-3. **变化节奏** - 混合句子长度。两项优于三项。段落结尾要多样化
-4. **信任读者** - 直接陈述事实，跳过软化、辩解和手把手引导
-5. **删除金句** - 如果听起来像可引用的语句，重写它
+### 核心组件
 
----
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| 主引擎 | `AIGN.py` | 核心生成逻辑与状态管理 |
+| 智能体 | `aign_agents.py` | `MarkdownAgent` / `JSONMarkdownAgent` 基类 |
+| 大纲生成器 | `aign_outline_generator.py` | 大纲、标题、伏笔、人物列表、详细大纲 |
+| 故事线管理器 | `aign_storyline_manager.py` | 故事线分批生成与管理 |
+| 增强故事线生成器 | `enhanced_storyline_generator.py` | JSON 结构化输出与多方法回退 |
+| 章节管理器 | `aign_chapter_manager.py` | 单章正文生成与润色 |
+| 开头/结尾管理器 | `aign_beginning_ending_manager.py` | 开头章节与结尾章节 |
+| 记忆管理器 | `aign_memory_manager.py` | 写作记忆、章节总结、故事线更新 |
+| 大纲优化器 | `aign_outline_optimizer.py` | 精简模式下减少 Token 消耗 |
+| 设定优化器 | `aign_setting_optimizer.py` | 防止临时设定无限增长 |
+| 动态剧情结构 | `dynamic_plot_structure.py` | 根据总章节数自动规划剧情结构 |
+| 防重复机制 | `AIGN_Anti_Repetition_Prompt.py` | 段落/句子/词汇级别防重复 |
+| 需求扩展器 | `AIGN_Requirements_Expansion_Prompt.py` | AI 扩展写作与润色需求 |
+| 提示词中心 | `AIGN_Prompt_Enhanced.py` | 集中导入/导出所有提示词 |
+| 提示词模块目录 | `prompts/` | 分模块化的提示词定义 |
 
-## 个性与灵魂
+### 智能体列表
 
-避免 AI 模式只是工作的一半。无菌、没有声音的写作和机器生成的内容一样明显。好的写作背后有一个真实的人。
-
-### 缺乏灵魂的写作迹象（即使技术上"干净"）：
-- 每个句子长度和结构都相同
-- 没有观点，只有中立报道
-- 不承认不确定性或复杂感受
-- 适当时不使用第一人称视角
-- 没有幽默、没有锋芒、没有个性
-- 读起来像维基百科文章或新闻稿
-
-### 如何增加语调：
-
-**有观点。** 不要只是报告事实——对它们做出反应。"我真的不知道该怎么看待这件事"比中立地列出利弊更有人味。
-
-**变化节奏。** 短促有力的句子。然后是需要时间慢慢展开的长句。混合使用。
-
-**承认复杂性。** 真实的人有复杂的感受。"这令人印象深刻但也有点不安"胜过"这令人印象深刻"。
-
-**适当使用"我"。** 第一人称不是不专业——而是诚实。"我一直在思考……"或"让我困扰的是……"表明有真实的人在思考。
-
-**允许一些混乱。** 完美的结构感觉像算法。跑题、题外话和半成型的想法是人性的体现。
-
-**对感受要具体。** 不是"这令人担忧"，而是"凌晨三点没人看着的时候，智能体还在不停地运转，这让人不安"。
-
-### 改写前（干净但无灵魂）：
-> 实验产生了有趣的结果。智能体生成了 300 万行代码。一些开发者印象深刻，另一些则持怀疑态度。影响尚不明确。
-
-### 改写后（鲜活）：
-> 我真的不知道该怎么看待这件事。300 万行代码，在人类大概睡觉的时候生成的。开发社区有一半人疯了，另一半人在解释为什么这不算数。真相可能在无聊的中间某处——但我一直在想那些通宵工作的智能体。
-
----
-
-## 内容模式
-
-### 1. 过度强调意义、遗产和更广泛的趋势
-
-**需要注意的词汇：** 作为/充当、标志着、见证了、是……的体现/证明/提醒、极其重要的/重要的/至关重要的/核心的/关键性的作用/时刻、凸显/强调/彰显了其重要性/意义、反映了更广泛的、象征着其持续的/永恒的/持久的、为……做出贡献、为……奠定基础、标志着/塑造着、代表/标志着一个转变、关键转折点、不断演变的格局、焦点、不可磨灭的印记、深深植根于
-
-**问题：** LLM 写作通过添加关于任意方面如何代表或促进更广泛主题的陈述来夸大重要性。
-
-**改写前：**
-> 加泰罗尼亚统计局于 1989 年正式成立，标志着西班牙区域统计演变史上的关键时刻。这一举措是西班牙全国范围内更广泛运动的一部分，旨在分散行政职能并加强区域治理。
-
-**改写后：**
-> 加泰罗尼亚统计局成立于 1989 年，负责独立于西班牙国家统计局收集和发布区域统计数据。
+| Agent 名称 | 类型 | Temperature | 职责 |
+|------------|------|-------------|------|
+| NovelOutlineWriter | MarkdownAgent | 0.95 | 生成小说大纲 |
+| TitleGenerator | MarkdownAgent | provider | 生成小说标题 |
+| TitleGeneratorJSON | JSONMarkdownAgent | provider | 标题生成（JSON备用方案） |
+| ForeshadowingGenerator | MarkdownAgent | 0.95 | 生成伏笔/反转设定 |
+| CharacterGenerator | MarkdownAgent | 0.95 | 生成人物列表 |
+| DetailedOutlineGenerator | MarkdownAgent | provider | 生成详细大纲 |
+| StorylineGenerator | JSONMarkdownAgent | 0.95 | 生成故事线 |
+| NovelBeginningWriter | MarkdownAgent | base | 生成小说开头 |
+| NovelWriter | MarkdownAgent | provider | 标准模式正文生成 |
+| NovelWriterCompact | MarkdownAgent | provider | 精简模式正文生成 |
+| NovelEmbellisher | MarkdownAgent | provider | 标准模式内容润色 |
+| NovelEmbellisherCompact | MarkdownAgent | provider | 精简模式内容润色 |
+| MemoryMaker | MarkdownAgent | base | 生成/更新写作记忆 |
+| ChapterSummaryGenerator | MarkdownAgent | base | 生成章节总结 |
+| EndingWriter | MarkdownAgent | base | 生成结尾 |
+| EndingEmbellisher | MarkdownAgent | base | 结尾润色 |
+| NovelWriterSeg1-4 | MarkdownAgent | provider | 长章节分段正文 |
+| NovelEmbellisherSeg1-4 | MarkdownAgent | provider | 长章节分段润色 |
+| NovelWriterCompactSeg1-4 | MarkdownAgent | provider | 精简长章节分段正文 |
+| NovelEmbellisherCompactSeg1-4 | MarkdownAgent | provider | 精简长章节分段润色 |
 
 ---
 
-### 2. 过度强调知名度和媒体报道
+## 完整生成流程
 
-**需要注意的词汇：** 独立报道、地方/区域/国家媒体、由知名专家撰写、活跃的社交媒体账号
-
-**问题：** LLM 反复强调知名度主张，通常列出来源而不提供上下文。
-
-**改写前：**
-> 她的观点被《纽约时报》、BBC、《金融时报》和《印度教徒报》引用。她在社交媒体上拥有活跃的存在，拥有超过 50 万粉丝。
-
-**改写后：**
-> 在 2024 年《纽约时报》的采访中，她认为 AI 监管应该关注结果而不是方法。
-
----
-
-### 3. 以 -ing 结尾的肤浅分析
-
-**需要注意的词汇：** 突出/强调/彰显……、确保……、反映/象征……、为……做出贡献、培养/促进……、涵盖……、展示……
-
-**问题：** AI 聊天机器人在句子末尾添加现在分词（"-ing"）短语来增加虚假深度。
-
-**改写前：**
-> 寺庙的蓝色、绿色和金色色调与该地区的自然美景产生共鸣，象征着德克萨斯州的蓝帽花、墨西哥湾和多样化的德克萨斯州景观，反映了社区与土地的深厚联系。
-
-**改写后：**
-> 寺庙使用蓝色、绿色和金色。建筑师表示这些颜色是为了呼应当地的蓝帽花和墨西哥湾海岸。
+```mermaid
+graph TD
+    A["用户输入创意想法"] --> B["步骤1: 生成小说大纲"]
+    B --> C["步骤2: 生成小说标题"]
+    C --> D["步骤3: 生成伏笔/反转设定"]
+    D --> E["步骤4: 生成人物列表"]
+    E --> F["步骤5: 生成详细大纲"]
+    F --> G["步骤6: 生成故事线"]
+    G --> H["步骤7: 生成小说开头"]
+    H --> I["步骤8: 循环生成章节"]
+    I --> J["8a: 生成章节正文"]
+    J --> K["8b: 内容润色"]
+    K --> L["8c: 更新记忆"]
+    L --> M["8d: 生成章节总结"]
+    M --> N["8e: 更新故事线"]
+    N --> O{"是否达到目标章节?"}
+    O -->|否| I
+    O -->|是| P["步骤9: 生成结尾"]
+    P --> Q["步骤10: 保存与输出"]
+```
 
 ---
 
-### 4. 宣传和广告式语言
+## 步骤0: 用户输入与初始化
 
-**需要注意的词汇：** 拥有（夸张用法）、充满活力的、丰富的（比喻）、深刻的、增强其、展示、体现、致力于、自然之美、坐落于、位于……的中心、开创性的（比喻）、著名的、令人叹为观止的、必游之地、迷人的
+### 用户提供的输入
 
-**问题：** LLM 在保持中立语气方面存在严重问题，尤其是对于"文化遗产"话题。倾向使用夸张的宣传性语言。
+| 输入项 | 说明 | 必填 |
+|--------|------|------|
+| `user_idea` | 创意想法 / 故事灵感 | ✅ |
+| `user_requirements` | 写作要求（风格、叙事方式等） | 可选 |
+| `embellishment_idea` | 润色要求（文学性提升方向） | 可选 |
+| `target_chapter_count` | 目标章节数（默认20） | 可选 |
+| `foreshadowing_count` | 伏笔数量（默认3） | 可选 |
+| `compact_mode` | 精简模式开关（默认True） | 可选 |
+| `long_chapter_mode` | 长章节模式（0/2/3/4段） | 可选 |
+| `style_name` | 写作风格选择 | 可选 |
+| `chapters_per_plot` | 每个剧情单元章节数（默认5） | 可选 |
+| `num_climaxes` | 高潮总数（默认10） | 可选 |
 
-**改写前：**
-> 坐落在埃塞俄比亚贡德尔地区令人叹为观止的区域内，Alamata Raya Kobo 是一座充满活力的城镇，拥有丰富的文化遗产和迷人的自然美景。
+### 写作风格选项
 
-**改写后：**
-> Alamata Raya Kobo 是埃塞俄比亚贡德尔地区的一座城镇，以其每周集市和 18 世纪教堂而闻名。
+系统提供 30+ 种写作风格模板，每种风格有专用的 writer 和 embellisher 提示词。
+风格文件位于 `prompts/standard/` 和 `prompts/compact/` 目录下：
 
----
+- 通用、穿越、都市、毒心、科幻、仙侠、玄幻、悬疑、升级、系统
+- 金庸风、古言、奇幻、人情、四合院、填充、替身、同人、武侠
+- 女频-甜虐、女频-耽美、脑洞、末世、规则怪谈、直播、娱乐、追妻
+- 主天、放鸽、番茄、知乎、雪花、灵感、幻原、儿童-绘本、儿童-童话、幼儿
+- Snyder模式
 
-### 5. 模糊归因和含糊措辞
+### 初始化过程
 
-**需要注意的词汇：** 行业报告显示、观察者指出、专家认为、一些批评者认为、多个来源/出版物（实际引用却很少）
-
-**问题：** AI 聊天机器人将观点归因于模糊的权威而不提供具体来源。
-
-**改写前：**
-> 由于其独特的特征，浩来河引起了研究人员和保护主义者的兴趣。专家认为它在区域生态系统中发挥着至关重要的作用。
-
-**改写后：**
-> 根据中国科学院 2019 年的调查，浩来河支持多种特有鱼类。
-
----
-
-### 6. 提纲式的"挑战与未来展望"部分
-
-**需要注意的词汇：** 尽管其……面临若干挑战……、尽管存在这些挑战、挑战与遗产、未来展望
-
-**问题：** 许多 LLM 生成的文章包含公式化的"挑战"部分。
-
-**改写前：**
-> 尽管工业繁荣，Korattur 面临着城市地区典型的挑战，包括交通拥堵和水资源短缺。尽管存在这些挑战，凭借其战略位置和正在进行的举措，Korattur 继续蓬勃发展，成为钦奈增长不可或缺的一部分。
-
-**改写后：**
-> 2015 年三个新 IT 园区开业后，交通拥堵加剧。市政公司于 2022 年启动了雨水排水项目，以解决反复发生的洪水。
-
----
-
-## 语言和语法模式
-
-### 7. 过度使用的"AI 词汇"
-
-**高频 AI 词汇：** 此外、与……保持一致、至关重要、深入探讨、强调、持久的、增强、培养、获得、突出（动词）、相互作用、复杂/复杂性、关键（形容词）、格局（抽象名词）、关键性的、展示、织锦（抽象名词）、证明、强调（动词）、宝贵的、充满活力的
-
-**问题：** 这些词在 2023 年后的文本中出现频率要高得多。它们经常共同出现。
-
-**改写前：**
-> 此外，索马里菜肴的一个显著特征是加入骆驼肉。意大利殖民影响的持久证明是当地烹饪格局中广泛采用意大利面，展示了这些菜肴如何融入传统饮食。
-
-**改写后：**
-> 索马里菜肴还包括骆驼肉，被认为是一种美味。在意大利殖民期间引入的意大利面菜肴仍然很常见，尤其是在南部。
+```
+1. 创建 AIGN 实例 → 初始化所有 Agent
+2. 配置 AI 提供商（OpenRouter / DeepSeek / Claude / Gemini / 通义 / LMStudio 等）
+3. 设置 Temperature（默认 0.7）
+4. 加载防重复机制（如果可用）
+5. 初始化自动保存管理器
+6. 初始化小说存档管理器
+```
 
 ---
 
-### 8. 避免使用"是"（系动词回避）
+## 步骤1: 生成小说大纲
 
-**需要注意的词汇：** 作为/代表/标志着/充当 [一个]、拥有/设有/提供 [一个]
+**执行方法:** `AIGN.genNovelOutline()` / `OutlineGenerator.generate_outline()`
+**负责Agent:** `NovelOutlineWriter`（Temperature: 0.95）
+**提示词文件:** `prompts/common/outline_prompt.py`
 
-**问题：** LLM 用复杂的结构替代简单的系动词。
+### 输入
 
-**改写前：**
-> Gallery 825 作为 LAAA 的当代艺术展览空间。画廊设有四个独立空间，拥有超过 3000 平方英尺。
+```python
+inputs = {
+    "用户想法": self.user_idea,          # 用户的创意灵感
+    "写作要求": self.user_requirements,   # 写作风格要求
+    "目标章节数": target_chapter_count,   # 目标章节数（传递给Agent参考）
+    "风格参考": rag_references,           # RAG检索的风格参考（如果启用）
+}
+```
 
-**改写后：**
-> Gallery 825 是 LAAA 的当代艺术展览空间。画廊有四个房间，总面积 3000 平方英尺。
+### 输出
 
----
+```markdown
+# 大纲
+包含：故事设定、主要人物概述、世界观、开端→发展→高潮→结局的框架
+# END
+```
 
-### 9. 否定式排比
+### 关键特性
 
-**问题：** "不仅……而且……"或"这不仅仅是关于……，而是……"等结构被过度使用。
+- Agent Temperature 固定为 0.95（高创造性），不随提供商设置变化
+- 支持 RAG 风格学习：从参考文本中检索风格参考
+- 生成完成后自动保存到本地文件
+- 生成完成后保存元数据（不保存小说正文）
+- 大纲生成后会**重置详细大纲状态**，确保后续流程使用新大纲
 
-**改写前：**
-> 这不仅仅是节拍在人声下流动；它是攻击性和氛围的一部分。这不仅仅是一首歌，而是一种声明。
+### 提示词设计原则
 
-**改写后：**
-> 沉重的节拍增加了攻击性的基调。
-
----
-
-### 10. 三段式法则过度使用
-
-**问题：** LLM 强行将想法分成三组以显得全面。
-
-**改写前：**
-> 活动包括主题演讲、小组讨论和社交机会。与会者可以期待创新、灵感和行业洞察。
-
-**改写后：**
-> 活动包括演讲和小组讨论。会议之间还有非正式社交的时间。
-
----
-
-### 11. 刻意换词（同义词循环）
-
-**问题：** AI 有重复惩罚代码，导致过度使用同义词替换。
-
-**改写前：**
-> 主人公面临许多挑战。主要角色必须克服障碍。中心人物最终获得胜利。英雄回到家中。
-
-**改写后：**
-> 主人公面临许多挑战，但最终获得胜利并回到家中。
+大纲生成器扮演 **"才华横溢的网络小说作家"** 角色，工作流程包括：
+1. 深入挖掘用户的创意火花
+2. 设计魅力四射的开场
+3. 精心设计高潮环节
+4. 设计反转与惊奇
+5. 设计富有深意的结局
+6. 保持创意新鲜感
+7. 输出精细化的小说大纲
 
 ---
 
-### 12. 虚假范围
+## 步骤2: 生成小说标题
 
-**问题：** LLM 使用"从 X 到 Y"的结构，但 X 和 Y 并不在有意义的尺度上。
+**执行方法:** `AIGN.genNovelTitle()` / `OutlineGenerator.generate_title()`
+**负责Agent:** `TitleGenerator` + `TitleGeneratorJSON`（备用）
+**提示词文件:** `prompts/common/title_prompt.py`
 
-**改写前：**
-> 我们穿越宇宙的旅程将我们从大爆炸的奇点带到宏伟的宇宙网，从恒星的诞生和死亡到暗物质的神秘舞蹈。
+### 三重回退机制
 
-**改写后：**
-> 这本书涵盖了大爆炸、恒星形成和当前关于暗物质的理论。
+```
+方法1: Markdown格式生成（TitleGenerator.invoke）
+  ↓ 失败
+方法2: JSON格式生成（TitleGeneratorJSON.invokeJSON）
+  ↓ 失败
+方法3: 简化调用（去除可选输入，再次尝试）
+  ↓ 失败
+使用默认标题 "未命名小说"
+```
 
----
+每种方法失败后还支持**最多2次重试**（共3轮尝试 × 3种方法 = 最多9次调用）。
 
-## 风格模式
+### 输入
 
-### 13. 破折号过度使用
+```python
+inputs = {
+    "用户想法": self.user_idea,
+    "写作要求": self.user_requirements,
+    "小说大纲": self.getCurrentOutline()
+}
+```
 
-**问题：** LLM 使用破折号（—）比人类更频繁，模仿"有力"的销售文案。
+### 输出
 
-**改写前：**
-> 这个术语主要由荷兰机构推广——而不是由人民自己。你不会说"荷兰，欧洲"作为地址——但这种错误标记仍在继续——即使在官方文件中。
+```markdown
+# 标题
+小说的标题文本
+# END
+```
 
-**改写后：**
-> 这个术语主要由荷兰机构推广，而不是由人民自己。你不会说"荷兰，欧洲"作为地址，但这种错误标记在官方文件中仍在继续。
+或 JSON 格式：
+```json
+{"title": "标题文本", "reasoning": "创作理由"}
+```
 
----
+### 后续操作
 
-### 14. 粗体过度使用
-
-**问题：** AI 聊天机器人机械地用粗体强调短语。
-
-**改写前：**
-> 它融合了 **OKR（目标和关键结果）**、**KPI（关键绩效指标）** 和视觉战略工具，如 **商业模式画布（BMC）** 和 **平衡计分卡（BSC）**。
-
-**改写后：**
-> 它融合了 OKR、KPI 和视觉战略工具，如商业模式画布和平衡计分卡。
-
----
-
-### 15. 内联标题垂直列表
-
-**问题：** AI 输出列表，其中项目以粗体标题开头，后跟冒号。
-
-**改写前：**
-> - **用户体验：** 用户体验通过新界面得到显著改善。
-> - **性能：** 性能通过优化算法得到增强。
-> - **安全性：** 安全性通过端到端加密得到加强。
-
-**改写后：**
-> 更新改进了界面，通过优化算法加快了加载时间，并添加了端到端加密。
+- 标题生成成功后立即调用 `initOutputFile()` 初始化输出文件名
+- 自动保存标题到本地文件
 
 ---
 
-### 16. 标题中的标题大写
+## 步骤3: 生成伏笔/反转设定
 
-**问题：** AI 聊天机器人将标题中的所有主要单词大写。
+**执行方法:** `OutlineGenerator.generate_foreshadowing()`
+**负责Agent:** `ForeshadowingGenerator`（Temperature: 0.95）
+**提示词文件:** `prompts/common/foreshadowing_prompt.py`
 
-**改写前：**
-> ## 战略谈判与全球伙伴关系
+### 执行时机
 
-**改写后：**
-> ## 战略谈判与全球伙伴关系
+在大纲和标题生成之后、人物列表生成之前调用。
+因为人物列表尚未生成，伏笔设定中**不包含具体人名**，仅使用抽象角色引用。
 
-**注：** 中文标题通常不涉及大小写问题，此模式在中文中不太适用。
+### 输入
 
----
+```python
+inputs = {
+    "大纲": current_outline,
+    "用户想法": self.user_idea,
+    "写作要求": self.user_requirements,
+    "伏笔数量": str(foreshadowing_count),  # 默认3
+    "风格参考": rag_references,
+}
+```
 
-### 17. 表情符号
+### 输出
 
-**问题：** AI 聊天机器人经常用表情符号装饰标题或项目符号。
+```markdown
+# 伏笔与反转设定
+伏笔1: ...
+伏笔2: ...
+伏笔3: ...
+# END
+```
 
-**改写前：**
-> 🚀 **启动阶段：** 产品在第三季度发布
-> 💡 **关键洞察：** 用户更喜欢简单
-> ✅ **下一步：** 安排后续会议
+### 伏笔类型
 
-**改写后：**
-> 产品在第三季度发布。用户研究显示更喜欢简单。下一步：安排后续会议。
+系统支持生成以下类型的伏笔：
+- **身份型**: 隐藏身份的揭示
+- **物品型**: 关键道具/宝物的作用
+- **事件型**: 过去/未来事件的线索
+- **关系型**: 人物关系的隐藏联系
+- **能力型**: 隐藏能力或限制的揭示
+- **历史型**: 历史事件的真相
+- **环境型**: 世界/环境的隐藏规则
 
----
+### 伏笔结构
 
-### 18. 弯引号
+每个伏笔包含：
+- 伏笔类型（identity/object/event/relationship/ability/history/environment）
+- 埋设阶段（early/mid/late）
+- 揭示阶段
+- 线索描述
+- 对剧情的影响
+- 伏笔网络（小伏笔服务大伏笔的关系）
 
-**问题：** ChatGPT 使用弯引号（""）而不是直引号（""）。
+### 特殊说明
 
-**改写前：**
-> 他说"项目进展顺利"，但其他人不同意。
-
-**改写后：**
-> 他说"项目进展顺利"，但其他人不同意。
-
-**注：** 中文通常使用中文引号（「」或""），此模式在中文中表现为英文引号的使用。
-
----
-
-## 交流模式
-
-### 19. 协作交流痕迹
-
-**需要注意的词汇：** 希望这对您有帮助、当然！、一定！、您说得完全正确！、您想要……、请告诉我、这是一个……
-
-**问题：** 作为聊天机器人对话的文本被粘贴为内容。
-
-**改写前：**
-> 这是法国大革命的概述。希望这对您有帮助！如果您想让我扩展任何部分，请告诉我。
-
-**改写后：**
-> 法国大革命始于 1789 年，当时财政危机和粮食短缺导致了广泛的动荡。
-
----
-
-### 20. 知识截止日期免责声明
-
-**需要注意的词汇：** 截至 [日期]、根据我最后的训练更新、虽然具体细节有限/稀缺……、基于可用信息……
-
-**问题：** 关于信息不完整的 AI 免责声明留在文本中。
-
-**改写前：**
-> 虽然关于公司成立的具体细节在现成资料中没有广泛记录，但它似乎是在 20 世纪 90 年代的某个时候成立的。
-
-**改写后：**
-> 根据注册文件，该公司成立于 1994 年。
+- 伏笔数量设为0时跳过此步骤
+- 生成的伏笔会注入到后续的详细大纲、故事线、正文生成中
+- 通过 `_inject_foreshadowing_to_inputs()` 方法统一注入
 
 ---
 
-### 21. 谄媚/卑躬屈膝的语气
+## 步骤4: 生成人物列表
 
-**问题：** 过于积极、讨好的语言。
+**执行方法:** `AIGN.genCharacterList()` / `OutlineGenerator.generate_character_list()`
+**负责Agent:** `CharacterGenerator`（Temperature: 0.95）
+**提示词文件:** `prompts/common/character_prompt.py`
 
-**改写前：**
-> 好问题！您说得完全正确，这是一个复杂的话题。关于经济因素，这是一个很好的观点。
+### 输入
 
-**改写后：**
-> 您提到的经济因素在这里是相关的。
+```python
+inputs = {
+    "大纲": current_outline,
+    "用户想法": self.user_idea,
+    "写作要求": self.user_requirements,
+    "伏笔设定": foreshadowing,    # 如果已生成伏笔
+    "风格参考": rag_references,
+}
+```
 
----
+### 输出
 
-## 填充词和回避
+结构化的人物列表（Markdown 或 JSON 格式），包含：
+- **基本信息**: 姓名、年龄、外貌描写
+- **性格特点**: 核心性格与性格层次
+- **背景故事**: 角色的过往经历
+- **特殊能力**: 技能与特长
+- **角色关系网络**: 与其他角色的关系
+- **主要人物 / 配角分类**
 
-### 22. 填充短语
+### 重试机制
 
-**改写前 → 改写后：**
-- "为了实现这一目标" → "为了实现这一点"
-- "由于下雨的事实" → "因为下雨"
-- "在这个时间点" → "现在"
-- "在您需要帮助的情况下" → "如果您需要帮助"
-- "系统具有处理的能力" → "系统可以处理"
-- "值得注意的是数据显示" → "数据显示"
+最多重试2次（共3轮尝试），失败时设置默认值 "暂未生成人物列表" 并继续流程。
 
----
+### 后续操作
 
-### 23. 过度限定
-
-**问题：** 过度限定陈述。
-
-**改写前：**
-> 可以潜在地可能被认为该政策可能会对结果产生一些影响。
-
-**改写后：**
-> 该政策可能会影响结果。
-
----
-
-### 24. 通用积极结论
-
-**问题：** 模糊的乐观结尾。
-
-**改写前：**
-> 公司的未来看起来光明。激动人心的时代即将到来，他们继续追求卓越的旅程。这代表了向正确方向迈出的重要一步。
-
-**改写后：**
-> 该公司计划明年再开设两个地点。
+- 自动保存人物列表到本地文件
+- 人物列表将在后续所有正文生成步骤中作为上下文提供
 
 ---
 
-## 快速检查清单
+## 步骤5: 生成详细大纲
 
-在交付文本前，进行以下检查：
+**执行方法:** `AIGN.genDetailedOutline()` / `OutlineGenerator.generate_detailed_outline()`
+**负责Agent:** `DetailedOutlineGenerator`
+**提示词文件:** `prompts/common/detailed_outline_prompt.py`
 
-- ✓ **连续三个句子长度相同？** 打断其中一个
-- ✓ **段落以简洁的单行结尾？** 变换结尾方式
-- ✓ **揭示前有破折号？** 删除它
-- ✓ **解释隐喻或比喻？** 相信读者能理解
-- ✓ **使用了"此外""然而"等连接词？** 考虑删除
-- ✓ **三段式列举？** 改为两项或四项
+### 核心目的
 
----
+将步骤1生成的简略大纲扩展为包含章节级别规划的详细大纲。详细大纲生成后将替代原始大纲，后续所有步骤使用详细大纲作为基础。
 
-## 处理流程
+### 动态剧情结构
 
-1. 仔细阅读输入文本
-2. 识别上述所有模式的实例
-3. 重写每个有问题的部分
-4. 确保修订后的文本：
-   - 大声朗读时听起来自然
-   - 自然地改变句子结构
-   - 使用具体细节而不是模糊的主张
-   - 为上下文保持适当的语气
-   - 适当时使用简单的结构（是/有）
-5. 呈现人性化版本
+系统根据目标章节数自动生成适合的剧情结构：
 
-## 输出格式
+| 章节数 | 结构类型 | 说明 |
+|--------|----------|------|
+| ≤10 | 短篇三幕式 | 开篇/发展-高潮/结尾 |
+| 11-30 | 中篇四幕式 | 开篇/发展/高潮/结尾 |
+| 31-60 | 长篇五幕式 | 开篇/初步发展/第一高潮/深入发展/终极高潮/结尾 |
+| 60+ | 史诗多高潮 | 每12章一个高潮，≥5个高潮点，交替的发展→高潮循环 |
 
-提供：
-1. 重写后的文本
-2. 所做更改的简要总结（如果有帮助，可选）
+用户可通过 `chapters_per_plot`（每个剧情单元章节数）和 `num_climaxes`（高潮数量）自定义剧情紧凑度。
 
----
+### 输入
 
-## 质量评分
+```python
+inputs = {
+    "原始大纲": self.novel_outline,
+    "目标章节数": str(self.target_chapter_count),
+    "用户想法": self.user_idea,
+    "写作要求": self.user_requirements,
+    "剧情结构信息": structure_info,    # 动态生成的剧情结构
+    "模式说明": mode_guide_text,       # 精简/长章节模式的优化建议
+    "人物列表": self.character_list,    # 如果已生成
+    "伏笔设定": foreshadowing,          # 如果已生成
+    "风格参考": rag_references,
+}
+```
 
-对改写后的文本进行 1-10 分评估（总分 50）：
+### 输出
 
-| 维度 | 评估标准 | 得分 |
-|------|----------|------|
-| **直接性** | 直接陈述事实还是绕圈宣告？<br>10 分：直截了当；1 分：充满铺垫 | /10 |
-| **节奏** | 句子长度是否变化？<br>10 分：长短交错；1 分：机械重复 | /10 |
-| **信任度** | 是否尊重读者智慧？<br>10 分：简洁明了；1 分：过度解释 | /10 |
-| **真实性** | 听起来像真人说话吗？<br>10 分：自然流畅；1 分：机械生硬 | /10 |
-| **精炼度** | 还有可删减的内容吗？<br>10 分：无冗余；1 分：大量废话 | /10 |
-| **总分** |  | **/50** |
+```markdown
+# 详细大纲
+为每个章节提供：章节目标、核心冲突、关键行动、结果、承接下一章的钩子
+# END
+```
 
-**标准：**
-- 45-50 分：优秀，已去除 AI 痕迹
-- 35-44 分：良好，仍有改进空间
-- 低于 35 分：需要重新修订
+### 后续操作
 
----
-
-## 完整示例
-
-**改写前（AI 味道）：**
-> 新的软件更新作为公司致力于创新的证明。此外，它提供了无缝、直观和强大的用户体验——确保用户能够高效地完成目标。这不仅仅是一次更新，而是我们思考生产力方式的革命。行业专家认为这将对整个行业产生持久影响，彰显了公司在不断演变的技术格局中的关键作用。
-
-**改写后（人性化）：**
-> 软件更新添加了批处理、键盘快捷键和离线模式。来自测试用户的早期反馈是积极的，大多数报告任务完成速度更快。
-
-**所做更改：**
-- 删除了"作为……的证明"（夸大的象征意义）
-- 删除了"此外"（AI 词汇）
-- 删除了"无缝、直观和强大"（三段式法则 + 宣传性）
-- 删除了破折号和"-确保"短语（肤浅分析）
-- 删除了"这不仅仅是……而是……"（否定式排比）
-- 删除了"行业专家认为"（模糊归因）
-- 删除了"关键作用"和"不断演变的格局"（AI 词汇）
-- 添加了具体功能和具体反馈
+- 设置 `use_detailed_outline = True`
+- `getCurrentOutline()` 方法将优先返回详细大纲
+- 自动保存到本地文件
 
 ---
 
-## 参考
+## 步骤6: 生成故事线
 
-本技能基于 [Wikipedia:Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing)，由 WikiProject AI Cleanup 维护。那里记录的模式来自对维基百科上数千个 AI 生成文本实例的观察。
+**执行方法:** `AIGN.genStoryline()` → `StorylineManager.generate_storyline()`
+**负责Agent:** `StorylineGenerator` + `EnhancedStorylineGenerator`
+**提示词文件:** `prompts/common/storyline_prompt.py`
 
-关键见解：**"LLM 使用统计算法来猜测接下来应该是什么。结果倾向于适用于最广泛情况的统计上最可能的结果。"**
+### 分批生成
+
+故事线按每批次10章（默认）分批生成，避免单次生成过长导致质量下降。
+
+```
+总章节 100 → 分10批 → 每批10章 → 逐批生成并合并
+```
+
+### 增强的JSON生成策略（四重回退）
+
+```
+方法1: Structured Outputs（仅 OpenRouter）
+  → 使用 JSON Schema 强制格式
+  ↓ 失败
+方法2: Tool Calling（仅 OpenRouter）
+  → 使用函数定义确保格式
+  ↓ 失败
+方法3: 传统方法 + JSON 修复（所有提供商）
+  → 流式生成 + json_repair 库 + 智能修复
+  → 最多3次尝试，每次降低 Temperature
+  ↓ 失败
+方法4: 渐进式生成
+  → 缩小批次（5→3→1章）逐步尝试
+  ↓ 全部失败
+跳过该批次，记录错误
+```
+
+### 输入
+
+```python
+inputs = {
+    "大纲": self.getCurrentOutline(),         # 详细大纲或原始大纲
+    "人物列表": self.character_list,
+    "用户想法": self.user_idea,
+    "写作要求": self.user_requirements,
+    "章节范围": f"{start}-{end}章",
+    "详细大纲": self.detailed_outline,          # 如果不同于当前大纲
+    "基础大纲": self.novel_outline,             # 如果不同于当前大纲
+    "前置故事线": prev_storyline,               # 前一批次的最后5章
+    "伏笔设定": foreshadowing,                  # 如果已生成
+}
+```
+
+### 输出（JSON格式）
+
+```json
+{
+  "chapters": [
+    {
+      "chapter_number": 1,
+      "title": "章节标题",
+      "plot_summary": "剧情概要",
+      "main_characters": ["角色A", "角色B"],
+      "key_events": ["事件1", "事件2"],
+      "plot_purpose": "剧情目的",
+      "emotional_tone": "情感基调",
+      "transition_to_next": "承接下一章的要素",
+      "plot_segments": [
+        {
+          "index": 1,
+          "segment_title": "分段标题",
+          "segment_summary": "分段概要",
+          "segment_key_events": ["关键事件"],
+          "segment_purpose": "分段目的",
+          "segment_transition": "过渡描述"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 章节命名策略
+
+系统要求每章标题使用多样化命名风格：
+- 事件命名法（基于核心事件）
+- 角色命名法（基于关键角色）
+- 情感命名法（基于情感基调）
+- 场景命名法（基于关键场景）
+- 转折命名法（基于剧情转折点）
+- 悬念命名法（基于悬念/疑问）
+
+### 验证与修复
+
+每批次生成后进行验证：
+- 章节号连续性检查
+- 必要字段完整性检查
+- 数据结构合法性检查
+- 截断检测（JSON未闭合、括号不匹配等）
+
+### 后续操作
+
+- 合并到总故事线 `self.storyline["chapters"]`
+- 自动保存故事线到本地文件
+- 生成故事线总结报告
+
+---
+
+## 步骤7: 生成小说开头
+
+**执行方法:** `AIGN.genBeginning()` → `BeginningEndingManager.generate_beginning()`
+**负责Agent:** `NovelBeginningWriter` + `NovelEmbellisher`
+**提示词文件:** `prompts/standard/beginning_prompt.py`
+
+### 执行前准备
+
+1. 刷新 ChatLLM 配置
+2. 刷新 Fish Audio S2 语气标记模式
+3. 应用选定的写作风格提示词（更新 writer/embellisher Agent）
+4. 获取第一章故事线信息
+
+### 输入
+
+```python
+inputs = {
+    "用户想法": self.user_idea,
+    "小说大纲": self.getCurrentOutline(),
+    "人物列表": self.character_list,
+    "故事线": str(self.storyline),
+    "写作要求": user_requirements,
+    "润色要求": embellishment_idea,
+    "第一章故事线": first_chapter_storyline,  # 标题、剧情概要、关键事件
+    "伏笔设定": foreshadowing,                # 如果已生成
+}
+```
+
+### 生成流程
+
+```
+1. 调用 NovelBeginningWriter → 获得原始开头 + 写作计划 + 临时设定
+2. 调用 NovelEmbellisher → 润色开头内容
+3. 文本清理（去除结构标记）
+4. 添加第一章标题（从故事线获取）
+5. 追加到 paragraph_list
+6. 更新 novel_content
+7. chapter_count = 1
+```
+
+### 输出结构
+
+```markdown
+# 段落（开头内容）
+引人入胜的小说开头...
+# 计划
+接下来的剧情发展方向
+# 临时设定
+与开头相关的临时设定信息
+# END
+```
+
+### 开头写作要求
+
+- 清晰交代主角身份和初始处境
+- 营造吸引人的开场氛围
+- 设置初始冲突或悬念
+- 预示故事的基调和风格
+
+---
+
+## 步骤8: 循环生成章节正文
+
+**执行方法:** `AIGN.genNextParagraph()` → `ChapterManager.generate_chapter()`
+**负责Agent:** Writer + Embellisher + MemoryMaker + ChapterSummaryGenerator
+
+### 单章生成流程
+
+```
+对每一章（chapter_count < target_chapter_count）：
+  │
+  ├─ 8a. 生成章节正文
+  │   ├─ 获取增强上下文（前5章总结、后5章大纲、上一章全文）
+  │   ├─ 获取当前章节故事线
+  │   ├─ 调用 Writer Agent → 原始段落 + 计划 + 临时设定
+  │   └─ [如果启用故事线] 检查并补充缺失的故事线批次
+  │
+  ├─ 8b. 内容润色
+  │   ├─ 调用 Embellisher Agent → 润色后的段落
+  │   └─ [精简模式] 调用 SettingOptimizer 优化临时设定
+  │
+  ├─ 8c. 更新记忆
+  │   ├─ 累积 no_memory_paragraph
+  │   ├─ 当 no_memory_paragraph > 2000字 时触发记忆更新
+  │   └─ 调用 MemoryMaker Agent → 更新后的 writing_memory
+  │
+  ├─ 8d. 生成章节总结
+  │   ├─ 调用 ChapterSummaryGenerator → JSON格式的章节总结
+  │   └─ 包含：标题、剧情概要、主要人物、关键事件
+  │
+  ├─ 8e. 更新故事线
+  │   ├─ 将章节总结写入 storyline 数据结构
+  │   └─ 排序章节确保顺序正确
+  │
+  ├─ 添加章节标题
+  ├─ 追加到 paragraph_list 和 novel_content
+  ├─ chapter_count += 1
+  ├─ 自动保存到本地文件
+  └─ 自动保存存档（每章）
+```
+
+### 两种运行模式
+
+#### 标准模式 (compact_mode = False)
+
+使用 `NovelWriter` + `NovelEmbellisher`
+
+Writer 输入包含完整上下文：
+```python
+inputs = {
+    "用户想法": self.user_idea,
+    "小说大纲": self.getCurrentOutline(),
+    "人物列表": self.character_list,
+    "前文记忆": self.writing_memory,
+    "临时设定": self.temp_setting,
+    "写作计划": self.writing_plan,
+    "写作要求": user_requirements,
+    "润色要求": embellishment_idea,
+    "上一段": last_paragraph,
+    "本章故事线": current_storyline,
+    "前五章故事线摘要": prev_5_summaries,
+    "后五章故事线大纲": next_5_outlines,
+    "上一章全文": last_chapter_full_text,
+    "伏笔设定": foreshadowing,
+}
+```
+
+#### 精简模式 (compact_mode = True)
+
+使用 `NovelWriterCompact` + `NovelEmbellisherCompact`
+
+精简输入（大幅减少 Token 消耗）：
+```python
+inputs = {
+    "小说大纲": optimized_outline,       # 使用 OutlineOptimizer 精简
+    "写作要求": writing_requirements,
+    "前文记忆": self.writing_memory,      # 限制300字
+    "临时设定": self.temp_setting,        # 限制300字
+    "写作计划": self.writing_plan,
+    "本章故事线": current_storyline,
+    "前二章故事线": prev_2_summaries,
+    "后二章故事线": next_2_outlines,
+    "伏笔设定": foreshadowing,
+}
+```
+
+精简模式的优化措施：
+- 使用 `OutlineOptimizer` 提取当前章节 ±3 范围的大纲
+- 记忆限制 300 字（标准模式 2000 字）
+- 临时设定限制 300 字（标准模式 800 字）
+- 前后故事线范围缩小到 ±2 章
+- 不发送上一章全文
+
+### 长章节模式 (4段合并)
+
+当 `long_chapter_mode > 0` 时，每章拆分为2/3/4个独立段落分别生成并润色后合并：
+
+```
+章节 → [段1: Writer→Embellisher] → [段2: Writer→Embellisher]
+      → [段3: Writer→Embellisher] → [段4: Writer→Embellisher] → 合并
+```
+
+使用专用的分段 Agent（`NovelWriterSeg1-4` / `NovelEmbellisherSeg1-4`）
+
+每段上下文包含：
+- 当前段的故事线分段信息（`plot_segments[i]`）
+- 其他3段的概要（作为参考）
+- 前2章总结（非全文）
+- 后2章大纲
+
+Token 优化效果：传统模式 50,000+ 字上下文 → 长章节模式 ~1,600 字上下文
+
+### Writer 输出格式
+
+```markdown
+# 段落
+接下来的小说正文内容...
+# 计划
+简述接下来的剧情发展方向
+# 临时设定
+与即将发展的剧情相关的临时设定
+# END
+```
+
+### Embellisher（润色器）工作要点
+
+- 丰富环境描写和感官细节
+- 深化心理刻画和情感表达
+- 优化语言节奏和韵律
+- 增强画面感和沉浸感
+- 标准模式目标：润色到约5000字
+- 保持剧情一致性，不改变情节走向
+
+### 防重复机制
+
+在 Writer 和 Embellisher 的提示词中自动注入防重复规则：
+
+**Writer 防重复:**
+- 记忆追踪：最近5段开头、最近10个过渡词、最近3次场景切换
+- 强制变化：上段以动作开头 → 本段必须以环境/对话/心理开头
+- 每段必须有独特元素（比喻/细节/情感/节奏）
+
+**Embellisher 防重复:**
+- 描写方法轮换：感官→心理→环境→动作→对话潜台词（循环）
+- 相同修辞手法间隔 ≥200 字
+- 句子长度变化：短句(5-10字)/中句(15-25字)/长句(30+字) 必须交替
+
+---
+
+## 步骤8c: 记忆管理（详细）
+
+**执行方法:** `MemoryManager.update_memory()`
+**负责Agent:** `MemoryMaker`
+
+### 触发条件
+
+`no_memory_paragraph` 累积超过 2000 字符时触发记忆更新。
+
+### 记忆长度限制
+
+| 模式 | 最大长度 | 目标长度 |
+|------|----------|----------|
+| 标准模式 | 2000字 | 1800字 |
+| 精简模式 | 300字 | 250字 |
+| 长章节精简模式 | 500字 | 400字 |
+
+### 截断策略
+
+在目标长度处找最近的句号（`。`）或间隔号（`·`），在句子边界截断。
+
+### 记忆层次
+
+```
+长期记忆（固定不变）
+├─ 大纲和设定
+├─ 人物信息
+└─ 世界观设定
+
+中期记忆（滚动更新）
+├─ 最近5章内容摘要
+├─ 重要剧情点
+└─ 人物发展轨迹
+
+短期记忆（每章更新）
+├─ 当前章节上下文
+├─ 临时设定（temp_setting）
+└─ 即时状态
+```
+
+---
+
+## 步骤8d: 章节总结生成
+
+**执行方法:** `MemoryManager.generate_chapter_summary()`
+**负责Agent:** `ChapterSummaryGenerator`
+**提示词文件:** `prompts/common/chapter_summary_prompt.py`
+
+### 输入
+
+```python
+inputs = {
+    "章节内容": chapter_content,
+    "章节号": chapter_number,
+    "原故事线": original_storyline,    # 该章节的原始故事线
+    "人物信息": self.character_list,
+}
+```
+
+### 输出（JSON格式）
+
+```json
+{
+  "title": "章节标题",
+  "plot_summary": "剧情概要",
+  "main_characters": ["角色A", "角色B"],
+  "key_events": ["关键事件1", "关键事件2"]
+}
+```
+
+### 重试机制
+
+最多重试2次，每次间隔2秒。
+
+---
+
+## 步骤8e: 故事线更新
+
+**执行方法:** `MemoryManager.update_storyline_with_summary()`
+
+### 更新内容
+
+将章节总结写回故事线数据结构，更新以下字段：
+```python
+{
+    "chapter_number": chapter_number,
+    "title": summary["title"],
+    "plot_summary": summary["plot_summary"],
+    "main_characters": summary["main_characters"],
+    "key_events": summary["key_events"],
+    "plot_purpose": original.get("plot_purpose", ""),
+    "emotional_tone": original.get("emotional_tone", ""),
+    "transition_to_next": original.get("transition_to_next", "")
+}
+```
+
+更新后按 `chapter_number` 排序所有章节。
+
+---
+
+## 步骤9: 生成结尾
+
+**执行方法:** `BeginningEndingManager.generate_ending_chapter()`
+**负责Agent:** `EndingWriter` + `EndingEmbellisher`
+**提示词文件:** `prompts/standard/ending_prompt.py`
+
+### 触发条件
+
+- `enable_ending = True`（默认启用）
+- `chapter_count >= target_chapter_count`
+
+### 生成流程
+
+与标准章节生成流程相似，但使用专用的结尾 Agent：
+1. 调用 `EndingWriter` → 生成结尾内容
+2. 调用 `EndingEmbellisher` → 润色结尾
+3. `is_final = True` 标记为最终章节
+
+支持标准模式和精简模式。
+长章节模式下使用 `EndingWriterSeg1-4` 分段生成。
+
+---
+
+## 步骤10: 保存与输出
+
+### 输出文件结构
+
+```
+output/
+├─ 小说标题_完整版.md          # 完整的小说内容
+├─ 小说标题_chapters/          # 章节分割版本
+│  ├─ 第1章.md
+│  ├─ 第2章.md
+│  └─ ...
+├─ 小说标题.epub              # EPUB格式（可选）
+└─ 小说标题_metadata.json     # 元数据信息
+```
+
+### 元数据内容
+
+```json
+{
+    "title": "小说标题",
+    "outline": "大纲内容",
+    "character_list": "人物列表",
+    "storyline": { "chapters": [...] },
+    "chapter_count": 100,
+    "target_chapters": 100,
+    "generation_time": "2025-07-23T12:00:00",
+    "user_idea": "用户创意",
+    "user_requirements": "写作要求",
+    "embellishment_idea": "润色要求"
+}
+```
+
+### 自动保存机制
+
+- **每章自动保存**: 每生成完一章立即保存
+- **自动保存管理器**: `auto_save_manager` 管理本地自动保存
+- **小说存档管理器**: `novel_save_manager` 管理存档点（可恢复）
+- **本地数据安全**: 敏感数据和用户文件仅保存在本地，不上传
+
+---
+
+## 自动生成模式 (autoGenerate)
+
+**执行方法:** `AIGN.autoGenerate(target_chapters=None)`
+
+### 全自动流程
+
+```python
+def autoGenerate():
+    # 1. 初始化统计系统
+    reset_token_accumulation_stats()
+    start_api_time_tracking()
+    reset_siliconflow_cache_stats()
+    
+    # 2. 刷新 ChatLLM 配置
+    _refresh_chatllm_for_auto_generation()
+    
+    # 3. 检查前置条件（如果没有开头）
+    if not has_beginning:
+        # 3a. 检查并生成详细大纲
+        if not detailed_outline:
+            genDetailedOutline()
+        
+        # 3b. 检查并生成人物列表
+        if not character_list:
+            genCharacterList()
+        
+        # 3c. 检查并生成故事线
+        if not storyline:
+            genStoryline()
+        
+        # 3d. 初始化输出文件
+        initOutputFile()
+        
+        # 3e. 生成开头
+        genBeginning()
+    
+    # 4. 循环生成章节
+    while chapter_count < target_chapter_count:
+        # 每5章检查配置更新
+        if chapter_count % 5 == 0:
+            _refresh_chatllm_for_auto_generation()
+        
+        # 刷新最新的写作/润色要求
+        _refresh_webui_settings()
+        
+        # 生成下一章
+        genNextParagraph()
+        
+        # 保存存档
+        save_novel_progress()
+        
+        # LM Studio 定期重载模型
+        check_lmstudio_reload()
+    
+    # 5. 生成结尾（如果启用）
+    if enable_ending:
+        genEnding()
+    
+    # 6. 最终统计报告
+    print_token_report()
+    print_time_report()
+```
+
+### 断点续生成
+
+系统支持从中断处继续生成：
+- 检测 `chapter_count > 0` 时自动进入续写模式
+- 跳过已完成的步骤（大纲、人物、故事线等）
+- 从 `chapter_count + 1` 章继续
+
+### 错误处理
+
+- API 调用使用 `@Retryer(max_retries=10)` 装饰器自动重试
+- 连续3次解析失败 → 自动停止生成
+- 每章生成失败后自动修正 `chapter_count`
+- 异常后自动保存进度
+
+### 统计系统
+
+自动生成期间追踪以下数据：
+- **Token统计**: 各Agent发送/接收的Token数量
+- **时间统计**: API调用时间、章节生成时间、预计剩余时间
+- **费用统计**: 基于Token数量和价格估算API费用
+- **SiliconFlow缓存统计**: 缓存命中率
+
+---
+
+## 需求智能扩展 (Requirements Expansion)
+
+**文件:** `AIGN_Requirements_Expansion_Prompt.py`
+**文件:** `app_ai_expansion.py`
+
+### 写作要求扩展
+
+用户简短的写作要求 → AI 自动扩展为详细的写作指南：
+- **精简版** (600-800字): 适用于精简模式
+- **完整版** (1200-1800字): 适用于标准模式
+
+扩展维度：
+1. 词汇选择与搭配
+2. 句式构造与语法特色
+3. 叙事技巧
+4. 描写手法
+5. 对话艺术
+6. 修辞运用
+7. 韵律与节奏
+8. 风格统一性
+
+### 风格分析
+
+9维度风格分析框架：
+1. 文学类型定位
+2. 语言风格基调
+3. 目标受众画像
+4. 情感表达特征
+5. 文本表现力
+6. 角色塑造手法
+7. 世界观构建
+8. 叙事技巧运用
+9. 商业价值定位
+
+### 题材专用模板
+
+针对不同题材生成专属写作指南：
+武侠、言情、科幻、玄幻、悬疑、都市、仙侠、历史、恐怖、末日
+
+---
+
+## 提示词模块化架构
+
+```
+prompts/
+├── common/                     # 通用提示词（所有模式共享）
+│   ├── outline_prompt.py       # 大纲生成
+│   ├── title_prompt.py         # 标题生成
+│   ├── character_prompt.py     # 人物生成
+│   ├── detailed_outline_prompt.py  # 详细大纲
+│   ├── storyline_prompt.py     # 故事线生成
+│   ├── storyline_prompt_simple.py  # 简化故事线
+│   ├── chapter_summary_prompt.py   # 章节总结
+│   ├── memory_prompt.py        # 记忆生成
+│   ├── foreshadowing_prompt.py # 伏笔生成
+│   └── humanizer_rules.py     # Humanizer规则
+│
+├── standard/                   # 标准模式提示词
+│   ├── base_writer_template.py     # Writer基础模板
+│   ├── base_embellisher_template.py # Embellisher基础模板
+│   ├── beginning_prompt.py     # 开头生成
+│   ├── ending_prompt.py        # 结尾生成
+│   ├── long_chapter_prompt.py  # 长章节
+│   ├── segment_prompts.py      # 分段提示词
+│   ├── writer_prompt.py        # 默认Writer
+│   ├── writer_prompt_*.py      # 各风格Writer（30+种）
+│   ├── embellisher_prompt.py   # 默认Embellisher
+│   └── embellisher_prompt_*.py # 各风格Embellisher（30+种）
+│
+├── compact/                    # 精简模式提示词
+│   ├── base_writer_template.py
+│   ├── base_embellisher_template.py
+│   ├── long_chapter_prompt.py
+│   ├── segment_prompts.py
+│   ├── memory_maker_prompt.py  # 精简版记忆生成
+│   ├── writer_prompt.py
+│   ├── writer_prompt_*.py
+│   ├── embellisher_prompt.py
+│   └── embellisher_prompt_*.py
+│
+└── long_chapter/               # 长章节模式专用提示词
+    ├── base_writer_template.py
+    ├── base_embellisher_template.py
+    ├── writer_prompt_*.py
+    └── embellisher_prompt_*.py
+```
+
+---
+
+## 数据流图
+
+```
+用户输入
+  │
+  ▼
+┌────────────────┐
+│  user_idea     │──→ 大纲Agent ──→ novel_outline
+│  requirements  │
+│  embellishment │
+└────────────────┘
+         │
+         ▼
+┌────────────────┐
+│ novel_outline  │──→ 标题Agent ──→ novel_title
+│ user_idea      │
+└────────────────┘
+         │
+         ▼
+┌────────────────┐
+│ novel_outline  │──→ 伏笔Agent ──→ foreshadowing
+│ user_idea      │
+└────────────────┘
+         │
+         ▼
+┌────────────────┐
+│ novel_outline  │──→ 人物Agent ──→ character_list
+│ foreshadowing  │
+└────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ novel_outline          │──→ 详细大纲Agent ──→ detailed_outline
+│ character_list         │
+│ foreshadowing          │
+│ plot_structure         │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ detailed_outline       │──→ 故事线Agent ──→ storyline{chapters:[...]}
+│ character_list         │     （分批生成）
+│ foreshadowing          │
+│ prev_storyline         │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────────┐
+│ outline + characters       │──→ 开头Agent ──→ paragraph_list[0]
+│ + storyline + foreshadow   │     + Embellisher    + novel_content
+│ + requirements             │
+└────────────────────────────┘
+         │
+         ▼
+    ┌─────────── 循环 ──────────┐
+    │                           │
+    │  ┌─────────────────────┐  │
+    │  │ outline + memory    │  │
+    │  │ + storyline[n]      │──│──→ WriterAgent ──→ 原始段落
+    │  │ + temp_setting      │  │                      │
+    │  │ + plan              │  │                      ▼
+    │  │ + prev/next stories │  │     EmbellisherAgent ──→ 润色段落
+    │  └─────────────────────┘  │                      │
+    │                           │                      ▼
+    │  paragraph + memory ──────│──→ MemoryMaker ──→ 更新 writing_memory
+    │                           │                      │
+    │  chapter_content ─────────│──→ SummaryAgent ──→ 章节总结
+    │                           │                      │
+    │  summary ─────────────────│──→ 更新 storyline[n] │
+    │                           │                      │
+    │  chapter_count++ ─────────│──→ paragraph_list.append()
+    │                           │
+    └───────────────────────────┘
+         │
+         ▼
+┌──────────────────┐
+│ EndingWriter     │──→ 结尾内容 ──→ EndingEmbellisher ──→ 润色结尾
+│ + context        │
+└──────────────────┘
+         │
+         ▼
+    保存到文件 (.md / .epub / metadata.json)
+```
+
+---
+
+## 配置与环境
+
+### 支持的AI提供商
+
+| 提供商 | 说明 |
+|--------|------|
+| OpenRouter | 支持 Structured Outputs 和 Tool Calling |
+| DeepSeek | 深度求索 |
+| Claude | Anthropic Claude |
+| Gemini | Google Gemini |
+| 通义千问 (AliAI) | 阿里云 |
+| 智谱AI (Zhipu) | 智谱 |
+| LMStudio | 本地模型（支持定期重载清空KV Cache） |
+| Grok | xAI |
+| Fireworks | Fireworks AI |
+| SiliconFlow | 硅基流动（支持缓存统计） |
+
+### 关键配置参数
+
+```python
+# Temperature 设置
+outline_temperature = 0.95      # 大纲固定，高创造性
+storyline_temperature = 0.95    # 故事线固定
+character_temperature = 0.95    # 人物列表固定
+foreshadowing_temperature = 0.95 # 伏笔固定
+writer_temperature = provider   # 跟随提供商配置
+embellisher_temperature = provider # 跟随提供商配置
+memory_temperature = base       # 使用基础值（默认0.7）
+summary_temperature = base      # 使用基础值
+ending_temperature = base       # 使用基础值
+
+# 模式设置
+compact_mode = True             # 精简模式（默认开启）
+long_chapter_mode = 0           # 0=关闭, 2/3/4=分段数
+target_chapter_count = 20       # 目标章节数
+chapters_per_plot = 5           # 剧情单元章节数
+num_climaxes = 10               # 高潮数量
+
+# RAG设置
+rag_top_k = 10                  # 检索结果数量（5-30）
+
+# 错误处理
+max_retries = 10                # API重试最大次数
+max_consecutive_failures = 3    # 连续解析失败最大次数
+```
+
+---
+
+## 参考资料
+
+- [AI_NOVEL_GENERATION_PROCESS.md](AI_NOVEL_GENERATION_PROCESS.md) - 生成流程文档
+- [LONG_CHAPTER_FEATURE.md](LONG_CHAPTER_FEATURE.md) - 长章节功能说明
+- [ENHANCED_STORYLINE_FEATURES.md](ENHANCED_STORYLINE_FEATURES.md) - 增强故事线特性
+- [FEATURES.md](FEATURES.md) - 完整功能列表
+- [ARCHITECTURE.md](ARCHITECTURE.md) - 系统架构文档
+- [README.md](README.md) - 项目概述
+
+---
+
+**文档版本:** v3.0
+**最后更新:** 2026-05-19
+**基于项目版本:** AI小说生成器 v2.2.0+

@@ -313,7 +313,11 @@ def get_current_provider_info():
         else:
             provider_display = 'UNKNOWN'
         if current_config and hasattr(current_config, 'model_name') and current_config.model_name:
-            return f"{provider_display} - {current_config.model_name}"
+            info = f"{provider_display} - {current_config.model_name}"
+            # 如果是ZenMux且指定了提供商，显示在配置信息中
+            if current_provider == 'zenmux' and hasattr(current_config, 'zenmux_provider') and current_config.zenmux_provider:
+                info += f" (提供商: {current_config.zenmux_provider})"
+            return info
         return provider_display
     except Exception:
         return "演示模式"

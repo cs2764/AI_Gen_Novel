@@ -27,7 +27,7 @@ class AutoSaveManager:
             "character_list": self.save_dir / "character_list.json",
             "foreshadowing": self.save_dir / "foreshadowing.json",
             "detailed_outline": self.save_dir / "detailed_outline.json",
-            "storyline": self.save_dir / "storyline.json",
+            "storyline": self.save_dir / "storyline.md",
             "user_settings": self.save_dir / "user_settings.json",
             "metadata": self.save_dir / "metadata.json"
         }
@@ -138,25 +138,24 @@ class AutoSaveManager:
             return False
     
     def save_storyline(self, storyline: Dict[str, Any], target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", style_name: str = "无") -> bool:
-        """保存故事线"""
+        """保存故事线（Markdown格式）"""
         try:
+            from storyline_markdown_parser import dict_to_storyline_markdown
             chapter_count = len(storyline.get('chapters', []))
-            data = {
-                "storyline": storyline,
-                "target_chapters": target_chapters,
-                "actual_chapters": chapter_count,
-                "user_idea": user_idea,
-                "user_requirements": user_requirements,
-                "embellishment_idea": embellishment_idea,
-                "style_name": style_name,
-                "timestamp": time.time(),
-                "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
-            }
+            
+            md_content = dict_to_storyline_markdown(
+                storyline,
+                target_chapters=target_chapters,
+                user_idea=user_idea,
+                user_requirements=user_requirements,
+                embellishment_idea=embellishment_idea,
+                style_name=style_name
+            )
             
             with open(self.files["storyline"], 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+                f.write(md_content)
             
-            print(f"💾 故事线已自动保存 ({chapter_count}/{target_chapters}章)")
+            print(f"💾 故事线已自动保存为Markdown ({chapter_count}/{target_chapters}章)")
             return True
         except Exception as e:
             print(f"❌ 故事线保存失败: {e}")
@@ -262,14 +261,25 @@ class AutoSaveManager:
         return None
     
     def load_storyline(self) -> Optional[Dict[str, Any]]:
-        """加载故事线"""
+        """加载故事线（优先Markdown格式，回退JSON格式）"""
         try:
             if self.files["storyline"].exists():
-                with open(self.files["storyline"], 'r', encoding='utf-8') as f:
+                from storyline_markdown_parser import parse_storyline_from_file
+                data = parse_storyline_from_file(str(self.files["storyline"]))
+                if data:
+                    actual_chapters = data.get('actual_chapters', 0)
+                    target_chapters = data.get('target_chapters', 0)
+                    print(f"📚 故事线已从Markdown加载 ({actual_chapters}/{target_chapters}章, {data.get('readable_time', 'unknown time')})")
+                    return data
+            
+            # 回退：尝试加载旧的JSON格式文件
+            json_path = self.save_dir / "storyline.json"
+            if json_path.exists():
+                with open(json_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 actual_chapters = data.get('actual_chapters', 0)
                 target_chapters = data.get('target_chapters', 0)
-                print(f"📚 故事线已自动加载 ({actual_chapters}/{target_chapters}章, {data.get('readable_time', 'unknown time')})")
+                print(f"📚 故事线已从JSON回退加载 ({actual_chapters}/{target_chapters}章, {data.get('readable_time', 'unknown time')})")
                 return data
         except Exception as e:
             print(f"❌ 故事线加载失败: {e}")
@@ -502,7 +512,8 @@ class AutoSaveManager:
             backup_count = 0
             for file_type, file_path in self.files.items():
                 if file_path.exists():
-                    backup_file = backup_path / f"{file_type}.json"
+                    # 保持原始文件扩展名
+                    backup_file = backup_path / file_path.name
                     shutil.copy2(file_path, backup_file)
                     backup_count += 1
             
@@ -556,47 +567,14 @@ class AutoSaveManager:
                     
                     # 尝试获取更详细的信息
                     try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            if key == "outline":
-                                # 检查用户输入数据
-                                user_inputs = []
-                                if data.get('user_idea', '').strip():
-                                    user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
-                                if data.get('user_requirements', '').strip():
-                                    user_inputs.append(f"写作要求({len(data.get('user_requirements', ''))}字符)")
-                                if data.get('embellishment_idea', '').strip():
-                                    user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
-                                
-                                outline_info = f"{len(data.get('outline', ''))}字符"
-                                if user_inputs:
-                                    content_info = f"{outline_info} [含用户输入: {', '.join(user_inputs)}]"
-                                else:
-                                    content_info = outline_info
-                            elif key == "title":
-                                content_info = f"'{data.get('title', '')}'"
-                            elif key == "character_list":
-                                content_info = f"{len(data.get('character_list', ''))}字符"
-                            elif key == "detailed_outline":
-                                # 检查用户输入数据
-                                user_inputs = []
-                                if data.get('user_idea', '').strip():
-                                    user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
-                                if data.get('user_requirements', '').strip():
-                                    user_inputs.append(f"写作要求({len(data.get('user_requirements', ''))}字符)")
-                                if data.get('embellishment_idea', '').strip():
-                                    user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
-                                
-                                detail_info = f"{len(data.get('detailed_outline', ''))}字符, {data.get('target_chapters', 0)}章"
-                                if user_inputs:
-                                    content_info = f"{detail_info} [含用户输入: {', '.join(user_inputs)}]"
-                                else:
-                                    content_info = detail_info
-                            elif key == "storyline":
+                        if key == "storyline":
+                            # 故事线现在是Markdown格式
+                            from storyline_markdown_parser import parse_storyline_from_file
+                            data = parse_storyline_from_file(str(file_path))
+                            if data:
                                 actual = data.get('actual_chapters', 0)
                                 target = data.get('target_chapters', 0)
                                 
-                                # 检查用户输入数据
                                 user_inputs = []
                                 if data.get('user_idea', '').strip():
                                     user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
@@ -605,13 +583,52 @@ class AutoSaveManager:
                                 if data.get('embellishment_idea', '').strip():
                                     user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
                                 
-                                story_info = f"{actual}/{target}章"
+                                story_info = f"{actual}/{target}章 (Markdown)"
                                 if user_inputs:
                                     content_info = f"{story_info} [含用户输入: {', '.join(user_inputs)}]"
                                 else:
                                     content_info = story_info
                             else:
-                                content_info = "已保存"
+                                content_info = f"{size}字节 (Markdown解析失败)"
+                        else:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                                if key == "outline":
+                                    # 检查用户输入数据
+                                    user_inputs = []
+                                    if data.get('user_idea', '').strip():
+                                        user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
+                                    if data.get('user_requirements', '').strip():
+                                        user_inputs.append(f"写作要求({len(data.get('user_requirements', ''))}字符)")
+                                    if data.get('embellishment_idea', '').strip():
+                                        user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
+                                    
+                                    outline_info = f"{len(data.get('outline', ''))}字符"
+                                    if user_inputs:
+                                        content_info = f"{outline_info} [含用户输入: {', '.join(user_inputs)}]"
+                                    else:
+                                        content_info = outline_info
+                                elif key == "title":
+                                    content_info = f"'{data.get('title', '')}'"
+                                elif key == "character_list":
+                                    content_info = f"{len(data.get('character_list', ''))}字符"
+                                elif key == "detailed_outline":
+                                    # 检查用户输入数据
+                                    user_inputs = []
+                                    if data.get('user_idea', '').strip():
+                                        user_inputs.append(f"想法({len(data.get('user_idea', ''))}字符)")
+                                    if data.get('user_requirements', '').strip():
+                                        user_inputs.append(f"写作要求({len(data.get('user_requirements', ''))}字符)")
+                                    if data.get('embellishment_idea', '').strip():
+                                        user_inputs.append(f"润色要求({len(data.get('embellishment_idea', ''))}字符)")
+                                    
+                                    detail_info = f"{len(data.get('detailed_outline', ''))}字符, {data.get('target_chapters', 0)}章"
+                                    if user_inputs:
+                                        content_info = f"{detail_info} [含用户输入: {', '.join(user_inputs)}]"
+                                    else:
+                                        content_info = detail_info
+                                else:
+                                    content_info = "已保存"
                     except:
                         content_info = f"{size}字节"
                     

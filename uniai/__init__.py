@@ -18,3 +18,5 @@ from .grokAI import grokChatLLM
 from .lambdaAI import lambdaChatLLM
 from .siliconflowAI import siliconflowChatLLM
 from .nvidiaAI import nvidiaChatLLM
+from .omlxAI import omlxChatLLM
+from .zenmuxAI import zenmuxChatLLM

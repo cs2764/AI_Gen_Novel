@@ -312,6 +312,13 @@ def create_data_management_interface(aign) -> Tuple:
                 data_count += 1
                 saved_items.append(f"🗂️ 故事线 ({chapter_count}/{target_chapters}章){user_input_summary}")
             
+            # 保存伏笔/反转设定
+            foreshadowing = getattr(aign_instance, 'foreshadowing', '') or ''
+            if foreshadowing.strip():
+                aign_instance._save_to_local("foreshadowing", foreshadowing=foreshadowing)
+                data_count += 1
+                saved_items.append(f"🔮 伏笔设定 ({len(foreshadowing)}字符)")
+            
             # 如果有用户输入数据但没有其他生成内容，也要保存用户输入
             if data_count == 0 and user_input_items:
                 # 创建一个包含用户输入的空大纲条目来保存用户输入

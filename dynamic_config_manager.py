@@ -29,6 +29,8 @@ class ProviderConfig:
     provider_routing: Optional[Dict[str, Any]] = None  # OpenRouter provider routing配置
     temperature: float = 0.7  # 默认温度值
     thinking_enabled: bool = True  # 是否启用思考模式 (默认True)
+    reasoning_effort: str = "none"  # 思考强度 (none/minimal/low/medium/high/max)，用于ZenMux
+    zenmux_provider: str = ""  # ZenMux专用：指定特定上游提供商 (例如: anthropic, google-vertex)，为空则使用ZenMux智能路由
     
     def __post_init__(self):
         if self.models is None:
@@ -41,6 +43,7 @@ PROVIDER_DISPLAY_NAMES = {
     "deepseek": "DeepSeek",
     "ali": "Ali (阿里云)",
     "lmstudio": "LM Studio",
+    "omlx": "oMLX",
     "gemini": "Gemini",
     "openrouter": "OpenRouter",
     "claude": "Claude",
@@ -50,7 +53,8 @@ PROVIDER_DISPLAY_NAMES = {
     "lambda2": "OpenAI兼容模式2",  # Lambda2 显示为 OpenAI兼容模式2
     "lambda3": "OpenAI兼容模式3",  # Lambda3 显示为 OpenAI兼容模式3
     "siliconflow": "SiliconFlow",
-    "nvidia": "NVIDIA"
+    "nvidia": "NVIDIA",
+    "zenmux": "ZenMux"
 }
 
 class DynamicConfigManager:
@@ -62,7 +66,7 @@ class DynamicConfigManager:
         self._providers = {}
         self._debug_level = "1"  # 默认调试级别
         self._json_auto_repair = True  # 默认开启JSON自动修复
-        self._cosyvoice_mode = False  # 默认关闭CosyVoice2模式
+        self._fishaudio_mode = False  # 默认关闭Fish Audio S2语气标记模式
         self._tts_provider = ""  # TTS处理专用提供商，空表示使用当前提供商
         self._tts_model = ""  # TTS处理专用模型，空表示使用当前模型
         self._tts_api_key = ""  # TTS处理专用API密钥，空表示使用当前API密钥
@@ -105,6 +109,13 @@ class DynamicConfigManager:
                 api_key="lm-studio",
                 model_name="your-local-model-name",
                 base_url="http://localhost:1234/v1",
+                models=["your-local-model-name"]
+            ),
+            "omlx": ProviderConfig(
+                name="omlx",
+                api_key="omlx",
+                model_name="your-local-model-name",
+                base_url="http://localhost:8000/v1",
                 models=["your-local-model-name"]
             ),
             "gemini": ProviderConfig(
@@ -260,6 +271,22 @@ class DynamicConfigManager:
                     "qwen/qwen3-235b-instruct",
                     "nvidia/llama-3.1-nemotron-70b-instruct"
                 ]
+            ),
+            # ZenMux - 统一AI模型路由服务，支持reasoning_effort思考强度控制
+            "zenmux": ProviderConfig(
+                name="zenmux",
+                api_key="your-zenmux-api-key-here",
+                model_name="deepseek/deepseek-v4-flash",
+                base_url="https://zenmux.ai/api/v1",
+                models=[
+                    "deepseek/deepseek-v4-flash",
+                    "deepseek/deepseek-r1",
+                    "deepseek/deepseek-v3-0324",
+                    "qwen/qwen3-max-preview",
+                    "qwen/qwen3-32b",
+                    "qwen/qwen3-14b"
+                ],
+                reasoning_effort="high"  # ZenMux默认思考强度为high
             )
         }
         
@@ -394,8 +421,8 @@ class DynamicConfigManager:
             # 注意：web_config_interface可能通过kwargs传递或者我们需要修改此方法签名
             return True
 
-    def update_provider_config_full(self, provider_name: str, api_key: str, model_name: str, system_prompt: str = "", base_url: str = None, temperature: float = None, thinking_enabled: bool = None) -> bool:
-        """更新提供商配置(完整版，包含thinking_enabled)"""
+    def update_provider_config_full(self, provider_name: str, api_key: str, model_name: str, system_prompt: str = "", base_url: str = None, temperature: float = None, thinking_enabled: bool = None, reasoning_effort: str = None, zenmux_provider: str = None) -> bool:
+        """更新提供商配置(完整版，包含thinking_enabled、reasoning_effort和zenmux_provider)"""
         with self._config_lock:
             if provider_name not in self._providers:
                 return False
@@ -410,6 +437,10 @@ class DynamicConfigManager:
                 config.temperature = temperature
             if thinking_enabled is not None:
                 config.thinking_enabled = thinking_enabled
+            if reasoning_effort is not None:
+                config.reasoning_effort = reasoning_effort
+            if zenmux_provider is not None:
+                config.zenmux_provider = zenmux_provider
             return True
     
     def set_current_provider(self, provider_name: str) -> bool:
@@ -429,7 +460,7 @@ class DynamicConfigManager:
                 config_data["current_provider"] = self._current_provider
                 config_data["debug_level"] = self._debug_level
                 config_data["json_auto_repair"] = self._json_auto_repair
-                config_data["cosyvoice_mode"] = self._cosyvoice_mode
+                config_data["fishaudio_mode"] = self._fishaudio_mode
                 config_data["tts_provider"] = self._tts_provider
                 config_data["tts_model"] = self._tts_model
                 config_data["tts_api_key"] = self._tts_api_key
@@ -467,7 +498,7 @@ class DynamicConfigManager:
                 self._current_provider = config_data.get("current_provider", "deepseek")
                 self._debug_level = config_data.get("debug_level", "1")
                 self._json_auto_repair = config_data.get("json_auto_repair", True)
-                self._cosyvoice_mode = config_data.get("cosyvoice_mode", False)
+                self._fishaudio_mode = config_data.get("fishaudio_mode", config_data.get("cosyvoice_mode", False))
                 self._tts_provider = config_data.get("tts_provider", "")
                 self._tts_model = config_data.get("tts_model", "")
                 self._tts_api_key = config_data.get("tts_api_key", "")
@@ -519,6 +550,17 @@ class DynamicConfigManager:
                             # 默认如果没设置，NVIDIA为True(代码中默认)，但为了安全起见这里不强制覆盖
                             # ProviderConfig默认是True，我们保持该行为
                             pass
+                        
+                        # 加载reasoning_effort设置 (ZenMux等支持思考强度的提供商)
+                        if "reasoning_effort" in provider_data:
+                            config.reasoning_effort = provider_data["reasoning_effort"]
+                            print(f"🧠 {name} reasoning_effort 已加载: {config.reasoning_effort}")
+                        
+                        # 加载zenmux_provider设置 (ZenMux专用：指定特定上游提供商)
+                        if "zenmux_provider" in provider_data:
+                            config.zenmux_provider = provider_data["zenmux_provider"]
+                            if config.zenmux_provider:
+                                print(f"🔀 {name} zenmux_provider 已加载: {config.zenmux_provider}")
             
             print(f"配置已从 {config_path} 加载")
             return True
@@ -535,7 +577,7 @@ class DynamicConfigManager:
             config = self._providers[provider_name]
             
             # 对于非本地提供商，检查API密钥
-            if provider_name != "lmstudio":
+            if provider_name not in ("lmstudio", "omlx"):
                 if not config.api_key or "your-" in config.api_key.lower():
                     return False
             
@@ -665,6 +707,28 @@ class DynamicConfigManager:
                 system_prompt=current_config.system_prompt,
                 thinking_enabled=current_config.thinking_enabled
             )
+        elif provider_name == "omlx":
+            from uniai.omlxAI import omlxChatLLM
+            print(f"🔧 oMLX 配置的系统提示词长度: {len(current_config.system_prompt)} 字符")
+            if current_config.system_prompt:
+                print(f"🔧 oMLX 系统提示词内容预览: {current_config.system_prompt[:100]}...")
+            return omlxChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                base_url=current_config.base_url,
+                system_prompt=current_config.system_prompt
+            )
+        elif provider_name == "zenmux":
+            from uniai.zenmuxAI import zenmuxChatLLM
+            print(f"🔧 ZenMux 配置: reasoning_effort={current_config.reasoning_effort}, zenmux_provider={current_config.zenmux_provider or '(自动路由)'}")
+            return zenmuxChatLLM(
+                model_name=current_config.model_name,
+                api_key=current_config.api_key,
+                base_url=current_config.base_url,
+                system_prompt=current_config.system_prompt,
+                reasoning_effort=current_config.reasoning_effort,
+                zenmux_provider=current_config.zenmux_provider
+            )
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
     
@@ -719,26 +783,35 @@ class DynamicConfigManager:
             print(f"设置JSON自动修复失败: {e}")
             return False
     
-    def get_cosyvoice_mode(self) -> bool:
-        """获取CosyVoice2模式状态"""
+    def get_fishaudio_mode(self) -> bool:
+        """获取Fish Audio S2语气标记模式状态"""
         with self._config_lock:
-            return self._cosyvoice_mode
+            return self._fishaudio_mode
     
-    def set_cosyvoice_mode(self, enabled: bool) -> bool:
-        """设置CosyVoice2模式并保存到配置文件"""
+    def set_fishaudio_mode(self, enabled: bool) -> bool:
+        """设置Fish Audio S2语气标记模式并保存到配置文件"""
         try:
             with self._config_lock:
-                old_state = self._cosyvoice_mode
-                self._cosyvoice_mode = enabled
+                old_state = self._fishaudio_mode
+                self._fishaudio_mode = enabled
                 
-                print(f"CosyVoice2模式已{'开启' if enabled else '关闭'} (原状态: {'开启' if old_state else '关闭'})")
+                print(f"Fish Audio S2语气标记模式已{'开启' if enabled else '关闭'} (原状态: {'开启' if old_state else '关闭'})")
             
             # 保存到配置文件
             return self.save_config_to_file()
             
         except Exception as e:
-            print(f"设置CosyVoice2模式失败: {e}")
+            print(f"设置Fish Audio S2语气标记模式失败: {e}")
             return False
+    
+    # 向后兼容别名
+    def get_cosyvoice_mode(self) -> bool:
+        """向后兼容：获取语气标记模式状态（已重命名为 get_fishaudio_mode）"""
+        return self.get_fishaudio_mode()
+    
+    def set_cosyvoice_mode(self, enabled: bool) -> bool:
+        """向后兼容：设置语气标记模式（已重命名为 set_fishaudio_mode）"""
+        return self.set_fishaudio_mode(enabled)
     
     def get_tts_provider(self) -> str:
         """获取TTS处理专用提供商"""

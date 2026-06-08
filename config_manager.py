@@ -321,7 +321,10 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
                     'api_key': current_config.api_key,
                     'model_name': current_config.model_name,
                     'base_url': current_config.base_url,
-                    'system_prompt': current_config.system_prompt if include_system_prompt else ""
+                    'system_prompt': current_config.system_prompt if include_system_prompt else "",
+                    'thinking_enabled': getattr(current_config, 'thinking_enabled', True),
+                    'reasoning_effort': getattr(current_config, 'reasoning_effort', 'high'),
+                    'zenmux_provider': getattr(current_config, 'zenmux_provider', ''),
                 }
             else:
                 # 动态配置无效，回退到静态配置
@@ -501,14 +504,33 @@ def get_chatllm(allow_incomplete: bool = True, include_system_prompt: bool = Tru
                 system_prompt=provider_config.get('system_prompt', ''),
                 thinking_enabled=provider_config.get('thinking_enabled', True)
             )
+        elif provider == "omlx":
+            from uniai.omlxAI import omlxChatLLM
+            return omlxChatLLM(
+                model_name=provider_config['model_name'],
+                api_key=provider_config['api_key'],
+                base_url=provider_config.get('base_url'),
+                system_prompt=provider_config.get('system_prompt', '')
+            )
+        elif provider == "zenmux":
+            from uniai.zenmuxAI import zenmuxChatLLM
+            return zenmuxChatLLM(
+                model_name=provider_config['model_name'],
+                api_key=provider_config['api_key'],
+                base_url=provider_config.get('base_url'),
+                system_prompt=provider_config.get('system_prompt', ''),
+                reasoning_effort=provider_config.get('reasoning_effort', 'high'),
+                zenmux_provider=provider_config.get('zenmux_provider', '')
+            )
         else:
             raise ValueError(f"不支持的AI提供商: {provider}")
             
     except Exception as e:
         if allow_incomplete:
-            print(f"⚠️  初始化AI提供商失败: {e}，返回虚拟函数")
+            error_msg = str(e)  # 在except块内捕获错误信息为字符串
+            print(f"⚠️  初始化AI提供商失败: {error_msg}，返回虚拟函数")
             def dummy_chatllm(*args, **kwargs):
-                yield {"content": f"AI提供商初始化失败: {e}", "total_tokens": 0}
+                yield {"content": f"AI提供商初始化失败: {error_msg}", "total_tokens": 0}
             return dummy_chatllm
         else:
             print(f"❌ 初始化AI提供商失败: {e}")

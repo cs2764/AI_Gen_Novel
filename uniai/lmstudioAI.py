@@ -185,66 +185,13 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
         # 检查是否使用 tools（Function Calling）
         use_tools = tools is not None
         
+        # LM Studio不使用tools（Function Calling），忽略tools参数
         if use_tools:
-            # ========== Chat Completions模式（支持Function Calling）==========
-            print(f"🔧 LM Studio: 检测到tools参数，使用Chat Completions模式")
-            print(f"🔧 LM Studio: tools数量={len(tools)}, tool_choice={tool_choice}")
-            
-            chat_messages = _build_chat_messages(messages)
-            print(f"🔧 LM Studio Chat: 消息数量={len(chat_messages)}")
-            
-            # 构建请求参数
-            params = {
-                "model": model_name,
-                "messages": chat_messages,
-                "tools": tools,
-            }
-            
-            # 设置tool_choice（LM Studio支持 "auto", "none", 或对象格式）
-            if tool_choice:
-                params["tool_choice"] = tool_choice
-            
-            # 设置max_tokens
-            if max_tokens is not None:
-                params["max_tokens"] = max_tokens
-            else:
-                params["max_tokens"] = 40000
-            
-            try:
-                print("🔧 LM Studio: 调用chat.completions.create()（带tools）...")
-                response = client.chat.completions.create(**params)
-                
-                # 处理响应
-                if response and response.choices:
-                    choice = response.choices[0]
-                    message = choice.message
-                    
-                    # 检查是否有工具调用
-                    if hasattr(message, 'tool_calls') and message.tool_calls:
-                        print(f"✅ LM Studio: 检测到工具调用，数量={len(message.tool_calls)}")
-                        return {
-                            "content": message.content or "",
-                            "tool_calls": message.tool_calls,
-                            "total_tokens": getattr(getattr(response, "usage", None), "total_tokens", 0) or 0,
-                        }
-                    else:
-                        # 没有工具调用，返回普通内容
-                        content = message.content or ""
-                        print(f"⚠️ LM Studio: 未检测到工具调用，返回普通内容（{len(content)}字符）")
-                        return {
-                            "content": content,
-                            "total_tokens": getattr(getattr(response, "usage", None), "total_tokens", 0) or 0,
-                        }
-                else:
-                    print("⚠️ LM Studio: Chat Completions响应为空")
-                    return {"content": "", "total_tokens": 0}
-                    
-            except Exception as e:
-                print(f"❌ LM Studio Chat Completions调用失败: {e}")
-                print(f"请确保模型支持function calling（如Qwen2.5, Llama 3.1+, Mistral等）")
-                raise e
+            print(f"⚠️ LM Studio: 不支持tool calling，忽略tools参数，使用普通Chat Completions模式")
+            tools = None
+            tool_choice = None
         
-        elif is_gpt_oss:
+        if is_gpt_oss:
             # ========== gpt-oss模型：使用 Completions + Harmony 格式 ==========
             if response_format is not None:
                 print("⚠️ LM Studio Completions 模式不支持 response_format，已忽略")
@@ -261,7 +208,7 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
             if max_tokens is not None:
                 params["max_tokens"] = max_tokens
             else:
-                params["max_tokens"] = 40000
+                params["max_tokens"] = 60000
 
             try:
                 if not stream:
@@ -327,8 +274,8 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
             if max_tokens is not None:
                 params["max_tokens"] = max_tokens
             else:
-                params["max_tokens"] = 40000
-                print("🔧 LM Studio: 设置max_tokens=40000")
+                params["max_tokens"] = 60000
+                print("🔧 LM Studio: 设置max_tokens=60000")
 
             try:
                 if not stream:
@@ -336,12 +283,38 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
                     response = client.chat.completions.create(**params)
                     
                     content = ""
+                    reasoning_content = ""
                     if response and response.choices:
-                        content = response.choices[0].message.content or ""
+                        raw_content = response.choices[0].message.content or ""
+                        
+                        # 检查 message.reasoning_content（某些LM Studio版本可能支持）
+                        if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
+                            reasoning_content = response.choices[0].message.reasoning_content
+                        
+                        # 解析 <think> 标签
+                        if "<think>" in raw_content:
+                            import re
+                            think_pattern = re.compile(r'<think>(.*?)</think>', re.DOTALL)
+                            think_matches = think_pattern.findall(raw_content)
+                            if think_matches:
+                                think_text = "\n".join(think_matches)
+                                if reasoning_content:
+                                    reasoning_content += "\n" + think_text
+                                else:
+                                    reasoning_content = think_text
+                                content = think_pattern.sub('', raw_content).strip()
+                            else:
+                                content = raw_content
+                        else:
+                            content = raw_content
+                        
+                        if reasoning_content:
+                            print(f"🧠 思考过程: {len(reasoning_content)} 字符")
                     
                     print(f"✅ LM Studio: 返回内容长度: {len(content)} 字符")
                     return {
                         "content": content,
+                        "reasoning_content": reasoning_content,
                         "total_tokens": getattr(getattr(response, "usage", None), "total_tokens", 0) or 0,
                     }
                 else:
@@ -351,24 +324,68 @@ def lmstudioChatLLM(model_name="local-model", base_url=None, api_key=None, syste
 
                     def respGenerator():
                         full_content = ""
+                        reasoning_content = ""
+                        in_think_block = False
                         for chunk in responses:
                             delta_content = ""
                             try:
                                 delta = chunk.choices[0].delta
                                 delta_content = delta.content or ""
+                                
+                                # 也检查 delta.reasoning_content（某些LM Studio版本可能支持）
+                                if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                    reasoning_content += delta.reasoning_content
+                                    yield {
+                                        "content": full_content,
+                                        "reasoning_content": reasoning_content,
+                                        "total_tokens": 0,
+                                    }
                             except Exception:
                                 delta_content = ""
                             if delta_content:
                                 full_content += delta_content
+
+                            # 实时解析 <think> 标签：从累积内容中分离思维链和正文
+                            parsed_reasoning = ""
+                            parsed_content = full_content
+                            
+                            # 检查是否包含 <think> 标签
+                            if "<think>" in full_content:
+                                # 提取已完成的 <think>...</think> 块
+                                import re
+                                think_pattern = re.compile(r'<think>(.*?)</think>', re.DOTALL)
+                                think_matches = think_pattern.findall(full_content)
+                                if think_matches:
+                                    parsed_reasoning = "\n".join(think_matches)
+                                    # 从内容中移除 <think>...</think> 块
+                                    parsed_content = think_pattern.sub('', full_content).strip()
+                                elif full_content.count("<think>") > full_content.count("</think>"):
+                                    # <think> 标签未关闭，说明还在思考中
+                                    think_start = full_content.index("<think>") + len("<think>")
+                                    parsed_reasoning = full_content[think_start:]
+                                    parsed_content = full_content[:full_content.index("<think>")].strip()
+
+                            # 合并 delta.reasoning_content 和 <think> 标签中的内容
+                            combined_reasoning = reasoning_content
+                            if parsed_reasoning:
+                                if combined_reasoning:
+                                    combined_reasoning += "\n" + parsed_reasoning
+                                else:
+                                    combined_reasoning = parsed_reasoning
 
                             total_tokens = 0
                             if hasattr(chunk, "usage") and chunk.usage:
                                 total_tokens = getattr(chunk.usage, "total_tokens", 0) or 0
 
                             yield {
-                                "content": full_content,
+                                "content": parsed_content,
+                                "reasoning_content": combined_reasoning,
                                 "total_tokens": total_tokens,
                             }
+                        
+                        if reasoning_content or parsed_reasoning:
+                            total_reasoning_len = len(reasoning_content) + len(parsed_reasoning if 'parsed_reasoning' in dir() else '')
+                            print(f"\n🧠 思考过程总长度: {total_reasoning_len} 字符")
 
                     return respGenerator()
 

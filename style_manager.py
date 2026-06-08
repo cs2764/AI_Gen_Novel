@@ -73,9 +73,13 @@ class StyleManager:
         if self.current_style_code != "none":
             writer_file = f"prompts/{mode}/writer_prompt_{self.current_style_code}.py"
             embellisher_file = f"prompts/{mode}/embellisher_prompt_{self.current_style_code}.py"
+            beginning_file = f"prompts/{mode}/beginning_prompt_{self.current_style_code}.py"
+            ending_file = f"prompts/{mode}/ending_prompt_{self.current_style_code}.py"
         else:
             writer_file = "AIGN_Prompt_Enhanced.py (默认)"
             embellisher_file = "AIGN_Prompt_Enhanced.py (默认)"
+            beginning_file = "AIGN_Prompt_Enhanced.py (默认)"
+            ending_file = "AIGN_Prompt_Enhanced.py (默认)"
         
         if prompts["writer_prompt"]:
             aign_instance.writer_prompt = prompts["writer_prompt"]
@@ -96,6 +100,31 @@ class StyleManager:
                 aign_instance.novel_embellisher_compact.prompt_source_file = embellisher_file
             print(f"✅ 已应用润色提示词: {self.current_style}")
             print(f"📄 提示词文件: {embellisher_file}")
+        
+        if prompts.get("beginning_prompt"):
+            # 更新开头生成器Agent
+            if hasattr(aign_instance, 'novel_beginning_writer'):
+                aign_instance.novel_beginning_writer.sys_prompt = prompts["beginning_prompt"]
+                aign_instance.novel_beginning_writer.history[0]["content"] = prompts["beginning_prompt"]
+                aign_instance.novel_beginning_writer.prompt_source_file = beginning_file
+            print(f"✅ 已应用开头提示词: {self.current_style}")
+            print(f"📄 提示词文件: {beginning_file}")
+        
+        if prompts.get("ending_prompt"):
+            # 更新结尾生成器Agent
+            if hasattr(aign_instance, 'ending_writer'):
+                aign_instance.ending_writer.sys_prompt = prompts["ending_prompt"]
+                aign_instance.ending_writer.history[0]["content"] = prompts["ending_prompt"]
+                aign_instance.ending_writer.prompt_source_file = ending_file
+            # 更新分段结尾writer
+            for seg in [1, 2, 3, 4]:
+                seg_attr = f"ending_writer_seg{seg}"
+                if hasattr(aign_instance, seg_attr):
+                    agent = getattr(aign_instance, seg_attr)
+                    agent.sys_prompt = prompts["ending_prompt"]
+                    agent.history[0]["content"] = prompts["ending_prompt"]
+            print(f"✅ 已应用结尾提示词: {self.current_style}")
+            print(f"📄 提示词文件: {ending_file}")
     
     def get_style_info(self):
         """

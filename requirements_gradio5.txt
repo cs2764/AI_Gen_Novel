@@ -30,6 +30,9 @@ python-dateutil>=2.8.2
 # JSON Schema validation
 jsonschema>=4.20.0
 
+# JSON auto-repair for LLM output parsing
+json-repair>=0.30.0
+
 # EPUB file processing
 ebooklib>=0.18
 

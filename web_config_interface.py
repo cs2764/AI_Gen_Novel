@@ -58,7 +58,7 @@ class WebConfigInterface:
     def on_provider_change(self, provider_name):
         """当提供商改变时的回调"""
         if not provider_name:
-            return gr.update(choices=[], value=""), gr.update(visible=False, value=""), "", "", "", 0.7, False, ""
+            return gr.update(choices=[], value=""), gr.update(visible=False, value=""), "", "", "", 0.7, False, gr.update(value="none", visible=False), gr.update(value="", visible=False), ""
         
         # 获取显示名称
         display_name = self.config_manager.get_provider_display_name(provider_name)
@@ -79,30 +79,42 @@ class WebConfigInterface:
             print(f"⚠️  Temperature值无效，使用默认值0.7")
         
         # 获取thinking_enabled状态 (默认为True)
-        # 仅针对NVIDIA和SiliconFlow显示，但配置中始终读取
         thinking_enabled = current_config.thinking_enabled if current_config and hasattr(current_config, 'thinking_enabled') else True
+        
+        # 获取reasoning_effort状态 (ZenMux专用)
+        current_reasoning_effort = current_config.reasoning_effort if current_config and hasattr(current_config, 'reasoning_effort') else "none"
+        # ZenMux提供商显示reasoning_effort下拉框
+        show_reasoning = (provider_name == "zenmux")
+        reasoning_update = gr.update(value=current_reasoning_effort, visible=show_reasoning)
+        
+        # 获取zenmux_provider状态 (ZenMux专用)
+        current_zenmux_provider = current_config.zenmux_provider if current_config and hasattr(current_config, 'zenmux_provider') else ""
+        show_zenmux_provider = (provider_name == "zenmux")
+        zenmux_provider_update = gr.update(value=current_zenmux_provider, visible=show_zenmux_provider)
         
         # Fireworks特殊处理：显示自定义模型输入框
         if provider_name == "fireworks":
             print(f"🔥 Fireworks提供商：启用自定义模型输入")
             models = self.get_model_choices(provider_name, refresh=False)
             
-            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, thinking_enabled, status)
+            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, thinking_enabled, reasoning_effort, zenmux_provider, status)
             return (
-                gr.update(choices=models, value=current_model),  # 更新模型下拉菜单
-                gr.update(visible=True, value=current_model),  # 显示并填充自定义模型输入框
-                current_api_key,  # 更新API key
-                current_base_url or "",  # 更新API地址
-                current_system_prompt,  # 更新系统提示词
-                current_temperature,  # 更新temperature
-                thinking_enabled,  # 更新thinking_enabled
-                f"已切换到 {display_name}，可选择预设模型或输入自定义模型名称"  # 状态信息
+                gr.update(choices=models, value=current_model),
+                gr.update(visible=True, value=current_model),
+                current_api_key,
+                current_base_url or "",
+                current_system_prompt,
+                current_temperature,
+                thinking_enabled,
+                reasoning_update,
+                zenmux_provider_update,
+                f"已切换到 {display_name}，可选择预设模型或输入自定义模型名称"
             )
         else:
             # 其他提供商的常规处理
             try:
                 print(f"📋 获取 {provider_name} 的模型列表（使用缓存）...")
-                models = self.get_model_choices(provider_name, refresh=False)  # 使用缓存避免阻塞
+                models = self.get_model_choices(provider_name, refresh=False)
                 print(f"📤 get_model_choices返回: {models}")
             except Exception as e:
                 print(f"⚠️ 获取{provider_name}模型列表出错: {e}")
@@ -115,19 +127,21 @@ class WebConfigInterface:
             
             print(f"✅ {display_name} 模型列表已更新，共 {len(models)} 个模型")
             
-            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, thinking_enabled, status)
+            # 返回格式：(model_dropdown, custom_model_input, api_key, base_url, system_prompt, temperature, thinking_enabled, reasoning_effort, zenmux_provider, status)
             return (
-                gr.update(choices=models, value=current_model),  # 更新模型下拉菜单
-                gr.update(visible=False, value=""),  # 隐藏自定义模型输入框
-                current_api_key,  # 更新API key
-                current_base_url or "",  # 更新API地址
-                current_system_prompt,  # 更新系统提示词
-                current_temperature,  # 更新temperature
-                thinking_enabled,  # 更新thinking_enabled
-                f"已切换到 {display_name}，模型列表已加载（{len(models)}个模型）"  # 状态信息
+                gr.update(choices=models, value=current_model),
+                gr.update(visible=False, value=""),
+                current_api_key,
+                current_base_url or "",
+                current_system_prompt,
+                current_temperature,
+                thinking_enabled,
+                reasoning_update,
+                zenmux_provider_update,
+                f"已切换到 {display_name}，模型列表已加载（{len(models)}个模型）"
             )
     
-    def save_config(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled=True, custom_model_name=""):
+    def save_config(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled=True, custom_model_name="", reasoning_effort="none", zenmux_provider=""):
         """保存配置"""
         try:
             if not provider_name:
@@ -149,29 +163,26 @@ class WebConfigInterface:
             print(f"🌡️ 保存配置 - temperature 值: {temperature}, 类型: {type(temperature)}")
             
             # 确保 temperature 是浮点数
-            # 如果是空字符串或无效值，保持当前配置的 temperature 不变
             if temperature is not None and temperature != "":
                 try:
                     temperature = float(temperature)
                     print(f"🌡️ 保存配置 - temperature 转换后: {temperature}")
                 except (ValueError, TypeError) as e:
                     print(f"⚠️ temperature 转换失败: {e}, 保持当前配置值")
-                    # 获取当前配置的 temperature
                     current_config = self.config_manager.get_provider_config(provider_name)
                     temperature = current_config.temperature if current_config and current_config.temperature else 0.7
                     print(f"🌡️ 使用当前配置的 temperature: {temperature}")
             else:
-                # 空字符串或 None，保持当前配置的 temperature
                 print(f"⚠️ temperature 为空，保持当前配置值")
                 current_config = self.config_manager.get_provider_config(provider_name)
                 temperature = current_config.temperature if current_config and current_config.temperature else 0.7
                 print(f"🌡️ 使用当前配置的 temperature: {temperature}")
             
-            # 更新配置 (使用完整版方法以支持thinking_enabled)
-            print(f"🧠 保存配置 - thinking_enabled: {thinking_enabled}, 类型: {type(thinking_enabled)}")
+            # 更新配置 (使用完整版方法以支持thinking_enabled、reasoning_effort和zenmux_provider)
+            print(f"🧠 保存配置 - thinking_enabled: {thinking_enabled}, reasoning_effort: {reasoning_effort}, zenmux_provider: {zenmux_provider}")
             if hasattr(self.config_manager, 'update_provider_config_full'):
                 success = self.config_manager.update_provider_config_full(
-                    provider_name, api_key, final_model_name, system_prompt, base_url, temperature, thinking_enabled
+                    provider_name, api_key, final_model_name, system_prompt, base_url, temperature, thinking_enabled, reasoning_effort, zenmux_provider
                 )
             else:
                 # 兼容旧版本
@@ -194,15 +205,17 @@ class WebConfigInterface:
             url_info = f" (API地址: {base_url})" if base_url else ""
             temp_info = f" (Temperature: {temperature})"
             think_info = f" (思考模式: {'启用' if thinking_enabled else '禁用'})"
-            return f"✅ 配置已保存: {display_name} - {final_model_name}{url_info}{prompt_info}{temp_info}{think_info}"
+            reasoning_info = f" (思考强度: {reasoning_effort})" if provider_name == "zenmux" else ""
+            zenmux_provider_info = f" (指定提供商: {zenmux_provider})" if provider_name == "zenmux" and zenmux_provider else ""
+            return f"✅ 配置已保存: {display_name} - {final_model_name}{url_info}{prompt_info}{temp_info}{think_info}{reasoning_info}{zenmux_provider_info}"
             
         except Exception as e:
             return f"❌ 保存配置失败: {str(e)}"
     
-    def save_config_and_refresh(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled=True, custom_model_name=""):
+    def save_config_and_refresh(self, provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled=True, custom_model_name="", reasoning_effort="none", zenmux_provider=""):
         """保存配置并刷新当前配置信息显示"""
         # 先保存配置
-        save_result = self.save_config(provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled, custom_model_name)
+        save_result = self.save_config(provider_name, api_key, model_name, base_url, system_prompt, temperature, thinking_enabled, custom_model_name, reasoning_effort, zenmux_provider)
         
         # 如果保存成功，尝试刷新ChatLLM实例和AIGN实例
         if save_result.startswith("✅"):
@@ -488,23 +501,24 @@ class WebConfigInterface:
         except Exception as e:
             return f"❌ 获取JSON自动修复配置失败: {str(e)}"
     
-    def get_cosyvoice_info(self):
-        """获取CosyVoice2配置信息"""
+    def get_fishaudio_info(self):
+        """获取Fish Audio S2语气标记配置信息"""
         try:
-            # 从动态配置管理器获取CosyVoice2状态
-            current_status = self.config_manager.get_cosyvoice_mode()
+            # 从动态配置管理器获取Fish Audio S2状态
+            current_status = self.config_manager.get_fishaudio_mode()
             
             status_display = "🎙️ 已启用" if current_status else "🔇 已关闭"
             
-            info = f"""⚙️ CosyVoice2语音标记配置:
+            info = f"""⚙️ Fish Audio S2语气标记配置:
 📊 当前状态: {status_display}
 
 📋 功能说明:
-• 启用后，所有生成的文章都会自动添加CosyVoice2语音合成控制标记
-• 包含细粒度控制：[breath]、[sigh]、[laughter]、[whisper]等30+种标记
-• 支持情感表达：通过标记组合表现复杂情感变化
+• 启用后，所有生成的文章都会自动添加Fish Audio S2语气控制标记
+• 支持64+种情感/语气标记，可调节强度（slightly/very）
+• 包含基础情感、高级情感、语调标记、音效、特殊效果等分类
+• 使用 (emotion) 格式，例如: (happy)、(sad)、(excited)、(whisper)
 • 生成两个版本：带标记版本用于语音合成，纯净版本用于阅读
-• 适用于小说转有声书的完整解决方案
+• Addon方式：在现有风格提示词基础上追加标记指令，不破坏原有风格
 
 💡 使用建议:
 • 如果需要生成有声书，建议启用此功能
@@ -516,7 +530,7 @@ class WebConfigInterface:
             return info
             
         except Exception as e:
-            return f"❌ 获取CosyVoice2配置失败: {str(e)}"
+            return f"❌ 获取Fish Audio S2配置失败: {str(e)}"
     
     def get_tts_config_info(self):
         """获取TTS模型配置信息"""
@@ -548,7 +562,7 @@ class WebConfigInterface:
 • 可以为TTS文本处理指定专用的AI模型和配置
 • TTS配置完全独立于文章生成配置
 • 如果未设置专用配置，将使用当前文章生成配置
-• TTS处理包括文本分段、添加CosyVoice标记、整理格式等
+• TTS处理包括文本分段、添加语气标记、整理格式等
 
 💡 使用建议:
 • 可以为TTS设置不同的提供商和模型以获得最佳效果
@@ -583,26 +597,26 @@ class WebConfigInterface:
         except Exception as e:
             return f"❌ 保存JSON自动修复配置失败: {str(e)}", self.get_json_auto_repair_info()
     
-    def save_cosyvoice_mode(self, enabled):
-        """保存CosyVoice2模式配置"""
+    def save_fishaudio_mode(self, enabled):
+        """保存Fish Audio S2语气标记模式配置"""
         try:
-            # 使用动态配置管理器保存CosyVoice2状态
-            success = self.config_manager.set_cosyvoice_mode(enabled)
+            # 使用动态配置管理器保存Fish Audio S2状态
+            success = self.config_manager.set_fishaudio_mode(enabled)
             
             status_text = "启用" if enabled else "关闭"
             
             if success:
-                status = f"✅ CosyVoice2模式已{status_text}，已保存到配置文件"
+                status = f"✅ Fish Audio S2语气标记已{status_text}，已保存到配置文件"
             else:
-                status = f"⚠️ CosyVoice2模式已{status_text}，但保存到配置文件失败"
+                status = f"⚠️ Fish Audio S2语气标记已{status_text}，但保存到配置文件失败"
             
             # 重新获取配置信息
-            updated_info = self.get_cosyvoice_info()
+            updated_info = self.get_fishaudio_info()
             
             return status, updated_info
             
         except Exception as e:
-            return f"❌ 保存CosyVoice2配置失败: {str(e)}", self.get_cosyvoice_info()
+            return f"❌ 保存Fish Audio S2配置失败: {str(e)}", self.get_fishaudio_info()
     
     def get_rag_info(self):
         """获取RAG风格学习配置信息"""
@@ -969,6 +983,38 @@ class WebConfigInterface:
                         info="启用后，模型会输出详细的思考过程 (仅支持NVIDIA API、SiliconFlow等特定模型)"
                     )
                     
+                    # 思考强度下拉框 (ZenMux专用)
+                    _current_provider = self.config_manager.get_current_provider()
+                    _current_config = self.config_manager.get_current_config()
+                    _show_reasoning = (_current_provider == "zenmux")
+                    _current_reasoning = _current_config.reasoning_effort if _current_config and hasattr(_current_config, 'reasoning_effort') else "high"
+                    reasoning_effort_dropdown = gr.Dropdown(
+                        label="思考强度 (Reasoning Effort)",
+                        choices=[
+                            ("不启用思考 (none)", "none"),
+                            ("最小强度 (minimal)", "minimal"),
+                            ("低强度 (low)", "low"),
+                            ("中等强度 (medium)", "medium"),
+                            ("高强度 (high)", "high"),
+                            ("最大强度 (max) - DeepSeek推荐", "max")
+                        ],
+                        value=_current_reasoning,
+                        visible=_show_reasoning,
+                        interactive=True,
+                        info="ZenMux专用：控制模型的推理深度，high为默认，max为DeepSeek模型最大推理"
+                    )
+                    
+                    # ZenMux指定提供商输入框 (ZenMux专用)
+                    _current_zenmux_provider = _current_config.zenmux_provider if _current_config and hasattr(_current_config, 'zenmux_provider') else ""
+                    zenmux_provider_input = gr.Textbox(
+                        label="指定提供商 (Provider Routing)",
+                        value=_current_zenmux_provider,
+                        visible=_show_reasoning,  # 与reasoning_effort使用相同的显示条件 (仅ZenMux显示)
+                        placeholder="例如: anthropic, google-vertex, amazon-bedrock (留空则使用自动路由)",
+                        interactive=True,
+                        info="ZenMux专用：指定特定上游提供商。留空则由ZenMux智能路由自动选择最优提供商。查看ZenMux模型详情页面可获取提供商slug"
+                    )
+                    
                     # 操作按钮
                     with gr.Row():
                         test_btn = gr.Button("🔍 测试连接", variant="secondary")
@@ -1019,98 +1065,76 @@ class WebConfigInterface:
                         interactive=False
                     )
                 
-                with gr.TabItem("⚙️ 通用设置"):
+                # Fish Audio S2语气标记功能暂时隐藏（功能尚未成熟）
+                with gr.TabItem("⚙️ 通用设置", visible=False):
                     gr.Markdown("### ⚙️ 通用功能设置")
                     
-                    # CosyVoice2配置信息
-                    cosyvoice_info = gr.Textbox(
-                        label="当前CosyVoice2配置",
-                        value=self.get_cosyvoice_info(),
+                    # Fish Audio S2配置信息
+                    fishaudio_info = gr.Textbox(
+                        label="当前Fish Audio S2语气标记配置",
+                        value=self.get_fishaudio_info(),
                         lines=6,
                         interactive=False
                     )
                     
-                    # CosyVoice2开关
-                    cosyvoice_checkbox = gr.Checkbox(
-                        label="启用CosyVoice2语音标记",
-                        value=self.config_manager.get_cosyvoice_mode(),
+                    # Fish Audio S2开关
+                    fishaudio_checkbox = gr.Checkbox(
+                        label="启用Fish Audio S2语气标记",
+                        value=self.config_manager.get_fishaudio_mode(),
                         interactive=True,
-                        info="🎙️ 启用后，所有生成的文章都会添加语音合成控制标记，用于生成有声书"
+                        info="🎙️ 启用后，所有生成的文章都会添加Fish Audio S2语气控制标记，用于生成有声书"
                     )
                     
                     # 操作按钮
                     with gr.Row():
-                        cosyvoice_save_btn = gr.Button("💾 应用设置", variant="primary")
-                        cosyvoice_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
+                        fishaudio_save_btn = gr.Button("💾 应用设置", variant="primary")
+                        fishaudio_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
                     
                     # 状态信息
-                    cosyvoice_status_output = gr.Textbox(
+                    fishaudio_status_output = gr.Textbox(
                         label="状态",
                         lines=2,
                         interactive=False
                     )
                 
-                with gr.TabItem("🤖 TTS模型配置"):
-                    gr.Markdown("### 🤖 TTS处理模型配置")
-                    
-                    # TTS配置信息
-                    tts_config_info = gr.Textbox(
-                        label="当前TTS模型配置",
-                        value=self.get_tts_config_info(),
-                        lines=8,
-                        interactive=False
+                # EPUB Fish Audio S2标签添加功能暂时隐藏（功能尚未成熟）
+                with gr.TabItem("🏷️ EPUB标签添加", visible=False):
+                    gr.Markdown("### 🏷️ EPUB Fish Audio S2 标签添加")
+                    gr.Markdown(
+                        "为EPUB文件逐章添加Fish Audio S2语气标记。\n"
+                        "处理后的文件将保持原始目录结构不变，文件名添加 `_fish_audio` 后缀。"
                     )
                     
-                    with gr.Row():
-                        with gr.Column(scale=1):
-                            # TTS提供商选择 - 使用显示名称
-                            tts_provider_dropdown = gr.Dropdown(
-                                choices=[("使用主配置提供商", "")] + self.get_provider_choices_with_display_names(),
-                                label="TTS专用提供商",
-                                value=self.config_manager.get_tts_provider(),
-                                interactive=True,
-                                info="选择用于TTS文本处理的AI提供商，留空则使用当前提供商"
-                            )
-                            
-                            # TTS模型选择
-                            tts_model_dropdown = gr.Dropdown(
-                                choices=[],
-                                label="TTS专用模型",
-                                value=self.config_manager.get_tts_model(),
-                                interactive=True,
-                                allow_custom_value=True,
-                                info="选择用于TTS文本处理的AI模型，留空则使用当前模型"
-                            )
-                        
-                        with gr.Column(scale=1):
-                            # TTS API密钥
-                            tts_api_key_input = gr.Textbox(
-                                label="TTS专用API密钥",
-                                type="password",
-                                placeholder="留空则使用主配置的API密钥",
-                                interactive=True,
-                                info="为TTS处理设置独立的API密钥"
-                            )
-                            
-                            # TTS基础URL
-                            tts_base_url_input = gr.Textbox(
-                                label="TTS专用基础URL",
-                                placeholder="留空则使用主配置的基础URL",
-                                interactive=True,
-                                info="为TTS处理设置独立的基础URL"
-                            )
+                    # 文件上传
+                    epub_file_upload = gr.File(
+                        label="上传EPUB文件（支持多文件）",
+                        file_count="multiple",
+                        file_types=[".epub"],
+                        type="filepath"
+                    )
+                    
+                    # 并发设置
+                    epub_concurrency_slider = gr.Slider(
+                        minimum=1,
+                        maximum=10,
+                        value=2,
+                        step=1,
+                        label="API并发数",
+                        info="同时处理的章节数量，增加并发可加速处理但消耗更多API配额"
+                    )
                     
                     # 操作按钮
                     with gr.Row():
-                        tts_save_btn = gr.Button("💾 保存TTS配置", variant="primary")
-                        tts_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
-                        tts_refresh_models_btn = gr.Button("🔄 刷新模型", variant="secondary")
+                        epub_start_btn = gr.Button("🚀 开始添加标签", variant="primary")
+                        epub_stop_btn = gr.Button("⏹️ 停止处理", variant="stop")
                     
-                    # 状态信息
-                    tts_status_output = gr.Textbox(
-                        label="状态",
-                        lines=2,
-                        interactive=False
+                    # 进度日志
+                    epub_progress_log = gr.Textbox(
+                        label="处理日志",
+                        lines=18,
+                        max_lines=30,
+                        interactive=False,
+                        placeholder="上传EPUB文件后点击'开始添加标签'..."
                     )
                 
                 with gr.TabItem("📚 RAG风格学习"):
@@ -1282,12 +1306,75 @@ class WebConfigInterface:
                         lines=2,
                         interactive=False
                     )
+                
+                with gr.TabItem("🤖 TTS模型配置"):
+                    gr.Markdown("### 🤖 TTS处理模型配置")
+                    
+                    # TTS配置信息
+                    tts_config_info = gr.Textbox(
+                        label="当前TTS模型配置",
+                        value=self.get_tts_config_info(),
+                        lines=8,
+                        interactive=False
+                    )
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            # TTS提供商选择 - 使用显示名称
+                            tts_provider_dropdown = gr.Dropdown(
+                                choices=[("使用主配置提供商", "")] + self.get_provider_choices_with_display_names(),
+                                label="TTS专用提供商",
+                                value=self.config_manager.get_tts_provider(),
+                                interactive=True,
+                                info="选择用于TTS文本处理的AI提供商，留空则使用当前提供商"
+                            )
+                            
+                            # TTS模型选择
+                            tts_model_dropdown = gr.Dropdown(
+                                choices=[],
+                                label="TTS专用模型",
+                                value=self.config_manager.get_tts_model(),
+                                interactive=True,
+                                allow_custom_value=True,
+                                info="选择用于TTS文本处理的AI模型，留空则使用当前模型"
+                            )
+                        
+                        with gr.Column(scale=1):
+                            # TTS API密钥
+                            tts_api_key_input = gr.Textbox(
+                                label="TTS专用API密钥",
+                                type="password",
+                                placeholder="留空则使用主配置的API密钥",
+                                interactive=True,
+                                info="为TTS处理设置独立的API密钥"
+                            )
+                            
+                            # TTS基础URL
+                            tts_base_url_input = gr.Textbox(
+                                label="TTS专用基础URL",
+                                placeholder="留空则使用主配置的基础URL",
+                                interactive=True,
+                                info="为TTS处理设置独立的基础URL"
+                            )
+                    
+                    # 操作按钮
+                    with gr.Row():
+                        tts_save_btn = gr.Button("💾 保存TTS配置", variant="primary")
+                        tts_refresh_btn = gr.Button("🔄 刷新信息", variant="secondary")
+                        tts_refresh_models_btn = gr.Button("🔄 刷新模型", variant="secondary")
+                    
+                    # 状态信息
+                    tts_status_output = gr.Textbox(
+                        label="状态",
+                        lines=2,
+                        interactive=False
+                    )
             
             # 事件绑定
             provider_dropdown.change(
                 fn=self.on_provider_change,
                 inputs=[provider_dropdown],
-                outputs=[model_dropdown, custom_model_input, api_key_input, base_url_input, system_prompt_input, temperature_slider, thinking_checkbox, status_output]
+                outputs=[model_dropdown, custom_model_input, api_key_input, base_url_input, system_prompt_input, temperature_slider, thinking_checkbox, reasoning_effort_dropdown, zenmux_provider_input, status_output]
             )
             
             test_btn.click(
@@ -1298,7 +1385,7 @@ class WebConfigInterface:
             
             save_btn_event = save_btn.click(
                 fn=self.save_config_and_refresh,
-                inputs=[provider_dropdown, api_key_input, model_dropdown, base_url_input, system_prompt_input, temperature_slider, thinking_checkbox, custom_model_input],
+                inputs=[provider_dropdown, api_key_input, model_dropdown, base_url_input, system_prompt_input, temperature_slider, thinking_checkbox, custom_model_input, reasoning_effort_dropdown, zenmux_provider_input],
                 outputs=[status_output, current_info]
             )
             
@@ -1342,16 +1429,28 @@ class WebConfigInterface:
                 outputs=[debug_level_info]
             )
             
-            # CosyVoice2相关事件绑定
-            cosyvoice_save_btn.click(
-                fn=self.save_cosyvoice_mode,
-                inputs=[cosyvoice_checkbox],
-                outputs=[cosyvoice_status_output, cosyvoice_info]
+            # Fish Audio S2相关事件绑定
+            fishaudio_save_btn.click(
+                fn=self.save_fishaudio_mode,
+                inputs=[fishaudio_checkbox],
+                outputs=[fishaudio_status_output, fishaudio_info]
             )
             
-            cosyvoice_refresh_btn.click(
-                fn=self.get_cosyvoice_info,
-                outputs=[cosyvoice_info]
+            fishaudio_refresh_btn.click(
+                fn=self.get_fishaudio_info,
+                outputs=[fishaudio_info]
+            )
+            
+            # EPUB标签添加相关事件绑定
+            epub_start_btn.click(
+                fn=self.process_epub_fishaudio,
+                inputs=[epub_file_upload, epub_concurrency_slider],
+                outputs=[epub_progress_log]
+            )
+            
+            epub_stop_btn.click(
+                fn=self.stop_epub_processing,
+                outputs=[epub_progress_log]
             )
             
             # TTS配置相关事件绑定
@@ -1429,6 +1528,8 @@ class WebConfigInterface:
                 'system_prompt_input': system_prompt_input,
                 'temperature_slider': temperature_slider,
                 'thinking_checkbox': thinking_checkbox,
+                'reasoning_effort_dropdown': reasoning_effort_dropdown,
+                'zenmux_provider_input': zenmux_provider_input,
                 'test_btn': test_btn,
                 'save_btn': save_btn,
                 'refresh_btn': refresh_btn,
@@ -1470,6 +1571,50 @@ class WebConfigInterface:
                 'lmstudio_reload_status_output': lmstudio_reload_status_output,
                 'lmstudio_reload_info': lmstudio_reload_info
             }
+    
+    # ============================================================
+    # EPUB Fish Audio 标签添加功能
+    # ============================================================
+    
+    def process_epub_fishaudio(self, files, concurrency):
+        """处理EPUB文件добавление Fish Audio标签"""
+        if not files:
+            return "⚠️ 请先上传EPUB文件"
+        
+        try:
+            from epub_fishaudio_tagger import EpubFishAudioTagger
+            
+            concurrency = int(concurrency)
+            tagger = EpubFishAudioTagger(concurrency=concurrency)
+            
+            # 保存tagger实例以便停止
+            self._epub_tagger = tagger
+            
+            # 收集文件路径
+            epub_paths = []
+            for f in files:
+                path = f if isinstance(f, str) else f.name
+                epub_paths.append(path)
+            
+            # 收集所有进度消息
+            log_lines = []
+            for msg in tagger.process_multiple_epubs(epub_paths):
+                log_lines.append(msg)
+            
+            return "\n".join(log_lines)
+            
+        except ImportError as e:
+            return f"❌ 模块导入失败: {e}\n💡 请确保 ebooklib 已安装: pip install ebooklib"
+        except Exception as e:
+            import traceback
+            return f"❌ 处理失败: {e}\n{traceback.format_exc()}"
+    
+    def stop_epub_processing(self):
+        """停止EPUB处理"""
+        if hasattr(self, '_epub_tagger') and self._epub_tagger:
+            self._epub_tagger.stop()
+            return "⏹️ 已发送停止信号，当前正在处理的章节完成后将停止"
+        return "⚠️ 没有正在进行的处理任务"
 
 # 全局实例
 _web_config = WebConfigInterface()

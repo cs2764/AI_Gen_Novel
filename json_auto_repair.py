@@ -3,7 +3,7 @@
 
 """
 JSON自动修复工具
-智能修复大模型返回的不规范JSON结构
+使用 json_repair 库智能修复大模型返回的不规范JSON结构
 """
 
 import json
@@ -11,12 +11,18 @@ import re
 import logging
 from typing import Dict, Any, Optional, Tuple, Union
 
+try:
+    import json_repair as _json_repair
+    JSON_REPAIR_LIB_AVAILABLE = True
+except ImportError:
+    JSON_REPAIR_LIB_AVAILABLE = False
+
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class JSONAutoRepair:
-    """JSON自动修复器"""
+    """JSON自动修复器（基于 json_repair 库）"""
     
     def __init__(self, debug_mode: bool = False):
         self.debug_mode = debug_mode
@@ -65,6 +71,8 @@ class JSONAutoRepair:
         """
         执行单次修复流程
         
+        流水线：直接解析 → json_repair.loads() → 提取JSON内容 + json_repair → 失败
+        
         Args:
             content: 待修复的内容
             attempt_num: 尝试次数
@@ -79,21 +87,42 @@ class JSONAutoRepair:
                 logger.info(f"✅ 直接解析成功 (尝试 {attempt_num})")
             return result, True, ""
         
-        # 2. 安全修复
-        safe_repaired = self._safe_repair(content)
-        result, success, error = self._direct_parse(safe_repaired)
-        if success:
-            if self.debug_mode:
-                logger.info(f"✅ 安全修复后解析成功 (尝试 {attempt_num})")
-            return result, True, ""
+        # 2. 使用 json_repair 库修复（首选方案）
+        if JSON_REPAIR_LIB_AVAILABLE:
+            try:
+                repaired = _json_repair.loads(content)
+                if isinstance(repaired, (dict, list)):
+                    if self.debug_mode:
+                        logger.info(f"✅ json_repair库修复成功 (尝试 {attempt_num})")
+                    return repaired, True, ""
+                else:
+                    if self.debug_mode:
+                        logger.warning(f"⚠️ json_repair返回了非dict/list类型: {type(repaired)}")
+            except Exception as e:
+                if self.debug_mode:
+                    logger.warning(f"⚠️ json_repair库修复失败: {e}")
         
-        # 3. 启发式修复
-        heuristic_repaired = self._heuristic_repair(safe_repaired)
-        result, success, error = self._direct_parse(heuristic_repaired)
-        if success:
-            if self.debug_mode:
-                logger.info(f"✅ 启发式修复后解析成功 (尝试 {attempt_num})")
-            return result, True, ""
+        # 3. 提取JSON内容后再用 json_repair 修复
+        extracted = self._extract_json_content(content)
+        if extracted != content:
+            # 先直接解析提取后的内容
+            result, success, error = self._direct_parse(extracted)
+            if success:
+                if self.debug_mode:
+                    logger.info(f"✅ 提取JSON内容后直接解析成功 (尝试 {attempt_num})")
+                return result, True, ""
+            
+            # 用 json_repair 修复提取后的内容
+            if JSON_REPAIR_LIB_AVAILABLE:
+                try:
+                    repaired = _json_repair.loads(extracted)
+                    if isinstance(repaired, (dict, list)):
+                        if self.debug_mode:
+                            logger.info(f"✅ 提取+json_repair修复成功 (尝试 {attempt_num})")
+                        return repaired, True, ""
+                except Exception as e:
+                    if self.debug_mode:
+                        logger.warning(f"⚠️ 提取+json_repair修复失败: {e}")
         
         # 修复失败
         return None, False, f"修复失败: {error}"
@@ -107,41 +136,6 @@ class JSONAutoRepair:
             return None, False, str(e)
         except Exception as e:
             return None, False, f"解析异常: {str(e)}"
-    
-    def _safe_repair(self, content: str) -> str:
-        """
-        安全修复：低风险的修复操作
-        """
-        repaired = content
-        
-        # 类别一：预处理与清理
-        repaired = self._extract_json_content(repaired)
-        
-        # 类别二：常见语法错误
-        repaired = self._remove_trailing_commas(repaired)
-        repaired = self._remove_comments(repaired)
-        
-        # 类别三：数据格式与特殊值
-        repaired = self._fix_boolean_null_values(repaired)
-        repaired = self._fix_special_numbers(repaired)
-        
-        return repaired
-    
-    def _heuristic_repair(self, content: str) -> str:
-        """
-        启发式修复：高风险的修复操作
-        """
-        repaired = content
-        
-        # 类别四：引号与转义
-        repaired = self._fix_quotes(repaired)
-        repaired = self._fix_escape_characters(repaired)
-        
-        # 类别五：结构完整性
-        repaired = self._fix_missing_brackets(repaired)
-        repaired = self._fix_missing_commas(repaired)
-        
-        return repaired
     
     def _extract_json_content(self, content: str) -> str:
         """提取JSON内容，去除无关文本"""
@@ -170,97 +164,6 @@ class JSONAutoRepair:
             if self.debug_mode:
                 logger.info(f"📋 提取JSON内容: {len(extracted)} 字符")
             return extracted
-        
-        return content
-    
-    def _remove_trailing_commas(self, content: str) -> str:
-        """移除结尾逗号"""
-        # 移除对象中的结尾逗号
-        content = re.sub(r',\s*}', '}', content)
-        # 移除数组中的结尾逗号
-        content = re.sub(r',\s*]', ']', content)
-        return content
-    
-    def _remove_comments(self, content: str) -> str:
-        """移除注释"""
-        # 移除单行注释 // ...
-        content = re.sub(r'//.*?$', '', content, flags=re.MULTILINE)
-        # 移除块注释 /* ... */
-        content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
-        return content
-    
-    def _fix_boolean_null_values(self, content: str) -> str:
-        """修复布尔值和空值"""
-        # 使用单词边界确保完整匹配
-        content = re.sub(r'\bTrue\b', 'true', content)
-        content = re.sub(r'\bFalse\b', 'false', content)
-        content = re.sub(r'\bNone\b', 'null', content)
-        return content
-    
-    def _fix_special_numbers(self, content: str) -> str:
-        """修复特殊数值"""
-        content = re.sub(r'\bNaN\b', 'null', content)
-        content = re.sub(r'\bInfinity\b', 'null', content)
-        content = re.sub(r'\b-Infinity\b', 'null', content)
-        return content
-    
-    def _fix_quotes(self, content: str) -> str:
-        """修复引号问题"""
-        # 将单引号替换为双引号（需要小心处理转义）
-        # 先处理键的单引号
-        content = re.sub(r"'([^']*)':", r'"\1":', content)
-        # 处理值的单引号
-        content = re.sub(r":\s*'([^']*)'", r': "\1"', content)
-        
-        # 为未加引号的键添加引号
-        content = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', content)
-        
-        return content
-    
-    def _fix_escape_characters(self, content: str) -> str:
-        """修复转义字符"""
-        # 在字符串值中修复未转义的反斜杠
-        def fix_backslashes(match):
-            value = match.group(1)
-            # 转义反斜杠
-            value = value.replace('\\', '\\\\')
-            # 转义换行符
-            value = value.replace('\n', '\\n')
-            value = value.replace('\r', '\\r')
-            value = value.replace('\t', '\\t')
-            return f'"{value}"'
-        
-        # 匹配字符串值并修复转义
-        content = re.sub(r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_backslashes, content)
-        
-        return content
-    
-    def _fix_missing_brackets(self, content: str) -> str:
-        """修复缺失的括号"""
-        # 计算括号数量
-        open_braces = content.count('{')
-        close_braces = content.count('}')
-        open_brackets = content.count('[')
-        close_brackets = content.count(']')
-        
-        # 补全缺失的括号
-        if open_braces > close_braces:
-            content += '}' * (open_braces - close_braces)
-        if open_brackets > close_brackets:
-            content += ']' * (open_brackets - close_brackets)
-        
-        return content
-    
-    def _fix_missing_commas(self, content: str) -> str:
-        """修复缺失的逗号（高风险操作）"""
-        # 在 value"key" 模式之间添加逗号
-        content = re.sub(r'([}\]"\d])\s*("[a-zA-Z_][a-zA-Z0-9_]*")\s*:', r'\1, \2:', content)
-        
-        # 在 }{ 模式之间添加逗号
-        content = re.sub(r'}\s*{', '}, {', content)
-        
-        # 在 ][ 模式之间添加逗号
-        content = re.sub(r']\s*\[', '], [', content)
         
         return content
     

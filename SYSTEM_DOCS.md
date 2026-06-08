@@ -8,8 +8,8 @@
 ## English Documentation
 
 ### Version Information
-- **Version**: 4.9.0
-- **Release Date**: 2026-03-15
+- **Version**: 5.0.0
+- **Release Date**: 2026-06-08
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -30,11 +30,13 @@
    - Auto-save and data management
 
 3. **uniai/** - AI Provider Layer
-   - Unified interface for 12 AI providers
+   - Unified interface for 14 AI providers
    - OpenRouter, Claude, Gemini, DeepSeek
    - LM Studio, 智谱AI, 阿里云
    - Fireworks, Grok, Lambda
    - SiliconFlow, NVIDIA
+   - oMLX (Mac-optimized local LLM)
+   - ZenMux (unified model routing)
 
 4. **Configuration System**
    - config_manager.py - Configuration management
@@ -45,6 +47,17 @@
    - auto_save_manager.py - Auto-save functionality
    - aign_local_storage.py - Local data storage
    - secure_file_manager.py - Secure file operations
+
+6. **Fish Audio S2 Emotion Marking System** (v5.0.0, Experimental - hidden in UI)
+   - AIGN_FishAudio_Prompt.py - Fish Audio S2 emotion/tone marker instructions
+   - fishaudio_cleaner.py - Fish Audio text marker cleaner
+   - epub_fishaudio_tagger.py - EPUB batch emotion/tone tagging processor
+
+7. **Style & Prompt System** (v5.0.0)
+   - prompts/standard/ - 132 style-specific prompt files (33 styles × 4 types)
+   - prompts/compact/ - Compact mode prompt files
+   - storyline_markdown_parser.py - Markdown ↔ dict bidirectional parser
+   - AIGN_Prompt_Enhanced.py - Enhanced standard mode prompts
 
 #### Agent System
 
@@ -65,7 +78,7 @@ The AIGN engine uses specialized agents:
 ### Key Features
 
 1. **Multi-AI Provider Support**
-   - 12 major AI providers integrated
+   - 14 major AI providers integrated
    - Unified API interface
    - Easy provider switching
 
@@ -139,11 +152,22 @@ AI_Gen_Novel/
 ├── app.py                  # Web interface
 ├── config_template.py      # Configuration template
 ├── version.py              # Version information
-├── uniai/                  # AI provider adapters
+├── AIGN_FishAudio_Prompt.py# Fish Audio S2 instructions
+├── epub_fishaudio_tagger.py # EPUB emotion tagger
+├── fishaudio_cleaner.py    # Fish Audio marker cleaner
+├── storyline_markdown_parser.py # Storyline MD parser
+├── uniai/                  # AI provider adapters (14 providers)
 │   ├── openrouterAI.py
 │   ├── claudeAI.py
 │   ├── geminiAI.py
+│   ├── omlxAI.py           # oMLX local LLM
+│   ├── zenmuxAI.py         # ZenMux routing
 │   └── ...
+├── prompts/                # Prompt templates
+│   ├── standard/           # 132 style-specific prompts
+│   ├── compact/            # Compact mode prompts
+│   ├── long_chapter/       # Long chapter prompts
+│   └── common/             # Shared prompts
 ├── aign_*.py              # AIGN modules
 ├── app_*.py               # App modules
 ├── *_manager.py           # Manager modules
@@ -172,8 +196,8 @@ See [LICENSE](LICENSE) for license information.
 ## 中文文档
 
 ### 版本信息
-- **版本**: 4.9.0
-- **发布日期**: 2026-03-15
+- **版本**: 5.0.0
+- **发布日期**: 2026-06-08
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -194,11 +218,13 @@ See [LICENSE](LICENSE) for license information.
    - 自动保存和数据管理
 
 3. **uniai/** - AI提供商层
-   - 12个AI提供商的统一接口
+   - 14个AI提供商的统一接口
    - OpenRouter、Claude、Gemini、DeepSeek
    - LM Studio、智谱AI、阿里云
    - Fireworks、Grok、Lambda
    - SiliconFlow、NVIDIA
+   - oMLX（Mac优化本地LLM）
+   - ZenMux（统一模型路由）
 
 4. **配置系统**
    - config_manager.py - 配置管理
@@ -209,6 +235,17 @@ See [LICENSE](LICENSE) for license information.
    - auto_save_manager.py - 自动保存功能
    - aign_local_storage.py - 本地数据存储
    - secure_file_manager.py - 安全文件操作
+
+6. **Fish Audio S2语气标记系统** (v5.0.0，实验性功能 - UI中已隐藏)
+   - AIGN_FishAudio_Prompt.py - Fish Audio S2语气/情感标记指令
+   - fishaudio_cleaner.py - Fish Audio文本标记清理
+   - epub_fishaudio_tagger.py - EPUB批量语气/情感标记处理
+
+7. **风格与提示词系统** (v5.0.0)
+   - prompts/standard/ - 132个风格专用提示词文件（33种风格×4种类型）
+   - prompts/compact/ - 精简模式提示词文件
+   - storyline_markdown_parser.py - Markdown↔dict双向解析器
+   - AIGN_Prompt_Enhanced.py - 增强版标准模式提示词
 
 #### 智能体系统
 
@@ -229,7 +266,7 @@ AIGN引擎使用专业化智能体:
 ### 主要功能
 
 1. **多AI提供商支持**
-   - 集成12个主流AI提供商
+   - 集成14个主流AI提供商
    - 统一API接口
    - 轻松切换提供商
 
@@ -333,5 +370,5 @@ AI_Gen_Novel/
 
 ---
 
-**Last Updated / 最后更新**: 2026-03-15
-**Version / 版本**: 4.9.0
+**Last Updated / 最后更新**: 2026-06-08
+**Version / 版本**: 5.0.0

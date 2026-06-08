@@ -38,7 +38,6 @@ try:
     from dynamic_config_manager import get_config_manager
     from default_ideas_manager import get_default_ideas_manager
     from AIGN_Requirements_Expansion_Prompt import (
-        get_style_analysis_prompt,
         get_writing_requirements_expansion_prompt,
         get_embellishment_requirements_expansion_prompt
     )
@@ -480,7 +479,18 @@ def create_gradio5_original_app():
     /* 优化文本框高度和滚动 */
     #status_output {
         min-height: 500px;
-        max-height: none;
+        max-height: 800px;
+    }
+    
+    #status_output textarea {
+        max-height: 750px;
+        overflow-y: auto !important;
+    }
+    
+    /* 生成进度与状态面板 - 固定高度可滚动 */
+    .status-panel textarea {
+        max-height: 600px;
+        overflow-y: auto !important;
     }
     
     #novel_content {
@@ -1144,7 +1154,7 @@ def create_gradio5_original_app():
                         container=True,
                         elem_classes=["status-panel"],
                         info="显示详细的生成进度、状态信息和统计数据",
-                        autoscroll=True
+                        autoscroll=False
                     )
                     
                     # 实时数据流显示框
@@ -1180,7 +1190,7 @@ def create_gradio5_original_app():
                     interactive=False,
                     value=loaded_data["status_message"],
                     elem_id="status_output",
-                    autoscroll=True
+                    autoscroll=False
                 )
             
             # 右侧列 (scale=2, 对应原版row3)
@@ -2019,6 +2029,18 @@ def create_gradio5_original_app():
                             
                             if completion_rate >= 100:
                                 summary_text = f"✅ 故事线生成完成\n   • 成功生成: {generated_count}/{target_chapters} 章\n   • 完成率: 100%{timeout_info}\n   • 分段识别: {segments_ok}/{generated_count} 章包含4段"
+                                
+                                # 添加章节标题预览
+                                preview_count = min(5, len(chapters))
+                                summary_text += f"\n\n📖 章节标题预览（前{preview_count}章）："
+                                for idx in range(preview_count):
+                                    ch = chapters[idx]
+                                    ch_num = ch.get('chapter_number', idx + 1)
+                                    ch_title = ch.get('title', '未知标题')
+                                    summary_text += f"\n   第{ch_num}章: {ch_title}"
+                                if len(chapters) > 5:
+                                    summary_text += f"\n   ... 还有{len(chapters) - 5}章"
+                                
                                 storyline_status = f"✅ 已完成 {generated_count} 章{segments_info}"
                             else:
                                 failed_info = ""
@@ -2518,7 +2540,19 @@ def create_gradio5_original_app():
 • CosyVoice2: {'🎙️ 已启用' if hasattr(aign_instance, 'cosyvoice_mode') and aign_instance.cosyvoice_mode else '🔇 未启用'}
 
 💾 增强型自动保存: {auto_save_info}
-• 保存内容：用户想法、写作要求、润色要求、所有生成内容
+• 保存内容：用户想法、写作要求、润色要求、所有生成内容"""
+
+                            # 如果生成已完成，追加统计报告
+                            completion_info = detailed_status.get('completion_info')
+                            if completion_info and completion_info.get('completed'):
+                                token_report = completion_info.get('token_report', '')
+                                time_report = completion_info.get('time_report', '')
+                                if token_report:
+                                    progress_text += f"\n\n{token_report}"
+                                if time_report:
+                                    progress_text += f"\n\n{time_report}"
+
+                            progress_text += f"""
 
 📝 最新操作日志（最近5条）:
 {log_text}"""

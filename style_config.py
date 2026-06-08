@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """风格配置管理模块"""
@@ -53,16 +53,51 @@ def get_style_code(style_name):
     return STYLE_MAPPING.get(style_name, "none")
 
 def get_style_prompt_paths(style_code, mode="compact"):
+    """获取指定风格的所有提示词文件路径（正文、润色、开头、结尾）"""
     if style_code == "none":
         if mode == "compact":
-            return {"writer_prompt": "prompts/compact/writer_prompt.py", "embellisher_prompt": "prompts/compact/embellisher_prompt.py"}
+            return {
+                "writer_prompt": "prompts/compact/writer_prompt.py",
+                "embellisher_prompt": "prompts/compact/embellisher_prompt.py",
+                "beginning_prompt": "prompts/compact/beginning_prompt.py",
+                "ending_prompt": "prompts/compact/ending_prompt.py",
+            }
+        elif mode == "standard":
+            return {
+                "writer_prompt": "prompts/standard/writer_prompt.py",
+                "embellisher_prompt": "prompts/standard/embellisher_prompt.py",
+                "beginning_prompt": "prompts/standard/beginning_prompt.py",
+                "ending_prompt": "prompts/standard/ending_prompt.py",
+            }
         else:
-            return {"writer_prompt": "prompts/long_chapter/writer_prompt.py", "embellisher_prompt": "prompts/long_chapter/embellisher_prompt.py"}
+            return {
+                "writer_prompt": "prompts/long_chapter/writer_prompt.py",
+                "embellisher_prompt": "prompts/long_chapter/embellisher_prompt.py",
+                "beginning_prompt": "prompts/standard/beginning_prompt.py",
+                "ending_prompt": "prompts/standard/ending_prompt.py",
+            }
     else:
         if mode == "compact":
-            return {"writer_prompt": f"prompts/compact/writer_prompt_{style_code}.py", "embellisher_prompt": f"prompts/compact/embellisher_prompt_{style_code}.py"}
+            return {
+                "writer_prompt": f"prompts/compact/writer_prompt_{style_code}.py",
+                "embellisher_prompt": f"prompts/compact/embellisher_prompt_{style_code}.py",
+                "beginning_prompt": f"prompts/compact/beginning_prompt_{style_code}.py",
+                "ending_prompt": f"prompts/compact/ending_prompt_{style_code}.py",
+            }
+        elif mode == "standard":
+            return {
+                "writer_prompt": f"prompts/standard/writer_prompt_{style_code}.py",
+                "embellisher_prompt": f"prompts/standard/embellisher_prompt_{style_code}.py",
+                "beginning_prompt": f"prompts/standard/beginning_prompt_{style_code}.py",
+                "ending_prompt": f"prompts/standard/ending_prompt_{style_code}.py",
+            }
         else:
-            return {"writer_prompt": f"prompts/long_chapter/writer_prompt_{style_code}.py", "embellisher_prompt": f"prompts/long_chapter/embellisher_prompt_{style_code}.py"}
+            return {
+                "writer_prompt": f"prompts/long_chapter/writer_prompt_{style_code}.py",
+                "embellisher_prompt": f"prompts/long_chapter/embellisher_prompt_{style_code}.py",
+                "beginning_prompt": f"prompts/standard/beginning_prompt_{style_code}.py",
+                "ending_prompt": f"prompts/standard/ending_prompt_{style_code}.py",
+            }
 
 def get_style_description(style_name):
     descriptions = {

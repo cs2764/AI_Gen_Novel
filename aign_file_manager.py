@@ -4,7 +4,7 @@ AIGN文件管理模块 - 处理小说文件的保存、导出等I/O操作
 本模块包含:
 - FileManager类：管理小说文件的保存和导出
 - 小说文件保存功能（TXT格式）
-- CosyVoice版本管理
+- Fish Audio S2语气标记版本管理
 - 元数据保存功能
 - EPUB导出功能（如果可用）
 """
@@ -66,9 +66,9 @@ class FileManager:
             if hasattr(self.aign, 'updateNovelContent'):
                 self.aign.updateNovelContent()
             
-            # 检查是否启用了CosyVoice模式
-            if getattr(self.aign, 'cosyvoice_mode', False):
-                self._save_with_cosyvoice()
+            # 检查是否启用了Fish Audio S2模式
+            if getattr(self.aign, 'fishaudio_mode', False):
+                self._save_with_fishaudio()
             else:
                 self._save_normal()
             
@@ -91,20 +91,20 @@ class FileManager:
             f.write(self.aign.novel_content)
         print(f"💾 已保存到文件: {self.aign.current_output_file}")
     
-    def _save_with_cosyvoice(self):
-        """保存CosyVoice版本和纯净版本"""
-        # 保存包含CosyVoice标记的版本
-        cosyvoice_file = self.aign.current_output_file.replace('.txt', '_cosyvoice.txt')
-        with open(cosyvoice_file, "w", encoding="utf-8") as f:
+    def _save_with_fishaudio(self):
+        """保存Fish Audio S2版本和纯净版本"""
+        # 保存包含Fish Audio标记的版本
+        fishaudio_file = self.aign.current_output_file.replace('.txt', '_fishaudio.txt')
+        with open(fishaudio_file, "w", encoding="utf-8") as f:
             if self.aign.novel_title:
                 f.write(f"{self.aign.novel_title}\n\n")
             f.write(self.aign.novel_content)
-        print(f"🎙️ 已保存CosyVoice2版本: {cosyvoice_file}")
+        print(f"🎙️ 已保存Fish Audio S2标记版本: {fishaudio_file}")
         
-        # 清理CosyVoice标记，生成纯净版本
+        # 清理Fish Audio标记，生成纯净版本
         try:
-            from cosyvoice_cleaner import CosyVoiceTextCleaner
-            cleaner = CosyVoiceTextCleaner()
+            from fishaudio_cleaner import FishAudioTextCleaner
+            cleaner = FishAudioTextCleaner()
             cleaned_content = cleaner.clean_text(self.aign.novel_content)
             
             # 保存清理后的版本（常规文件）
@@ -115,15 +115,15 @@ class FileManager:
             print(f"📖 已保存纯净版本: {self.aign.current_output_file}")
             
             # 提取并显示标记统计
-            markers = cleaner.extract_cosyvoice_markers(self.aign.novel_content)
+            markers = cleaner.extract_fishaudio_markers(self.aign.novel_content)
             if markers['total_count'] > 0:
-                print(f"📊 CosyVoice2标记统计:")
-                print(f"   • 风格控制: {len(markers['style_controls'])}个")
-                print(f"   • 细粒度控制: {sum(count for _, count in markers['fine_controls'])}个")
-                print(f"   • 强调词汇: {len(markers['emphasis'])}个")
+                print(f"📊 Fish Audio S2标记统计:")
+                for category, count in markers['by_category'].items():
+                    if count > 0:
+                        print(f"   • {category}: {count}个")
                 
         except ImportError:
-            print("⚠️ CosyVoice清理器不可用，保存原始版本")
+            print("⚠️ Fish Audio清理器不可用，保存原始版本")
             with open(self.aign.current_output_file, "w", encoding="utf-8") as f:
                 if self.aign.novel_title:
                     f.write(f"{self.aign.novel_title}\n\n")
@@ -141,9 +141,9 @@ class FileManager:
             if hasattr(self.aign, 'updateNovelContent'):
                 self.aign.updateNovelContent()
             
-            # 检查是否启用了CosyVoice模式
-            if getattr(self.aign, 'cosyvoice_mode', False):
-                self._save_with_cosyvoice()
+            # 检查是否启用了Fish Audio S2模式
+            if getattr(self.aign, 'fishaudio_mode', False):
+                self._save_with_fishaudio()
             else:
                 self._save_normal()
             
@@ -171,7 +171,7 @@ class FileManager:
                     "enable_ending": getattr(self.aign, 'enable_ending', True),
                     "compact_mode": getattr(self.aign, 'compact_mode', True),
                     "long_chapter_mode": getattr(self.aign, 'long_chapter_mode', 0),
-                    "cosyvoice_mode": getattr(self.aign, 'cosyvoice_mode', False),
+                    "fishaudio_mode": getattr(self.aign, 'fishaudio_mode', False),
                     "created_time": datetime.now().isoformat(),
                     "output_file": self.aign.current_output_file
                 },

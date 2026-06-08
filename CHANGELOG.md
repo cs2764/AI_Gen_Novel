@@ -2,6 +2,160 @@
 
 [中文版本](#中文版本)
 
+## [5.0.0] - 2026-06-08 🚀 Style Template System & New AI Providers | 风格模板系统与新AI提供商
+
+### ✨ Core New Features | 核心新功能
+
+#### 🌐 oMLX AI Provider | oMLX AI提供商
+- **Mac-Optimized Local LLM**: New `omlxAI.py` provider for oMLX inference server, OpenAI-compatible Chat Completions API
+- **Mac优化本地LLM**: 新增`omlxAI.py`提供商，支持oMLX推理服务器，OpenAI兼容Chat Completions API
+- **Streaming & Non-Streaming**: Full support for both streaming and non-streaming modes with thinking content parsing
+- **流式与非流式**: 完整支持流式和非流式两种模式，含思考内容解析
+
+#### 🌐 ZenMux AI Provider | ZenMux AI提供商
+- **Unified Model Routing**: New `zenmuxAI.py` provider for ZenMux AI model routing service
+- **统一模型路由**: 新增`zenmuxAI.py`提供商，用于ZenMux AI模型路由服务
+- **Reasoning Effort Control**: Supports `none/minimal/low/medium/high/max` reasoning effort levels
+- **思考强度控制**: 支持`none/minimal/low/medium/high/max`思考强度级别
+- **Provider Routing**: Optional upstream provider specification via `zenmux_provider` parameter
+- **提供商路由**: 通过`zenmux_provider`参数可选指定特定上游提供商
+
+#### 📝 Style-Specific Prompt Template System | 风格专属提示词模板系统
+- **132 New Style Prompts**: 33 writing styles × 4 prompt types (writer, embellisher, beginning, ending) = 132 per-style prompt files
+- **132个新风格提示词**: 33种写作风格×4种提示词类型(写手、润色、开头、结尾)=132个风格专用提示词文件
+- **Base Template Inheritance**: Style prompts inherit from `base_*_template.py` and override only style-specific sections
+- **基础模板继承**: 风格提示词从`base_*_template.py`继承，仅覆盖风格特定部分
+- **Standard Mode Templates**: New `AIGN_Prompt_Enhanced.py` with more detailed standard mode prompts (5000-word embellishment target)
+- **标准模式模板**: 新增`AIGN_Prompt_Enhanced.py`，提供更详细的标准模式提示词(5000字润色目标)
+
+#### 📖 Storyline Markdown Parser | 故事线Markdown解析器
+- **Bidirectional Conversion**: New `storyline_markdown_parser.py` for Markdown → dict parsing and dict → Markdown serialization
+- **双向转换**: 新增`storyline_markdown_parser.py`用于Markdown→dict解析和dict→Markdown序列化
+- **YAML Front Matter**: Metadata support (target chapters, style, timestamps) via YAML front matter
+- **YAML元数据**: 通过YAML front matter支持元数据(目标章节、风格、时间戳)
+- **Long Chapter Segments**: Full parsing support for `### 分段X` sub-sections within chapters
+- **长章节分段**: 完整支持章节内`### 分段X`子段落解析
+
+### 🔧 Improvements | 功能改进
+
+- **Requirements Expansion Prompt Refactoring**: `AIGN_Requirements_Expansion_Prompt.py` code streamlined and optimized
+- **需求扩展提示词重构**: `AIGN_Requirements_Expansion_Prompt.py`代码精简优化
+- **Storyline Prompt Enhancement**: `storyline_prompt.py` and `storyline_prompt_simple.py` improved for better generation quality
+- **故事线提示词增强**: `storyline_prompt.py`和`storyline_prompt_simple.py`改进，提升生成质量
+- **Auto-Save Manager Optimization**: Improved auto-save handling and performance
+- **自动保存管理器优化**: 改进自动保存处理和性能
+- **Model Fetcher Updates**: Added support for oMLX and ZenMux model fetching
+- **模型获取器更新**: 新增oMLX和ZenMux模型获取支持
+- **Config Manager Updates**: Added oMLX and ZenMux provider configurations
+- **配置管理器更新**: 新增oMLX和ZenMux提供商配置
+
+### 🚧 Experimental (Hidden in UI) | 实验性功能（UI中已隐藏）
+
+> The following features are included in the codebase but hidden from the UI as they are still under development.
+> 以下功能已包含在代码中，但由于仍在开发中，已从UI中隐藏。
+
+#### 🎵 Fish Audio S2 Emotion Marking | Fish Audio S2语气标记功能
+- Replaces CosyVoice with Fish Audio S2 emotion/tone marking system using bracket `[emotion]` syntax
+- 替代CosyVoice，使用方括号`[emotion]`语法的Fish Audio S2语气/情感标记系统
+- Addon-style prompt injection, backward compatible config migration
+- Addon方式注入提示词，向后兼容配置迁移
+
+#### 📚 EPUB Fish Audio S2 Emotion Tagger | EPUB Fish Audio S2语气打标器
+- Batch EPUB processing with concurrent LLM API calls for adding emotion/tone markers
+- 批量EPUB处理，并发LLM API调用添加语气/情感标记
+
+#### 🧹 Fish Audio Text Cleaner | Fish Audio文本清理工具
+- Strips both S2 `[bracket]` and legacy S1 `(parenthesis)` emotion markers
+- 清理S2方括号和旧版S1圆括号两种格式的语气标记
+
+### 📄 New Files | 新增文件
+- `AIGN_FishAudio_Prompt.py`: Fish Audio S2 emotion marker addon instructions
+- `epub_fishaudio_tagger.py`: EPUB batch emotion tagging processor
+- `fishaudio_cleaner.py`: Fish Audio text marker cleaner
+- `storyline_markdown_parser.py`: Storyline Markdown ↔ dict parser
+- `uniai/omlxAI.py`: oMLX AI provider
+- `uniai/zenmuxAI.py`: ZenMux AI provider
+- `prompts/standard/base_beginning_template.py`: Base beginning template
+- `prompts/standard/base_embellisher_template.py`: Base embellisher template
+- `prompts/standard/base_ending_template.py`: Base ending template
+- `prompts/standard/base_writer_template.py`: Base writer template
+- `prompts/standard/*_prompt_*.py`: 132 style-specific prompt files (33 styles × 4 types)
+- `prompts/compact/ending_prompt_*.py`: Compact mode ending prompts for all styles
+- `docs/Fish_Audio_TTS_语气参考文档.md`: Fish Audio TTS reference documentation
+
+### 📝 Modified Files | 修改文件
+- `AIGN.py`: Fish Audio S2 emotion marking integration, standard mode template support
+- `AIGN_Prompt.py`: Minor prompt adjustments
+- `AIGN_Prompt_Enhanced.py`: Standard mode enhanced prompts
+- `AIGN_Requirements_Expansion_Prompt.py`: Code refactoring and optimization
+- `aign_agents.py`: Provider integration updates
+- `aign_file_manager.py`: File handling improvements
+- `aign_storyline_manager.py`: Storyline processing updates
+- `aign_webui_bridge.py`: WebUI bridge updates
+- `app.py`, `app_event_handlers.py`, `app_ui_components.py`: Fish Audio emotion marking UI integration
+- `app_ai_expansion.py`, `app_data_handlers.py`, `app_utils.py`: Various improvements
+- `auto_save_manager.py`: Auto-save optimization
+- `config_manager.py`, `config_template.py`: New provider configurations
+- `dynamic_config_manager.py`: Fish Audio emotion marking mode config, new providers
+- `enhanced_storyline_generator.py`: Storyline generation improvements
+- `json_auto_repair.py`: json_repair library integration
+- `local_data_manager.py`: Data management updates
+- `model_fetcher.py`: oMLX/ZenMux model fetching
+- `style_config.py`, `style_manager.py`, `style_prompt_loader.py`: Style template system
+- `tts_file_processor.py`: Fish Audio emotion marking integration
+- `web_config_interface.py`: Fish Audio emotion marking config UI, new provider UI
+- `uniai/__init__.py`: oMLX/ZenMux exports
+- `uniai/claudeAI.py`, `uniai/deepseekAI.py`, `uniai/lambdaAI.py`: Minor fixes
+- `uniai/lmstudioAI.py`: API improvements, tool_choice fix
+- `uniai/openrouterAI.py`, `uniai/siliconflowAI.py`: Minor updates
+- `requirements.txt`, `requirements_gradio5.txt`, `requirements_gradio5_ascii.txt`: json-repair dependency
+
+---
+
+## [4.9.1] - 2026-03-16 🔧 JSON Repair Enhancement & WebUI Progress Fix | JSON修复增强与WebUI进度修复
+
+### ✨ New Features | 新功能
+
+#### 🔧 json_repair Library Integration | json_repair库集成
+- **Replaced manual JSON repair**: Integrated [json_repair](https://github.com/mangiucugna/json_repair) library to replace 6+ manual regex-based repair methods, significantly improving JSON parsing success rate and robustness
+- **替代手写JSON修复**: 集成 [json_repair](https://github.com/mangiucugna/json_repair) 库替代6+种手写正则修复方法，大幅提升JSON解析成功率和鲁棒性
+- **Simplified repair pipeline**: Repair flow streamlined to `direct parse → json_repair.loads() → content extraction + json_repair → fail`, removing `_balance_brackets` and manual repair logic
+- **简化修复流水线**: 修复流程精简为 `直接解析 → json_repair.loads() → 内容提取 + json_repair → 失败`，移除 `_balance_brackets` 和手写修复逻辑
+- **Applied across codebase**: Both `json_auto_repair.py` and `enhanced_storyline_generator.py` now use `json_repair` as the primary repair mechanism
+- **全代码库应用**: `json_auto_repair.py` 和 `enhanced_storyline_generator.py` 均使用 `json_repair` 作为主要修复机制
+
+### 🔧 Improvements | 功能改进
+
+#### 📊 WebUI Storyline Progress Enhancement | WebUI故事线进度增强
+- **Fixed false timeout**: Stall timeout increased from 10 to 15 minutes, now tracks both chapter count AND batch number changes to avoid false positives during slow API calls
+- **修复假超时**: 停滞超时从10分钟增加到15分钟，现在同时跟踪章节数和批次号变化，避免在API调用缓慢时产生误报
+- **Detailed completion info**: WebUI now displays chapter title preview (first 5 chapters), failure statistics, and completion percentage upon generation completion
+- **详细完成信息**: 生成完成后WebUI现在显示章节标题预览（前5章）、失败统计和完成百分比
+- **Extended time limits**: Max wait time increased from 2h to 4h, per-chapter time from 30s to 60s, accommodating larger generation tasks
+- **延长时间限制**: 最大等待时间从2小时增加到4小时，每章时间从30秒增加到60秒，适应更大的生成任务
+
+### 🐛 Bug Fixes | 问题修复
+
+#### 🛠️ LM Studio tool_choice Fix | LM Studio tool_choice修复
+- **Fixed API error**: Corrected `tool_choice` parameter format for LM Studio — LM Studio only supports string values (`"none"`, `"auto"`, `"required"`), not object format
+- **修复API错误**: 修正了LM Studio的`tool_choice`参数格式——LM Studio仅支持字符串值（`"none"`、`"auto"`、`"required"`），不支持对象格式
+
+### 📦 Dependencies | 依赖变更
+- **New dependency**: `json-repair>=0.30.0` — added to `requirements.txt`, `requirements_gradio5.txt`, and `requirements_gradio5_ascii.txt`
+- **新增依赖**: `json-repair>=0.30.0` — 已添加到所有 requirements 文件
+- **Upgrade note**: Existing users should run `pip install json-repair` or re-run `pip install -r requirements_gradio5.txt` to install the new dependency
+- **升级说明**: 现有用户需运行 `pip install json-repair` 或重新运行 `pip install -r requirements_gradio5.txt` 安装新依赖
+
+### 📝 Modified Files | 修改文件
+- `json_auto_repair.py`: Rewritten to use `json_repair.loads()` as primary repair method
+- `enhanced_storyline_generator.py`: Integrated `json_repair`, removed `_balance_brackets`
+- `requirements.txt` / `requirements_gradio5.txt` / `requirements_gradio5_ascii.txt`: Added `json-repair` dependency
+- `app_event_handlers.py`: Improved stall timeout and completion info display (both handlers)
+- `app.py`: Added chapter title preview to completion summary
+- `uniai/lmstudioAI.py`: Fixed `tool_choice` comment for LM Studio API compatibility
+
+---
+
 ## [4.9.0] - 2026-03-15 🛡️ Embellish Truncation Detection & Retry | 润色截断检测与重试
 
 ### ✨ Core New Features | 核心新功能

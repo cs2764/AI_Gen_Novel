@@ -324,6 +324,16 @@ class WebUIBridge:
                     current_operation = f"正在生成第{generation_status['current_chapter'] + 1}章"
             else:
                 current_operation = f"正在生成第{generation_status['current_chapter'] + 1}章"
+        elif hasattr(self.parent_aign, 'generation_completion_info') and self.parent_aign.generation_completion_info and self.parent_aign.generation_completion_info.get('completed'):
+            info = self.parent_aign.generation_completion_info
+            total_words = info.get('total_word_count', 0)
+            if total_words >= 10000:
+                word_display = f"{total_words/10000:.1f}万字"
+            elif total_words >= 1000:
+                word_display = f"{total_words/1000:.1f}千字"
+            else:
+                word_display = f"{total_words}字"
+            current_operation = f"✅ 生成完成！共 {info.get('chapter_count', 0)} 章，{word_display}，耗时 {info.get('total_time', '未知')}"
         
         return {
             'timestamp': current_time,
@@ -333,6 +343,7 @@ class WebUIBridge:
             'storyline_stats': storyline_stats,
             'time_stats': time_stats,
             'current_operation': current_operation,
+            'completion_info': getattr(self.parent_aign, 'generation_completion_info', None),
             'log_count': len(self.log_buffer),
             'stream_info': {
                 'chars': self.current_stream_chars,

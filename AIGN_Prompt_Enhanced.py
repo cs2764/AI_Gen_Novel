@@ -55,6 +55,8 @@ from prompts.standard.segment_prompts import (
 # ================================
 from prompts.compact.writer_prompt import novel_writer_compact_prompt
 from prompts.compact.embellisher_prompt import novel_embellisher_compact_prompt
+from prompts.compact.beginning_prompt import novel_beginning_compact_prompt
+from prompts.compact.ending_prompt import novel_ending_compact_prompt
 from prompts.compact.long_chapter_prompt import novel_writer_compact_long_prompt
 from prompts.compact.segment_prompts import (
     novel_writer_compact_segment_1_prompt,
@@ -66,6 +68,12 @@ from prompts.compact.segment_prompts import (
     novel_embellisher_compact_segment_3_prompt,
     novel_embellisher_compact_segment_4_prompt,
 )
+
+# ================================
+# 标准模式模板提示词（非精简模式，更详细，润色5000字）
+# ================================
+from prompts.standard.writer_prompt import novel_writer_standard_prompt
+from prompts.standard.embellisher_prompt import novel_embellisher_standard_prompt
 
 # ================================
 # 导出所有提示词
@@ -82,7 +90,7 @@ __all__ = [
     'detailed_outline_generator_prompt',
     'foreshadowing_generator_prompt',
     
-    # 标准模式
+    # 标准模式（原有独立提示词）
     'novel_beginning_writer_prompt',
     'novel_writer_prompt',
     'novel_embellisher_prompt',
@@ -105,6 +113,8 @@ __all__ = [
     # 精简模式
     'novel_writer_compact_prompt',
     'novel_embellisher_compact_prompt',
+    'novel_beginning_compact_prompt',
+    'novel_ending_compact_prompt',
     'novel_writer_compact_long_prompt',
     'novel_writer_compact_segment_1_prompt',
     'novel_writer_compact_segment_2_prompt',
@@ -114,6 +124,10 @@ __all__ = [
     'novel_embellisher_compact_segment_2_prompt',
     'novel_embellisher_compact_segment_3_prompt',
     'novel_embellisher_compact_segment_4_prompt',
+    
+    # 标准模式模板提示词（非精简模式，更详细）
+    'novel_writer_standard_prompt',
+    'novel_embellisher_standard_prompt',
 ]
 
 # ================================
@@ -129,5 +143,7 @@ if __name__ == '__main__':
     print(f"\n可用的提示词数量: {len(__all__)}")
     print("\n提示词分类:")
     print("  - 通用提示词: 8个")
-    print("  - 标准模式: 16个")
+    print("  - 标准模式（原有）: 16个")
     print("  - 精简模式: 12个")
+    print("  - 标准模式模板（非精简）: 2个")
+

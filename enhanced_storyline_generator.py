@@ -9,6 +9,12 @@ import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 
+try:
+    import json_repair as _json_repair
+    JSON_REPAIR_LIB_AVAILABLE = True
+except ImportError:
+    JSON_REPAIR_LIB_AVAILABLE = False
+
 
 class EnhancedStorylineGenerator:
     """增强的故事线生成器，支持OpenRouter的structured outputs和tool calling"""
@@ -60,9 +66,9 @@ class EnhancedStorylineGenerator:
     
     def _supports_tool_calling(self):
         """检查当前提供商是否支持工具调用（但可能有格式限制）"""
-        # OpenRouter和LM Studio支持工具调用
-        # LM Studio需要使用支持function calling的模型（如Qwen2.5, Llama 3.1+, Mistral等）
-        return self.provider_name in ["openrouter", "lmstudio"]
+        # 只有OpenRouter支持工具调用
+        # LM Studio不使用tool calling，直接走流式传统方法
+        return self.provider_name in ["openrouter"]
     
     def _update_stream_display(self, content, method_name="故事线生成"):
         """更新实时数据流窗口显示
@@ -512,6 +518,17 @@ class EnhancedStorylineGenerator:
                 self._record_success("lmstudio_truncation_fix")
                 return fixed_truncated
 
+        # 第零步：使用 json_repair 库直接修复全文
+        if JSON_REPAIR_LIB_AVAILABLE:
+            try:
+                repaired = _json_repair.loads(text)
+                if isinstance(repaired, dict):
+                    print("✅ json_repair库全文修复成功")
+                    self._record_success("json_repair_lib_full_text")
+                    return repaired
+            except Exception as e:
+                print(f"⚠️ json_repair库全文修复失败: {e}")
+
         # 第一步：提取可能的JSON内容
         json_candidates = self._extract_json_candidates(text)
 
@@ -628,52 +645,23 @@ class EnhancedStorylineGenerator:
         return candidates
 
     def _repair_json_content(self, json_str: str) -> Optional[Dict[str, Any]]:
-        """修复单个JSON字符串"""
+        """修复单个JSON字符串（使用 json_repair 库）"""
         try:
             # 直接尝试解析
             return json.loads(json_str)
         except json.JSONDecodeError:
             pass
 
-        # 开始修复
-        repaired = json_str.strip()
+        # 使用 json_repair 库修复
+        if JSON_REPAIR_LIB_AVAILABLE:
+            try:
+                repaired = _json_repair.loads(json_str)
+                if isinstance(repaired, (dict, list)):
+                    return repaired
+            except Exception:
+                pass
 
-        # 修复1: 移除尾随逗号
-        repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
-
-        # 修复2: 修复未引用的键名
-        repaired = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', repaired)
-
-        # 修复3: 修复单引号
-        repaired = repaired.replace("'", '"')
-
-        # 修复4: 修复换行符和特殊字符
-        repaired = repaired.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-
-        # 修复5: 修复不完整的字符串
-        repaired = re.sub(r':\s*([^",\[\]{}]+)(?=\s*[,}])', r': "\1"', repaired)
-
-        # 修复6: 确保数组和对象正确闭合
-        repaired = self._balance_brackets(repaired)
-
-        try:
-            return json.loads(repaired)
-        except json.JSONDecodeError:
-            return None
-
-    def _balance_brackets(self, text: str) -> str:
-        """平衡括号和大括号"""
-        # 计算括号平衡
-        brace_count = text.count('{') - text.count('}')
-        bracket_count = text.count('[') - text.count(']')
-
-        # 添加缺失的闭合括号
-        if brace_count > 0:
-            text += '}' * brace_count
-        if bracket_count > 0:
-            text += ']' * bracket_count
-
-        return text
+        return None
 
     def _reconstruct_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
         """从文本中智能重构JSON结构"""
@@ -827,12 +815,10 @@ class EnhancedStorylineGenerator:
             print(f"🔢 期望生成章节数: {expected_count}")
 
             # 根据提供商调整tool_choice格式
-            # LM Studio和OpenRouter都支持对象格式的tool_choice
-            # 参考: https://lmstudio.ai/docs/developer/openai-compat/tools
             if self.provider_name == "lmstudio":
-                # LM Studio支持 "auto", "none", 或对象格式
-                # 使用对象格式强制调用特定函数
-                tool_choice_param = {"type": "function", "function": {"name": "generate_storyline_batch"}}
+                # LM Studio只支持字符串格式: "none", "auto", "required"
+                # 使用 "required" 强制模型进行工具调用
+                tool_choice_param = "required"
             else:
                 # OpenRouter和其他提供商支持对象格式
                 tool_choice_param = {"type": "function", "function": {"name": "generate_storyline_batch"}}
@@ -908,121 +894,130 @@ class EnhancedStorylineGenerator:
         require_segments: bool = True,
         segment_count: int = 4
     ) -> Tuple[Optional[Dict[str, Any]], str]:
-        """使用传统方法+增强JSON修复生成故事线"""
+        """使用Markdown格式生成故事线（主要方法）"""
         try:
-            print("🔧 尝试使用传统方法+增强JSON修复生成故事线...")
+            print("🔧 尝试使用Markdown格式生成故事线...")
 
-            # 增强提示词，提高JSON格式正确率
-            enhanced_messages = self._enhance_json_prompt(messages.copy(), require_segments, segment_count)
+            # 导入Markdown解析器
+            from storyline_markdown_parser import parse_storyline_markdown
 
             for retry in range(self.max_retries + 1):
                 print(f"🔄 第{retry+1}次尝试生成...")
 
-                # 根据重试次数调整策略
-                current_messages = enhanced_messages.copy()
+                current_messages = messages.copy()
                 if retry > 0:
-                    current_messages = self._add_retry_instructions(current_messages, retry)
+                    # 重试时添加提示
+                    retry_hint = f"\n\n**注意：请确保使用Markdown格式输出，每章必须以 ## 第X章：标题 开头。确保生成所有要求的章节。**"
+                    current_messages[-1]["content"] += retry_hint
 
                 response = self.chatLLM(
                     messages=current_messages,
-                    temperature=max(0.3, temperature - retry * 0.1),  # 重试时降低温度
-                    stream=True  # 使用流式输出，实时显示生成内容
+                    temperature=max(0.3, temperature - retry * 0.1),
+                    stream=True
                 )
                 
-                # 处理流式响应：实时输出到console并收集所有内容
+                # 处理流式响应
                 if hasattr(response, '__next__'):
                     print(f"🔧 故事线生成: 检测到流式响应，开始接收数据...\n")
                     final_result = None
                     accumulated_content = ""
+                    accumulated_reasoning = ""
                     chunk_count = 0
-                    last_content_length = 0  # 用于追踪新增内容
+                    last_content_length = 0
+                    last_reasoning_length = 0
                     
                     for chunk in response:
                         chunk_count += 1
                         final_result = chunk
+                        
+                        if chunk and 'reasoning_content' in chunk and chunk['reasoning_content']:
+                            current_reasoning = chunk['reasoning_content']
+                            new_reasoning = current_reasoning[last_reasoning_length:]
+                            if new_reasoning:
+                                print(new_reasoning, end='', flush=True)
+                                if self.aign_instance and hasattr(self.aign_instance, 'update_stream_progress'):
+                                    self.aign_instance.update_stream_progress(new_reasoning, is_reasoning=True)
+                            accumulated_reasoning = current_reasoning
+                            last_reasoning_length = len(current_reasoning)
+                        
                         if chunk and 'content' in chunk:
                             current_content = chunk['content']
-                            # 计算新增的内容并输出到console
                             new_content = current_content[last_content_length:]
                             if new_content:
                                 print(new_content, end='', flush=True)
+                                if self.aign_instance and hasattr(self.aign_instance, 'update_stream_progress'):
+                                    self.aign_instance.update_stream_progress(new_content, is_reasoning=False)
                             accumulated_content = current_content
                             last_content_length = len(current_content)
                     
-                    print(f"\n\n✅ 流式接收完成: {len(accumulated_content)} 字符, {chunk_count} 个数据块")
+                    if accumulated_reasoning:
+                        print(f"\n\n🧠 思考过程总长度: {len(accumulated_reasoning)} 字符")
+                    print(f"✅ 流式接收完成: {len(accumulated_content)} 字符, {chunk_count} 个数据块")
                     
-                    # 使用累积的内容构建响应
                     response = {
                         "content": accumulated_content,
                         "total_tokens": final_result.get("total_tokens", 0) if final_result else 0
                     }
                 
-                # 显示token使用信息
-                self._log_token_usage(f"传统方法(第{retry+1}次尝试)", current_messages, response)
+                self._log_token_usage(f"Markdown方法(第{retry+1}次尝试)", current_messages, response)
 
                 if response.get("content"):
-                    print(f"📝 收到响应，长度: {len(response['content'])}字符")
+                    content = response["content"]
+                    print(f"📝 收到响应，长度: {len(content)}字符")
 
                     # 🔍 检测截断
-                    self._detect_and_display_truncation(response["content"], f"传统方法(第{retry+1}次尝试)")
+                    self._detect_and_display_truncation(content, f"Markdown方法(第{retry+1}次尝试)")
 
-                    # 尝试直接解析
-                    try:
-                        data = json.loads(response["content"])
-                        if self._validate_storyline_structure(data):
-                            print(f"✅ 传统方法第{retry+1}次尝试成功")
-                            # 从消息中提取期望章节数以便调试
-                            expected_count = self._extract_chapter_count_from_messages(messages)
-                            self._debug_chapter_count(data, expected_count, f"传统方法(第{retry+1}次)")
-                            self._record_success(f"traditional_success_attempt_{retry+1}")
-                            
-                            # 更新实时数据流窗口
-                            self._update_stream_display(data, f"传统方法(第{retry+1}次)生成故事线")
-                            
-                            return data, f"traditional_success_attempt_{retry+1}"
-                        else:
-                            print(f"⚠️ JSON格式正确但结构不符合要求")
-                    except json.JSONDecodeError as e:
-                        print(f"⚠️ JSON解析失败: {e}")
-                        # 保存JSON解析错误数据
-                        self._save_error_data("json_parse_error", current_messages,
-                                            response["content"], str(e), retry + 1)
-
-                    # 尝试增强修复
-                    print("🔧 开始增强JSON修复...")
-                    fixed_data = self.fix_json_format(response["content"])
-                    if fixed_data and self._validate_storyline_structure(fixed_data):
-                        print(f"✅ 增强JSON修复成功，第{retry+1}次尝试")
-                        # 从消息中提取期望章节数以便调试
+                    # 尝试Markdown解析
+                    data = parse_storyline_markdown(content)
+                    if data and self._validate_storyline_structure(data):
+                        print(f"✅ Markdown解析成功，第{retry+1}次尝试")
                         expected_count = self._extract_chapter_count_from_messages(messages)
-                        self._debug_chapter_count(fixed_data, expected_count, f"增强JSON修复(第{retry+1}次)")
-                        # 记录成功案例
-                        self._log_successful_generation("enhanced_json_repair", retry + 1, fixed_data)
-                        self._record_success("enhanced_json_repair")
-                        
-                        # 更新实时数据流窗口
-                        self._update_stream_display(fixed_data, f"JSON修复(第{retry+1}次)生成故事线")
-                        
-                        return fixed_data, f"enhanced_json_repair_success_attempt_{retry+1}"
-                    else:
-                        print(f"❌ 第{retry+1}次尝试增强JSON修复失败")
-                        # 保存修复失败的数据
-                        self._save_error_data("json_repair_failed", current_messages,
-                                            response["content"], "JSON repair and validation failed", retry + 1)
+                        self._debug_chapter_count(data, expected_count, f"Markdown方法(第{retry+1}次)")
+                        self._record_success(f"markdown_success_attempt_{retry+1}")
+                        self._update_stream_display(data, f"Markdown方法(第{retry+1}次)生成故事线")
+                        return data, f"markdown_success_attempt_{retry+1}"
+                    elif data:
+                        print(f"⚠️ Markdown解析成功但结构验证失败，尝试使用部分结果")
+                        # 即使结构不完全符合，如果有chapters就接受
+                        if data.get("chapters") and len(data["chapters"]) > 0:
+                            expected_count = self._extract_chapter_count_from_messages(messages)
+                            self._debug_chapter_count(data, expected_count, f"Markdown部分解析(第{retry+1}次)")
+                            return data, f"markdown_partial_success_attempt_{retry+1}"
+                    
+                    # Markdown解析失败，回退尝试JSON解析（兼容旧格式）
+                    print("⚠️ Markdown解析失败，回退尝试JSON解析...")
+                    try:
+                        json_data = json.loads(content)
+                        if self._validate_storyline_structure(json_data):
+                            print(f"✅ JSON回退解析成功")
+                            self._record_success(f"json_fallback_success_attempt_{retry+1}")
+                            return json_data, f"json_fallback_success_attempt_{retry+1}"
+                    except json.JSONDecodeError:
+                        pass
+                    
+                    # 尝试JSON修复
+                    fixed_data = self.fix_json_format(content)
+                    if fixed_data and self._validate_storyline_structure(fixed_data):
+                        print(f"✅ JSON修复回退成功")
+                        self._record_success("json_repair_fallback")
+                        return fixed_data, f"json_repair_fallback_attempt_{retry+1}"
+                    
+                    print(f"❌ 第{retry+1}次尝试所有解析方法均失败")
+                    self._save_error_data("all_parse_failed", current_messages,
+                                        content, "Both Markdown and JSON parsing failed", retry + 1)
                 else:
                     print(f"⚠️ 第{retry+1}次尝试未返回内容")
-                    # 保存无内容错误
                     self._save_error_data("no_content_returned", current_messages,
                                         "", "API returned no content", retry + 1)
 
-            # 所有尝试都失败，保存最终失败信息
-            self._save_error_data("all_attempts_failed", enhanced_messages,
+            self._save_error_data("all_attempts_failed", messages,
                                 "", f"All {self.max_retries + 1} attempts failed")
-            return None, f"all_enhanced_attempts_failed_after_{self.max_retries + 1}_tries"
+            return None, f"all_markdown_attempts_failed_after_{self.max_retries + 1}_tries"
 
         except Exception as e:
-            print(f"❌ 增强传统方法调用失败: {e}")
-            return None, f"enhanced_traditional_error: {e}"
+            print(f"❌ Markdown生成方法调用失败: {e}")
+            return None, f"markdown_generation_error: {e}"
 
     def _enhance_json_prompt(self, messages: List[Dict[str, str]], require_segments: bool = True, segment_count: int = 4) -> List[Dict[str, str]]:
         """增强提示词以提高JSON格式正确率
@@ -1164,8 +1159,8 @@ class EnhancedStorylineGenerator:
     def _add_retry_instructions(self, messages: List[Dict[str, str]], retry_count: int) -> List[Dict[str, str]]:
         """根据重试次数添加特定指令"""
         retry_instructions = {
-            1: "\n\n**注意：上次返回的JSON格式有问题，请确保返回严格的JSON格式，不要包含任何markdown标记或解释文字。**",
-            2: "\n\n**最后一次机会：请只返回纯JSON对象，从{开始，以}结束，中间不要有任何其他内容。**"
+            1: "\n\n**注意：上次返回的格式有问题，请确保使用Markdown格式输出，每章以 ## 第X章：标题 开头，不要使用JSON格式。**",
+            2: "\n\n**最后一次机会：请严格使用Markdown格式，每章以 ## 第X章：标题 开头，包含剧情梗概、关键事件等所有字段。**"
         }
 
         if retry_count in retry_instructions:
@@ -1246,10 +1241,9 @@ class EnhancedStorylineGenerator:
         segment_count: int = 4
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         """
-        生成故事线批次，按优先级尝试不同方法：
-        1. OpenRouter Structured Outputs (仅OpenRouter)
-        2. OpenRouter Tool Calling (仅OpenRouter)
-        3. 传统方法 + JSON修复（重试2次）
+        生成故事线批次，统一使用Markdown格式：
+        1. Markdown格式生成 + 解析（主要方法，所有提供商统一）
+        2. 渐进式生成（如果主方法失败且请求章节数较多）
         
         Args:
             messages: 消息列表
@@ -1264,45 +1258,30 @@ class EnhancedStorylineGenerator:
         print(f"🔧 当前提供商: {self.provider_name.upper()}")
         print(f"📋 require_segments: {require_segments} (类型: {type(require_segments).__name__})")
         print(f"📦 segment_count: {segment_count} (类型: {type(segment_count).__name__})")
+        print(f"📝 输出格式: Markdown（统一格式）")
         if require_segments:
-            print(f"✅ 分段要求: 需要{segment_count}段plot_segments")
+            print(f"✅ 分段要求: 需要{segment_count}段")
         else:
             print(f"✅ 分段要求: 仅需梗概，不要求分段")
         print("🚀" * 35 + "\n")
 
-        # 方法1: Structured Outputs (仅OpenRouter)
-        if self._supports_advanced_features():
-            data, status = self.generate_with_structured_output(messages, temperature, require_segments, segment_count)
-            if data:
-                self._log_successful_generation("structured_output", 1, data)
-                return data, status
-
-        # 方法2: Tool Calling (OpenRouter和LM Studio)
-        if self._supports_tool_calling():
-            data, status = self.generate_with_tool_calling(messages, temperature, require_segments, segment_count)
-            if data:
-                self._log_successful_generation("tool_calling", 1, data)
-                return data, status
-        else:
-            print(f"🔧 {self.provider_name.upper()} 不支持Tool Calling，跳过此方法")
-
-        # 方法3: 传统方法 + JSON修复（所有提供商都支持）
+        # 方法1: Markdown格式生成（所有提供商统一使用）
         data, status = self.generate_with_fallback_repair(messages, temperature, require_segments, segment_count)
         if data:
-            # 成功案例已在 generate_with_fallback_repair 中记录
+            self._log_successful_generation("markdown_generation", 1, data)
             return data, status
 
-        # 方法4: 渐进式生成（针对LM Studio等容易截断的提供商）
-        print("🔄 所有标准方法失败，尝试渐进式生成策略...")
+        # 方法2: 渐进式生成（针对容易截断的场景）
+        print("🔄 Markdown主方法失败，尝试渐进式生成策略...")
         expected_count = self._extract_chapter_count_from_messages(messages)
-        if expected_count > 3:  # 只有在请求较多章节时才使用渐进式策略
+        if expected_count > 3:
             data, status = self._attempt_progressive_generation(messages, expected_count, require_segments, segment_count)
             if data:
                 print(f"✅ 渐进式生成成功：{status}")
                 return data, status
 
-        # 所有方法都失败，保存最终失败信息
-        print("❌ 所有JSON生成方法都失败，跳过此批次")
+        # 所有方法都失败
+        print("❌ 所有生成方法都失败，跳过此批次")
         self._save_error_data("all_methods_failed", messages, "", "All generation methods failed")
         return None, "all_methods_failed"
     
@@ -1322,26 +1301,18 @@ class EnhancedStorylineGenerator:
             # 修改消息以请求更少的章节
             modified_messages = self._modify_messages_for_smaller_batch(original_messages, attempt_size, require_segments, segment_count)
             
-            # 尝试所有生成方法
-            for method_name, method_func in [
-                ("Tool Calling", self.generate_with_tool_calling),
-                ("JSON修复", self.generate_with_fallback_repair)
-            ]:
-                if method_name == "Tool Calling" and not self._supports_tool_calling():
-                    continue
-                    
-                print(f"🔧 {method_name}方式生成{attempt_size}章...")
-                try:
-                    data, status = method_func(modified_messages, 0.7, require_segments, segment_count)  # 降低温度提高稳定性
-                    if data and self._validate_storyline_structure(data):
-                        chapter_count = len(data.get('chapters', []))
-                        print(f"✅ 渐进式生成成功: {method_name}方式生成了{chapter_count}章")
-                        result_status = f"progressive_{method_name.lower().replace(' ', '_')}_success_{attempt_size}chapters"
-                        self._record_success(result_status)
-                        return data, result_status
-                except Exception as e:
-                    print(f"⚠️ {method_name}方式失败: {e}")
-                    continue
+            # 使用Markdown方法生成
+            print(f"🔧 Markdown方式生成{attempt_size}章...")
+            try:
+                data, status = self.generate_with_fallback_repair(modified_messages, 0.7, require_segments, segment_count)
+                if data and self._validate_storyline_structure(data):
+                    chapter_count = len(data.get('chapters', []))
+                    print(f"✅ 渐进式生成成功: Markdown方式生成了{chapter_count}章")
+                    result_status = f"progressive_markdown_success_{attempt_size}chapters"
+                    self._record_success(result_status)
+                    return data, result_status
+            except Exception as e:
+                print(f"⚠️ Markdown方式失败: {e}")
         
         print("❌ 所有渐进式生成尝试都失败")
         return None, "progressive_generation_failed"
@@ -1433,26 +1404,19 @@ class EnhancedStorylineGenerator:
                 if req_lines:
                     key_info["写作要求"] = "**写作要求:**\n" + "\n".join(req_lines)
         
-        # 动态生成分段示例
+        # 动态生成分段说明
         if require_segments:
-            # 生成动态数量的分段示例
-            segment_examples = []
+            segment_requirement = f"（每章必须包含{segment_count}个分段）"
+            segment_example = ""
             for i in range(1, segment_count + 1):
-                segment_examples.append(f'        {{"index": {i}, "segment_title": "分段{i}", "segment_summary": "分段{i}内容"}}')
-            segments_json = ",\n".join(segment_examples)
-            
-            segments_section = f''',
-      "plot_segments": [
-{segments_json}
-      ]'''
-            segment_requirement = f"（每章必须包含{segment_count}个plot_segments）"
+                segment_example += f"\n### 分段{i}：分段{i}标题\n分段{i}的具体内容\n- 事件A\n**分段作用：** 本段的推进作用\n**衔接：** 衔接到下一段\n"
         else:
-            segments_section = ""
             segment_requirement = "（不需要分段，只需梗概）"
+            segment_example = ""
         
-        # 构建简化的提示词
+        # 构建简化的提示词（Markdown格式）
         simplified_prompt = f"""
-请严格按照JSON格式生成{target_count}章故事线{segment_requirement}：
+请使用Markdown格式生成{target_count}章故事线{segment_requirement}：
 
 {key_info.get('大纲', '')}
 {key_info.get('人物列表', '')}
@@ -1460,31 +1424,31 @@ class EnhancedStorylineGenerator:
 
 **要求生成第{start_chapter}-{end_chapter}章，共{target_count}章**
 
-必须返回完整JSON格式：
-```json
-{{
-  "chapters": [
-    {{
-      "chapter_number": {start_chapter},
-      "title": "章节标题",  
-      "plot_summary": "详细剧情梗概，至少50字",
-      "key_events": ["事件1", "事件2", "事件3"],
-      "character_development": "人物发展描述",
-      "chapter_mood": "情绪氛围"{segments_section}
-    }}
-  ],
-  "batch_info": {{
-    "start_chapter": {start_chapter},
-    "end_chapter": {end_chapter},
-    "total_chapters": {target_count}
-  }}
-}}
-```
+必须使用以下Markdown格式输出：
 
+# 故事线
+
+## 第{start_chapter}章：章节标题
+
+**剧情梗概：** 详细剧情梗概，至少50字
+
+**主要人物：** 人物A、人物B
+
+**关键事件：**
+- 事件1
+- 事件2
+- 事件3
+
+**剧情目的：** 本章在整体故事中的作用
+
+**情感基调：** 情感基调关键词
+
+**衔接下章：** 与下一章的衔接要点
+{segment_example}
 **关键要求：**
-1. 只返回JSON，不要其他文字
+1. 使用Markdown格式，不要使用JSON格式
 2. 确保生成{target_count}章完整内容，章节号从{start_chapter}到{end_chapter}
-3. 确保JSON语法正确
+3. 每章都以 ## 第X章：标题 开头
 4. 每章都要有完整的字段
 5. 章节号必须连续，不能跳号
 """

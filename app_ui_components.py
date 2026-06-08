@@ -680,7 +680,7 @@ def create_main_layout(
                 interactive=False,
                 value=loaded_data.get("status_message", ""),
                 elem_id="status_output",
-                autoscroll=True
+                autoscroll=False
             )
         
         # 右侧列

@@ -197,7 +197,7 @@ class MarkdownAgent:
         name: str,
         temperature=0.8,
         top_p=0.8,
-        max_tokens=40000,  # 默认32K tokens，确保章节内容不被截断
+        max_tokens=40000,  # 默认40K tokens，确保章节内容不被截断
         use_memory=False,
         first_replay="明白了。",
         is_speak=True,
@@ -354,6 +354,112 @@ class MarkdownAgent:
         # 其他智能体 40,000 token 限制（主要生成任务）
         return 40000
 
+    def detect_repetition_loop(self, text: str) -> dict:
+        """检测文本中是否存在重复循环（LLM陷入重复输出）
+        
+        检测策略：
+        1. 检查文本末尾是否有短语（2-4字符）大量重复
+        2. 检查是否有单个字符连续重复过多次
+        3. 检查是否有较长片段（5-10字符）循环重复
+        
+        Args:
+            text: 要检测的文本
+            
+        Returns:
+            dict: {"is_repetitive": bool, "detail": str, "clean_end_pos": int}
+                  clean_end_pos 为最后一个正常内容的位置（用于截断）
+        """
+        if not text or len(text) < 200:
+            return {"is_repetitive": False, "detail": "", "clean_end_pos": len(text) if text else 0}
+        
+        # 策略1: 检查末尾区域（最后800字符）是否有2-4字的短语大量重复
+        tail_size = min(800, len(text))
+        tail = text[-tail_size:]
+        
+        for ngram_len in [2, 3, 4]:
+            ngram_counts = {}
+            for i in range(len(tail) - ngram_len + 1):
+                ngram = tail[i:i+ngram_len]
+                # 跳过纯标点或空白
+                if all(c in ' \n\r\t，。！？、；：""''【】（）' for c in ngram):
+                    continue
+                ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
+            
+            # 密度阈值：根据n-gram长度和尾部长度动态计算
+            # 真正的重复循环通常有100+次重复，阈值设置偏高以避免误判
+            # 2字: 在800字中出现80+次 (10%密度) 且绝对数量>=50
+            # 3字: 在800字中出现64+次 (8%密度) 且绝对数量>=40
+            # 4字: 在800字中出现48+次 (6%密度) 且绝对数量>=30
+            density_thresholds = {2: (0.10, 50), 3: (0.08, 40), 4: (0.06, 30)}
+            pct_threshold, min_count = density_thresholds[ngram_len]
+            total_positions = len(tail) - ngram_len + 1
+            count_threshold = max(min_count, int(total_positions * pct_threshold))
+            
+            for ngram, count in ngram_counts.items():
+                if count >= count_threshold:
+                    # 找到重复开始的位置
+                    clean_pos = self._find_repetition_start(text, ngram)
+                    return {
+                        "is_repetitive": True,
+                        "detail": f"短语'{ngram}'在末尾重复了{count}次(阈值{count_threshold})",
+                        "clean_end_pos": clean_pos
+                    }
+        
+        # 策略2: 检查较长片段（6-15字符）的循环重复
+        for seg_len in [6, 8, 10, 15]:
+            if len(tail) < seg_len * 4:
+                continue
+            # 取末尾的一段作为候选重复片段
+            candidate = tail[-seg_len:]
+            # 检查这个片段在末尾区域重复了多少次
+            repeat_count = 0
+            check_pos = len(tail) - seg_len
+            while check_pos >= 0:
+                if tail[check_pos:check_pos+seg_len] == candidate:
+                    repeat_count += 1
+                    check_pos -= seg_len
+                else:
+                    break
+            
+            if repeat_count >= 5:
+                clean_pos = len(text) - tail_size + (check_pos + seg_len)
+                return {
+                    "is_repetitive": True,
+                    "detail": f"片段'{candidate[:20]}...'连续重复了{repeat_count}次",
+                    "clean_end_pos": max(0, clean_pos)
+                }
+        
+        return {"is_repetitive": False, "detail": "", "clean_end_pos": len(text)}
+    
+    def _find_repetition_start(self, text: str, ngram: str) -> int:
+        """从文本末尾往前查找重复区域的起始位置
+        
+        通过检测ngram密度突然升高的位置来确定重复开始的地方
+        """
+        window_size = 200
+        threshold = 8  # 每200字中出现8次以上认为是重复区域
+        
+        # 从后往前滑动窗口
+        best_pos = len(text)
+        for start in range(len(text) - window_size, 0, -100):
+            window = text[start:start + window_size]
+            count = window.count(ngram)
+            if count >= threshold:
+                best_pos = start
+            else:
+                break
+        
+        # 确保截断位置在一个合理的句子结尾
+        # 从best_pos往前找最近的句号/感叹号/问号
+        search_start = max(0, best_pos - 200)
+        search_region = text[search_start:best_pos]
+        for punct in ['。', '！', '？', '」', '"', '\n']:
+            last_punct = search_region.rfind(punct)
+            if last_punct >= 0:
+                return search_start + last_punct + 1
+        
+        return best_pos
+
     def query(self, user_input: str) -> dict:
         """查询AI代理
         
@@ -366,6 +472,8 @@ class MarkdownAgent:
         # Token长度检查和重试机制
         max_token_retries = 3
         token_retry_count = 0
+        repetition_retry_count = 0
+        max_repetition_retries = 2
         
         while token_retry_count < max_token_retries:
             resp = self._do_query(user_input)
@@ -409,16 +517,51 @@ class MarkdownAgent:
                     # 短暂延迟后重试
                     time.sleep(1.5)
                     continue
+                
+                # Token长度正常，检查重复循环
+                repetition_result = self.detect_repetition_loop(response_content)
+                if repetition_result["is_repetitive"]:
+                    repetition_retry_count += 1
+                    detail = repetition_result["detail"]
+                    print(f"🔁 [{self.name}] 检测到重复循环: {detail}")
+                    
+                    if hasattr(self, 'parent_aign') and self.parent_aign:
+                        self.parent_aign.log_message(
+                            f"🔁 {self.name}: 检测到重复循环 ({detail}), "
+                            f"正在重试 ({repetition_retry_count}/{max_repetition_retries})"
+                        )
+                    
+                    if repetition_retry_count <= max_repetition_retries:
+                        print(f"🔄 正在进行第 {repetition_retry_count}/{max_repetition_retries} 次重复重试...")
+                        time.sleep(1.5)
+                        continue
+                    else:
+                        # 超过重试次数，停止流程
+                        error_msg = (
+                            f"❌ {self.name}: 重试{max_repetition_retries}次后响应仍存在重复循环。"
+                            f"详情: {detail}"
+                        )
+                        print(error_msg)
+                        
+                        if hasattr(self, 'parent_aign') and self.parent_aign:
+                            self.parent_aign.log_message(error_msg)
+                            if hasattr(self.parent_aign, 'stop_generation'):
+                                self.parent_aign.stop_generation = True
+                                print("🛑 已设置停止生成标志，将停止自动生成")
+                        
+                        raise TokenLimitError(error_msg)
                 else:
-                    # Token长度正常
+                    # Token正常且无重复
                     if token_retry_count > 0:
                         print(f"✅ [{self.name}] 重试成功! Token数: {token_count}/{token_limit}")
                         if hasattr(self, 'parent_aign') and self.parent_aign:
                             self.parent_aign.log_message(
                                 f"✅ {self.name}: 重试成功，Token数: {token_count}/{token_limit}"
                             )
+                    if repetition_retry_count > 0:
+                        print(f"✅ [{self.name}] 重复重试成功! 内容正常")
             
-            # Token检查通过，更新历史记录（如果启用了记忆）
+            # 检查通过，更新历史记录（如果启用了记忆）
             if self.use_memory:
                 self.history.append({"role": "user", "content": user_input})
                 self.history.append({"role": "assistant", "content": resp["content"]})

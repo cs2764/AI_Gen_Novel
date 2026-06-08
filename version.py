@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "4.9.0"
+__version__ = "5.0.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-03-15)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-06-08)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,19 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "风格专属提示词模板系统：33种写作风格×4种提示词类型=132个风格专用提示词文件，基于base模板继承",
+        "oMLX AI提供商：新增Mac优化本地LLM推理服务器支持，OpenAI兼容API",
+        "ZenMux AI提供商：统一AI模型路由服务，支持reasoning_effort思考强度控制和提供商路由",
+        "故事线Markdown解析器：新增storyline_markdown_parser.py，支持Markdown↔dict双向转换，YAML front matter元数据",
+        "标准模式模板提示词：新增AIGN_Prompt_Enhanced.py，提供更详细的标准模式写手和润色提示词",
+        "需求扩展提示词重构：AIGN_Requirements_Expansion_Prompt.py代码精简优化",
+        "故事线提示词改进：storyline_prompt和storyline_prompt_simple增强",
+        "JSON智能修复增强：集成json_repair库替代手写正则修复，大幅提升JSON解析成功率和鲁棒性",
+        "WebUI故事线进度改进：修复假超时问题（批次级进度追踪+15分钟停滞超时），完成后显示章节标题预览和失败统计",
+        "LM Studio tool_choice修复：修正tool_choice格式为字符串类型，兼容LM Studio API",
+        "【实验性】Fish Audio S2语气标记功能：替代CosyVoice，使用方括号[emotion]标记语法（功能尚未成熟，UI中已隐藏）",
+        "【实验性】EPUB Fish Audio S2语气打标器：新增epub_fishaudio_tagger.py（功能尚未成熟，UI中已隐藏）",
+        "【实验性】Fish Audio文本清理工具：新增fishaudio_cleaner.py（功能尚未成熟）",
         "润色截断检测与重试系统：全新embellish_truncation_detector模块，通过===EMBELLISH_COMPLETE===完成标识、句子完整性和长度比率三重检测润色内容是否被截断，支持3次自动重试",
         "标题长度严格限制：标题字数从不超过15字收紧为严格不超过10字，最佳长度4-8字",
         "发送长度检测移除：清理冗余的overlength content检测代码，简化状态显示",
@@ -91,7 +104,9 @@ VERSION_INFO = {
         "Grok (xAI)",
         "Lambda Labs",
         "SiliconFlow",
-        "NVIDIA"
+        "NVIDIA",
+        "oMLX",
+        "ZenMux"
     ]
 }
 
