@@ -41,7 +41,9 @@ foreshadowing_generator_prompt = """
 ...
 
 # END
+===GENERATION_COMPLETE===
 ```
+**⚠️ 重要：输出完成后必须在最末尾输出 ===GENERATION_COMPLETE=== 标记，表示内容已完整输出。**
 
 ## 语言要求：所有输出必须使用简体中文。**严禁使用具体人名**，只能用角色代称。
 

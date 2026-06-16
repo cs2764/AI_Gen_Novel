@@ -1,4 +1,4 @@
-﻿"""
+"""
 AIGN故事线管理模块 - 处理故事线生成、验证、修复
 
 本模块包含:
@@ -494,22 +494,32 @@ class StorylineManager:
         for i in range(min(2, expected_count)):
             chapter_num = start_chapter + i
             prompt += f"## 第{chapter_num}章：第{chapter_num}章标题\n\n"
+            if chapter_num == start_chapter and start_chapter == 1:
+                prompt += f"**承接上章：** 本章为开篇\n\n"
+            else:
+                prompt += f"**承接上章：** 上一章结束时的状态是什么，本章从哪个时间点/场景开始，如何自然延续上章结尾\n\n"
+            prompt += f"**时间节点：** 本章发生的大致时间，必须明确与上一章的时间关系\n\n"
             prompt += f"**剧情梗概：** 第{chapter_num}章的详细剧情梗概（全章总览）\n\n"
             prompt += f"**主要人物：** 人物A、人物B\n\n"
+            prompt += f"**本章前置条件：** 本章剧情依赖哪些前面章节已发生的事件\n\n"
             prompt += f"**关键事件：**\n"
             prompt += f"- 关键事件1\n"
             prompt += f"- 关键事件2\n\n"
             prompt += f"**剧情目的：** 本章在整体故事中的作用和目的\n\n"
             prompt += f"**情感基调：** 情感基调关键词\n\n"
-            prompt += f"**衔接下章：** 与下一章的衔接要点\n\n"
+            prompt += f"**衔接下章：** 本章结束时人物在哪里、正在做什么、情绪如何，以及如何过渡到下一章\n\n"
             if segment_count > 0:
                 for seg_idx in range(1, segment_count + 1):
                     prompt += f"### 分段{seg_idx}：分段{seg_idx}标题\n"
                     prompt += f"分段{seg_idx}的具体内容描述\n"
                     prompt += f"- 事件A\n"
+                    prompt += f"**场景与时间：** 本段发生的地点和时间\n"
                     prompt += f"**分段作用：** 本段的推进作用\n"
-                    next_seg = f"分段{seg_idx + 1}" if seg_idx < segment_count else "下一章"
-                    prompt += f"**衔接：** 衔接到{next_seg}\n\n"
+                    if seg_idx < segment_count:
+                        prompt += f"**衔接：** 衔接到分段{seg_idx + 1}\n\n"
+                    else:
+                        prompt += f"**本章结束状态：** 本章结束时各主要人物的位置、状态、情绪\n"
+                        prompt += f"**过渡到下章：** 如何自然过渡到下一章\n\n"
         
         # 如果有更多章节，用省略号表示
         if expected_count > 2:
@@ -539,7 +549,17 @@ class StorylineManager:
         
         formatted = []
         for chapter in prev_chapters:
-            formatted.append(f"第{chapter['chapter_number']}章：{chapter['plot_summary']}")
+            ch_num = chapter.get('chapter_number', '?')
+            summary = chapter.get('plot_summary', '')
+            transition = chapter.get('transition_to_next', '')
+            time_anchor = chapter.get('time_anchor', '')
+            
+            line = f"第{ch_num}章：{summary}"
+            if time_anchor:
+                line += f"\n  时间节点：{time_anchor}"
+            if transition:
+                line += f"\n  衔接下章：{transition}"
+            formatted.append(line)
         
         return "\n".join(formatted)
     

@@ -12,8 +12,11 @@
         {
             "chapter_number": 1,
             "title": "章节标题",
+            "continuation_from_prev": "承接上章",
+            "time_anchor": "时间节点",
             "plot_summary": "剧情梗概",
             "main_characters": ["人物A", "人物B"],
+            "prerequisites": "本章前置条件",
             "key_events": ["事件1", "事件2"],
             "plot_purpose": "本章作用",
             "emotional_tone": "情感基调",
@@ -24,8 +27,11 @@
                     "segment_title": "分段标题",
                     "segment_summary": "分段内容",
                     "segment_key_events": ["事件A"],
+                    "segment_scene_time": "场景与时间",
                     "segment_purpose": "分段作用",
-                    "segment_transition": "衔接"
+                    "segment_transition": "衔接",
+                    "segment_end_state": "本章结束状态（仅最后一段）",
+                    "segment_next_transition": "过渡到下章（仅最后一段）"
                 }
             ]
         }
@@ -127,8 +133,11 @@ def _parse_single_chapter(text: str, chapter_number: int, title: str) -> Dict[st
     chapter = {
         "chapter_number": chapter_number,
         "title": title,
+        "continuation_from_prev": "",
+        "time_anchor": "",
         "plot_summary": "",
         "main_characters": [],
+        "prerequisites": "",
         "key_events": [],
         "plot_purpose": "",
         "emotional_tone": "",
@@ -166,11 +175,20 @@ def _parse_single_chapter(text: str, chapter_number: int, title: str) -> Dict[st
     main_text = '\n'.join(main_lines)
     
     # 提取各字段
+    chapter["continuation_from_prev"] = _extract_field(main_text,
+        ["承接上章", "continuation_from_prev", "与上章衔接", "上章衔接"])
+    
+    chapter["time_anchor"] = _extract_field(main_text,
+        ["时间节点", "time_anchor", "时间", "本章时间"])
+    
     chapter["plot_summary"] = _extract_field(main_text, 
         ["剧情梗概", "plot_summary", "梗概", "情节摘要", "剧情概要"])
     
     chapter["main_characters"] = _extract_list_field(main_text,
         ["主要人物", "main_characters", "出场人物", "主要角色"])
+    
+    chapter["prerequisites"] = _extract_field(main_text,
+        ["本章前置条件", "prerequisites", "前置条件"])
     
     chapter["key_events"] = _extract_list_field(main_text,
         ["关键事件", "key_events", "重要事件"])
@@ -329,8 +347,11 @@ def _parse_segments(segment_sections: List[Dict]) -> List[Dict[str, Any]]:
             "segment_title": sec['title'],
             "segment_summary": "",
             "segment_key_events": [],
+            "segment_scene_time": "",
             "segment_purpose": "",
-            "segment_transition": ""
+            "segment_transition": "",
+            "segment_end_state": "",
+            "segment_next_transition": ""
         }
         
         # 提取分段摘要：在标签行之前的纯文本
@@ -362,11 +383,20 @@ def _parse_segments(segment_sections: List[Dict]) -> List[Dict[str, Any]]:
             if items:
                 segment["segment_key_events"] = items
         
+        segment["segment_scene_time"] = _extract_field(seg_text,
+            ["场景与时间", "segment_scene_time", "场景时间", "地点和时间"])
+        
         segment["segment_purpose"] = _extract_field(seg_text,
             ["分段作用", "segment_purpose", "作用"])
         
         segment["segment_transition"] = _extract_field(seg_text,
             ["衔接", "segment_transition", "过渡"])
+        
+        segment["segment_end_state"] = _extract_field(seg_text,
+            ["本章结束状态", "segment_end_state", "结束状态"])
+        
+        segment["segment_next_transition"] = _extract_field(seg_text,
+            ["过渡到下章", "segment_next_transition", "过渡下章"])
         
         segments.append(segment)
     
@@ -433,6 +463,18 @@ def dict_to_storyline_markdown(data: Dict[str, Any],
         lines.append(f"## 第{ch_num}章：{ch_title}")
         lines.append("")
         
+        # 承接上章
+        continuation = chapter.get("continuation_from_prev", "")
+        if continuation:
+            lines.append(f"**承接上章：** {continuation}")
+            lines.append("")
+        
+        # 时间节点
+        time_anchor = chapter.get("time_anchor", "")
+        if time_anchor:
+            lines.append(f"**时间节点：** {time_anchor}")
+            lines.append("")
+        
         # 剧情梗概
         plot_summary = chapter.get("plot_summary", "")
         if plot_summary:
@@ -446,6 +488,12 @@ def dict_to_storyline_markdown(data: Dict[str, Any],
                 lines.append(f"**主要人物：** {'、'.join(main_chars)}")
             else:
                 lines.append(f"**主要人物：** {main_chars}")
+            lines.append("")
+        
+        # 本章前置条件
+        prerequisites = chapter.get("prerequisites", "")
+        if prerequisites:
+            lines.append(f"**本章前置条件：** {prerequisites}")
             lines.append("")
         
         # 关键事件
@@ -499,6 +547,10 @@ def dict_to_storyline_markdown(data: Dict[str, Any],
                     for event in seg_events:
                         lines.append(f"- {event}")
                 
+                seg_scene_time = seg.get("segment_scene_time", "")
+                if seg_scene_time:
+                    lines.append(f"**场景与时间：** {seg_scene_time}")
+                
                 seg_purpose = seg.get("segment_purpose", "")
                 if seg_purpose:
                     lines.append(f"**分段作用：** {seg_purpose}")
@@ -506,6 +558,14 @@ def dict_to_storyline_markdown(data: Dict[str, Any],
                 seg_transition = seg.get("segment_transition", "")
                 if seg_transition:
                     lines.append(f"**衔接：** {seg_transition}")
+                
+                seg_end_state = seg.get("segment_end_state", "")
+                if seg_end_state:
+                    lines.append(f"**本章结束状态：** {seg_end_state}")
+                
+                seg_next_trans = seg.get("segment_next_transition", "")
+                if seg_next_trans:
+                    lines.append(f"**过渡到下章：** {seg_next_trans}")
                 
                 lines.append("")
         

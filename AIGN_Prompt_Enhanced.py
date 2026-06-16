@@ -26,6 +26,7 @@ from prompts.common.chapter_summary_prompt import chapter_summary_prompt
 from prompts.common.memory_prompt import memory_maker_prompt
 from prompts.common.detailed_outline_prompt import detailed_outline_generator_prompt
 from prompts.common.foreshadowing_prompt import foreshadowing_generator_prompt
+from prompts.common.global_context_prompt import global_context_updater_prompt
 
 # ================================
 # 标准模式提示词
@@ -89,6 +90,7 @@ __all__ = [
     'memory_maker_prompt',
     'detailed_outline_generator_prompt',
     'foreshadowing_generator_prompt',
+    'global_context_updater_prompt',
     
     # 标准模式（原有独立提示词）
     'novel_beginning_writer_prompt',

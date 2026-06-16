@@ -60,6 +60,7 @@ class AIGN:
         self.writing_plan = ""
         self.temp_setting = ""
         self.writing_memory = ""
+        self.global_context = ""  # 全局设定追踪：世界观、角色关系、伏笔追踪、创作计划执行等
         
         # 初始化本地自动保存管理器
         from auto_save_manager import get_auto_save_manager
@@ -505,6 +506,15 @@ class AIGN:
             name="ForeshadowingGenerator",
             temperature=0.95,
         )
+        
+        # 全局设定追踪器
+        from AIGN_Prompt_Enhanced import global_context_updater_prompt
+        self.global_context_updater = MarkdownAgent(
+            chatLLM=self.chatLLM,
+            sys_prompt=global_context_updater_prompt,
+            name="GlobalContextUpdater",
+            temperature=provider_temperature,
+        )
 
         # 为所有Agent设置parent_aign引用，用于流式输出跟踪
         agents = [
@@ -512,7 +522,8 @@ class AIGN:
             self.novel_embellisher, self.novel_writer_compact, self.novel_embellisher_compact,
             self.memory_maker, self.title_generator, self.title_generator_json, self.ending_writer, 
             self.ending_embellisher, self.storyline_generator, self.character_generator, self.chapter_summary_generator, 
-            self.detailed_outline_generator, self.foreshadowing_generator
+            self.detailed_outline_generator, self.foreshadowing_generator,
+            self.global_context_updater
         ]
         for agent in agents:
             agent.parent_aign = self
@@ -572,6 +583,7 @@ class AIGN:
                 (self.chapter_summary_generator, '章节总结生成器'),
                 (self.detailed_outline_generator, '详细大纲生成器'),
                 (self.foreshadowing_generator, '伏笔生成器'),
+                (self.global_context_updater, '全局设定追踪器'),
                 # 分段生成相关
                 (getattr(self, 'novel_writer_seg1', None), '分段Writer1'),
                 (getattr(self, 'novel_writer_seg2', None), '分段Writer2'),
@@ -745,6 +757,94 @@ class AIGN:
         if foreshadowing:
             inputs["伏笔设定"] = foreshadowing
         return inputs
+    
+    def _inject_global_context_to_inputs(self, inputs: dict) -> dict:
+        """将全局设定追踪注入到writer/embellisher的输入字典中，并重排字段顺序以优化缓存命中
+        
+        如果存在全局设定且非空，自动添加到inputs中。
+        最后调用 _reorder_inputs_for_cache 重排字段顺序，最大化 DeepSeek KV Cache 命中率。
+        返回修改后的inputs。
+        
+        Args:
+            inputs: writer或embellisher的输入字典
+        Returns:
+            修改后并重排序的inputs字典
+        """
+        global_context = getattr(self, 'global_context', '')
+        if global_context:
+            inputs["全局设定"] = global_context
+        # 重排字段顺序：固定字段在前，动态字段在后，最大化前缀缓存命中
+        return self._reorder_inputs_for_cache(inputs)
+
+    def _reorder_inputs_for_cache(self, inputs: dict) -> dict:
+        """重排inputs字典的字段顺序以最大化DeepSeek KV Cache命中率
+        
+        DeepSeek的Context Caching基于前缀匹配：后续请求必须完整匹配之前请求的前缀才能命中缓存。
+        将固定不变的字段排在前面，每章变化的字段排在后面，可以最大化前缀重叠区域。
+        
+        排序优先级：
+        1. 固定字段（大纲、详细大纲、人物列表、写作要求、润色想法等）
+        2. 缓慢变化字段（伏笔设定、全局设定、风格参考等）
+        3. 动态字段（前文记忆、临时设定、计划、上文内容、故事线等）
+        
+        Args:
+            inputs: 原始输入字典
+        Returns:
+            重新排序后的输入字典（不删除任何字段）
+        """
+        # 定义字段优先级（数字越小越靠前）
+        field_priority = {
+            # === 固定字段（整个小说生成过程中不变） ===
+            "小说大纲": 10,
+            "大纲": 11,
+            "基础大纲": 12,
+            "详细大纲": 13,
+            "人物列表": 14,
+            "用户想法": 15,
+            "写作要求": 16,
+            "润色想法": 17,
+            "用户要求": 18,
+            # === 缓慢变化字段（多章才变一次） ===
+            "伏笔设定": 30,
+            "全局设定": 31,
+            "风格参考": 32,
+            "是否最终章": 33,
+            # === 结构/上下文字段（每章变化但可能部分重叠） ===
+            "前五章总结": 40,
+            "最近章节总结": 41,
+            "前2章故事线": 42,
+            "后2章故事线": 43,
+            "前三章正文（不含上一章）": 44,
+            "后五章梗概（仅供参考，不可写入本章）": 45,
+            # === 动态字段（每章/每段都变化） ===
+            "前文记忆": 60,
+            "临时设定": 61,
+            "计划": 62,
+            "当前章节": 63,
+            "本章故事线": 64,
+            "故事线": 65,
+            "本章分段（参考）": 66,
+            "当前分段": 67,
+            "前章过渡提示": 68,
+            "上一章原文": 70,
+            "上文内容": 71,
+            "上文结尾": 72,
+            "要润色的内容": 80,
+            "要润色的结尾内容": 81,
+            "要润色的开头内容": 82,
+            # === 辅助Agent字段 ===
+            "当前全局设定": 10,
+            "本章正文": 80,
+            "当前章节号": 63,
+        }
+        
+        # 按优先级排序，未知字段放到最后
+        sorted_items = sorted(
+            inputs.items(),
+            key=lambda item: field_priority.get(item[0], 100)
+        )
+        
+        return dict(sorted_items)
 
     def _save_to_local(self, data_type: str, **kwargs):
         """保存数据到本地文件"""
@@ -883,6 +983,13 @@ class AIGN:
                 self.foreshadowing = foreshadowing_data.get("foreshadowing", "")
                 if self.foreshadowing:
                     loaded_items.append(f"伏笔设定 ({len(self.foreshadowing)}字符)")
+            
+            # 加载全局设定追踪
+            if all_data.get("global_context"):
+                global_context_data = all_data["global_context"]
+                self.global_context = global_context_data.get("global_context", "")
+                if self.global_context:
+                    loaded_items.append(f"全局设定 ({len(self.global_context)}字符)")
             
             # 加载详细大纲
             if all_data["detailed_outline"]:
@@ -1075,10 +1182,13 @@ class AIGN:
         self.title_generator.chatLLM = new_chatllm
         self.title_generator_json.chatLLM = new_chatllm
         self.ending_writer.chatLLM = new_chatllm
+        self.ending_embellisher.chatLLM = new_chatllm
         self.storyline_generator.chatLLM = new_chatllm
         self.character_generator.chatLLM = new_chatllm
         self.chapter_summary_generator.chatLLM = new_chatllm
         self.detailed_outline_generator.chatLLM = new_chatllm
+        self.foreshadowing_generator.chatLLM = new_chatllm
+        self.global_context_updater.chatLLM = new_chatllm
         # 分段Agents
         for seg_agent_name in [
             'novel_writer_seg1','novel_writer_seg2','novel_writer_seg3','novel_writer_seg4',
@@ -1430,9 +1540,9 @@ class AIGN:
             try:
                 # 执行润色
                 if use_foreshadowing:
-                    invoke_inputs = self._inject_foreshadowing_to_inputs(current_inputs)
+                    invoke_inputs = self._inject_global_context_to_inputs(self._inject_foreshadowing_to_inputs(current_inputs))
                 else:
-                    invoke_inputs = current_inputs
+                    invoke_inputs = self._reorder_inputs_for_cache(current_inputs)
                     
                 resp = embellisher.invoke(
                     inputs=invoke_inputs,
@@ -2164,7 +2274,17 @@ class AIGN:
         
         formatted = []
         for chapter in prev_chapters:
-            formatted.append(f"第{chapter['chapter_number']}章：{chapter['plot_summary']}")
+            ch_num = chapter.get('chapter_number', '?')
+            summary = chapter.get('plot_summary', '')
+            transition = chapter.get('transition_to_next', '')
+            time_anchor = chapter.get('time_anchor', '')
+            
+            line = f"第{ch_num}章：{summary}"
+            if time_anchor:
+                line += f"\n  时间节点：{time_anchor}"
+            if transition:
+                line += f"\n  衔接下章：{transition}"
+            formatted.append(line)
         
         return "\n".join(formatted)
     
@@ -2556,10 +2676,15 @@ class AIGN:
         if missing_batches:
             if not hasattr(self, 'failed_batches'):
                 self.failed_batches = []
-            # 将检测到的缺失批次添加到failed_batches
+            # 使用章节范围去重（避免因error字段不同导致dict比较失败而重复添加）
+            existing_ranges = set()
+            for fb in self.failed_batches:
+                existing_ranges.add((fb['start_chapter'], fb['end_chapter']))
             for batch in missing_batches:
-                if batch not in self.failed_batches:
+                batch_range = (batch['start_chapter'], batch['end_chapter'])
+                if batch_range not in existing_ranges:
                     self.failed_batches.append(batch)
+                    existing_ranges.add(batch_range)
         
         if not hasattr(self, 'failed_batches') or not self.failed_batches:
             return {
@@ -2649,8 +2774,62 @@ class AIGN:
                 # 生成修复的批次故事线
                 current_chapters = end_chapter - start_chapter + 1
                 
-                # 构建修复请求的提示词（Markdown格式）
-                repair_prompt = f"""
+                # 根据长章节模式确定分段参数
+                segment_count_raw = getattr(self, 'long_chapter_mode', 0)
+                try:
+                    segment_count = int(segment_count_raw) if segment_count_raw else 0
+                except (ValueError, TypeError):
+                    segment_count = 0
+                require_segments = segment_count > 0
+                
+                print(f"🔧 修复参数: require_segments={require_segments}, segment_count={segment_count}")
+                
+                # 优先尝试使用 StorylineManager 的 _build_storyline_prompt 构建提示词
+                repair_prompt = None
+                try:
+                    if hasattr(self, 'storyline_manager') and hasattr(self.storyline_manager, '_build_storyline_prompt'):
+                        # 构建与 StorylineManager.repair_storyline 一致的输入
+                        if hasattr(self, 'getCurrentOutline'):
+                            current_outline = self.getCurrentOutline()
+                        else:
+                            current_outline = getattr(self, 'novel_outline', '')
+                        
+                        inputs = {
+                            "大纲": current_outline,
+                            "人物列表": getattr(self, 'character_list', ''),
+                            "用户想法": getattr(self, 'user_idea', ''),
+                            "写作要求": getattr(self, 'user_requirements', ''),
+                            "章节范围": f"{start_chapter}-{end_chapter}章"
+                        }
+                        
+                        # 添加详细大纲上下文
+                        if getattr(self, 'detailed_outline', '') and self.detailed_outline != getattr(self, 'novel_outline', ''):
+                            inputs["详细大纲"] = self.detailed_outline
+                        
+                        # 添加前置故事线上下文
+                        if self.storyline and self.storyline.get("chapters"):
+                            prev_chapters = self.storyline["chapters"][-5:]
+                            prev_lines = []
+                            for ch in prev_chapters:
+                                ch_num = ch.get('chapter_number', '?')
+                                summary = ch.get('plot_summary', '')
+                                transition = ch.get('transition_to_next', '')
+                                line = f"第{ch_num}章：{summary}"
+                                if transition:
+                                    line += f"\n  衔接下章：{transition}"
+                                prev_lines.append(line)
+                            inputs["前置故事线"] = "\n".join(prev_lines)
+                        
+                        repair_prompt, _ = self.storyline_manager._build_storyline_prompt(inputs, start_chapter, end_chapter)
+                        repair_prompt += f"\n\n**注意：这是修复生成，请确保章节编号连续且符合整体故事脉络。**"
+                        print(f"✅ 使用 StorylineManager 构建修复提示词")
+                except Exception as e:
+                    print(f"⚠️ StorylineManager 构建提示词失败: {e}，使用内置提示词")
+                    repair_prompt = None
+                
+                # 回退：使用内置提示词（包含升级后的结构字段）
+                if repair_prompt is None:
+                    repair_prompt = f"""
 根据以下故事设定，重新生成第{start_chapter}到第{end_chapter}章的详细故事线：
 
 用户想法：{self.user_idea}
@@ -2662,9 +2841,15 @@ class AIGN:
 
 ## 第X章：章节标题
 
-**剧情梗概：** 详细剧情总结
+**承接上章：** 上一章结束时的状态，本章从哪个时间点/场景开始
+
+**时间节点：** 本章发生的大致时间，与上一章的时间关系
+
+**剧情梗概：** 详细剧情总结（全章总览）
 
 **主要人物：** 人物A、人物B
+
+**本章前置条件：** 本章剧情依赖哪些前面章节已发生的事件
 
 **关键事件：**
 - 关键事件1
@@ -2674,7 +2859,7 @@ class AIGN:
 
 **情感基调：** 情感关键词
 
-**衔接下章：** 衔接要点
+**衔接下章：** 本章结束时人物状态，如何过渡到下一章
 
 注意：这是修复生成，请确保章节编号连续且符合整体故事脉络。
 必须使用Markdown格式，不要使用JSON格式。
@@ -2688,7 +2873,7 @@ class AIGN:
                     messages = [{"role": "user", "content": repair_prompt}]
                     batch_storyline, generation_status = enhanced_generator.generate_storyline_batch(
                         messages=messages, temperature=0.8,
-                        require_segments=False, segment_count=0
+                        require_segments=require_segments, segment_count=segment_count
                     )
                     if batch_storyline:
                         print(f"✅ 增强生成器修复成功: {generation_status}")
@@ -2899,6 +3084,10 @@ class AIGN:
         # 在生成前刷新chatLLM以确保使用最新配置
         print("🔄 小说开头生成: 刷新ChatLLM配置...")
         self.refresh_chatllm()
+        
+        # 重置全局设定（新小说开头应从空白开始，不继承上次的残留数据）
+        self.global_context = ""
+        print("🌐 全局设定已重置（新小说开头）")
         
         # 刷新Fish Audio S2语气标记模式设置
         try:
@@ -3155,7 +3344,7 @@ class AIGN:
                         "上一章原文": enhanced_context["last_chapter_content"] if not getattr(self, 'compact_mode', False) else "",
                         "风格参考": rag_references,
                     }
-                seg_resp = writer_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(seg_inputs), output_keys=["段落", "计划", "临时设定"])
+                seg_resp = writer_agent.invoke(inputs=self._inject_global_context_to_inputs(self._inject_foreshadowing_to_inputs(seg_inputs)), output_keys=["段落", "计划", "临时设定"])
                 seg_text = seg_resp["段落"]
                 last_plan = seg_resp.get("计划", last_plan)
                 last_setting = seg_resp.get("临时设定", last_setting)
@@ -3211,14 +3400,14 @@ class AIGN:
             # 原始单段开头生成流程
             # 注入伏笔到开头生成输入
             resp = self.novel_beginning_writer.invoke(
-                inputs=self._inject_foreshadowing_to_inputs({
+                inputs=self._inject_global_context_to_inputs(self._inject_foreshadowing_to_inputs({
                     "用户想法": self.user_idea,
                     "小说大纲": current_outline,
                     "写作要求": self.user_requirements,
                     "人物列表": self.character_list if self.character_list else "暂无人物列表",
                     "故事线": storyline_for_beginning,
                     "风格参考": rag_references,
-                }),
+                })),
                 output_keys=["开头", "计划", "临时设定", "关键元素"],
             )
             beginning = resp["开头"]
@@ -3239,13 +3428,23 @@ class AIGN:
             print(f"📝 生成计划：{self.writing_plan}")
             print(f"⚙️  临时设定：{self.temp_setting}")
 
-            print(f"✨ 正在润色开头...")
+            print(f"✨ 正在润色开头（第1章）...")
+            
+            # 获取第1章故事线（如果有）
+            ch1_storyline = ""
+            if self.enable_chapters:
+                storyline_data = self.getCurrentChapterStoryline(1)
+                if storyline_data:
+                    ch1_storyline = str(storyline_data)
+            
             emb_inputs = {
+                "当前章节": "第1章（开篇）",
                 "大纲": current_outline,
                 "临时设定": self.temp_setting,
                 "计划": self.writing_plan,
                 "润色要求": self.embellishment_idea,
                 "要润色的内容": beginning,
+                "本章故事线": ch1_storyline,
                 "风格参考": rag_references,
             }
             
@@ -3284,6 +3483,11 @@ class AIGN:
             print(f"📖 已生成 {chapter_title}")
 
         self.paragraph_list.append(beginning)
+        
+        # 更新记忆和全局设定（第1章也需要，与后续章节保持一致）
+        self.updateMemory()
+        self.updateGlobalContext()
+        
         self.updateNovelContent()
         
         # 自动生成人物列表和故事线（仅在自动生成模式下）
@@ -3313,6 +3517,17 @@ class AIGN:
         # 开始生成正文，保存小说文件（元数据已在大纲阶段保存）
         print(f"📖 开始生成正文，保存小说文件...")
         self.saveNovelFileOnly()
+        
+        # 为第1章生成章节总结（与后续章节保持一致）
+        if self.enable_chapters and self.chapter_count > 0:
+            try:
+                print(f"📋 正在生成第1章的剧情总结...")
+                summary_data = self.generateChapterSummary(beginning, self.chapter_count)
+                if summary_data:
+                    self.updateStorylineWithSummary(self.chapter_count, summary_data)
+                    print(f"✅ 第1章的故事线已更新")
+            except Exception as e:
+                print(f"⚠️ 第1章总结生成失败: {e}")
 
         # RAG: 从正文提炼关键元素，供后续润色阶段检索使用
         if self._is_rag_enabled():
@@ -3369,6 +3584,7 @@ class AIGN:
         record_content += f"# 正文\n\n"
         record_content += self.novel_content
         record_content += f"# 记忆\n\n{self.writing_memory}\n\n"
+        record_content += f"# 全局设定\n\n{self.global_context}\n\n"
         record_content += f"# 计划\n\n{self.writing_plan}\n\n"
         record_content += f"# 临时设定\n\n{self.temp_setting}\n\n"
 
@@ -3378,11 +3594,11 @@ class AIGN:
     def updateMemory(self):
         if (len(self.no_memory_paragraph)) > 2000:
             resp = self.memory_maker.invoke(
-                inputs={
+                inputs=self._reorder_inputs_for_cache({
                     "前文记忆": self.writing_memory,
                     "正文内容": self.no_memory_paragraph,
                     "人物列表": self.character_list,
-                },
+                }),
                 output_keys=["新的记忆"],
             )
             
@@ -3390,18 +3606,71 @@ class AIGN:
             new_memory = resp["新的记忆"]
             
             # 检查记忆长度并进行保护性处理
-            if len(new_memory) > 2000:  # 如果超过2000字符
+            if len(new_memory) > 5000:  # 如果超过5000字符
                 print(f"⚠️ 前文记忆生成过长({len(new_memory)}字符)，进行截断处理...")
-                # 截断到1800字符，保留一些缓冲空间
-                new_memory = new_memory[:1800]
+                # 截断到4800字符，保留一些缓冲空间
+                new_memory = new_memory[:4800]
                 # 确保不在句子中间截断，找到最后一个句号
                 last_period = new_memory.rfind('。')
-                if last_period > 1000:  # 确保截断点不会太短
+                if last_period > 3000:  # 确保截断点不会太短
                     new_memory = new_memory[:last_period + 1]
                 print(f"📏 记忆已截断至{len(new_memory)}字符")
             
             self.writing_memory = new_memory
             self.no_memory_paragraph = ""
+    
+    def updateGlobalContext(self):
+        """更新全局设定追踪文档
+        
+        在每章生成后调用，通过 global_context_updater Agent 更新全局设定。
+        追踪世界观、角色关系、时间线、伏笔执行、创作计划执行等。
+        """
+        try:
+            print("🌐 正在更新全局设定追踪...")
+            
+            # 获取本章故事线
+            current_storyline = ""
+            if self.enable_chapters and self.chapter_count > 0:
+                storyline_data = self.getCurrentChapterStoryline(self.chapter_count)
+                if storyline_data:
+                    current_storyline = str(storyline_data)
+            
+            # 获取最近生成的正文内容
+            chapter_content = self.paragraph_list[-1] if self.paragraph_list else ""
+            
+            # 调用全局设定追踪器
+            resp = self.global_context_updater.invoke(
+                inputs=self._reorder_inputs_for_cache({
+                    "当前全局设定": self.global_context if self.global_context else "（首次生成，暂无全局设定）",
+                    "本章正文": chapter_content,
+                    "本章故事线": current_storyline,
+                    "伏笔设定": getattr(self, 'foreshadowing', ''),
+                    "当前章节号": str(self.chapter_count),
+                    "前文记忆": self.writing_memory,
+                    "详细大纲": getattr(self, 'detailed_outline', '') or getattr(self, 'novel_outline', ''),
+                    "人物列表": getattr(self, 'character_list', ''),
+                }),
+                output_keys=["全局设定"],
+            )
+            
+            new_context = resp["全局设定"]
+            
+            self.global_context = new_context
+            print(f"✅ 全局设定已更新 ({len(self.global_context)}字符)")
+            
+            # 通知UI更新全局设定显示
+            self.log_message(f"🌐 全局设定已更新 ({len(self.global_context)}字符)")
+            
+            # 自动保存全局设定
+            try:
+                if hasattr(self, 'auto_save_manager'):
+                    self.auto_save_manager.save_global_context(self.global_context)
+            except Exception as save_err:
+                print(f"⚠️ 全局设定自动保存失败: {save_err}")
+                
+        except Exception as e:
+            print(f"⚠️ 全局设定更新失败: {e}")
+            # 不影响主流程，仅打印警告
     
     def generateChapterSummary(self, chapter_content, chapter_number):
         """生成章节总结"""
@@ -3426,12 +3695,12 @@ class AIGN:
                     print(f"🔄 第{retry_count + 1}次尝试生成第{chapter_number}章总结...")
                 
                 resp = self.chapter_summary_generator.invoke(
-                    inputs={
+                    inputs=self._reorder_inputs_for_cache({
                         "章节内容": chapter_content,
                         "章节号": str(chapter_number),
                         "原故事线": str(original_storyline) if original_storyline else "无",
                         "人物信息": self.character_list if self.character_list else "无"
-                    },
+                    }),
                     output_keys=["章节总结"]
                 )
                 
@@ -3965,8 +4234,15 @@ class AIGN:
                 # 精简模式：结尾阶段也使用精简输入
                 print("📦 使用精简模式生成结尾阶段...")
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
+                # 获取上文结尾（2000字符）和前章过渡提示
+                last_para_excerpt = self.getLastParagraph(max_length=2000)
+                prev_ch_storyline = self.getCurrentChapterStoryline(self.chapter_count)
+                prev_transition = ""
+                if isinstance(prev_ch_storyline, dict):
+                    prev_transition = prev_ch_storyline.get("transition_to_next", "")
                 inputs = {
                     "大纲": self.getCurrentOutline(),
+                    "人物列表": self.character_list,
                     "写作要求": self.user_requirements,
                     # 长章节启用时已确保不发送原文，仅用两章总结
                     "前文记忆": self.writing_memory,
@@ -3975,6 +4251,8 @@ class AIGN:
                     "本章故事线": str(current_chapter_storyline),
                     "前2章故事线": compact_prev_storyline,
                     "后2章故事线": compact_next_storyline,
+                    "上文结尾": last_para_excerpt,
+                    "前章过渡提示": prev_transition,
                     "是否最终章": "否"
                 }
             else:
@@ -4050,8 +4328,15 @@ class AIGN:
                 if segment_count > 0:
                     mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
                     print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}最终章）：仅传递前2/后2章总结，不发送原文")
+                # 获取上文结尾（2000字符）和前章过渡提示
+                last_para_excerpt = self.getLastParagraph(max_length=2000)
+                prev_ch_storyline = self.getCurrentChapterStoryline(self.chapter_count)
+                prev_transition = ""
+                if isinstance(prev_ch_storyline, dict):
+                    prev_transition = prev_ch_storyline.get("transition_to_next", "")
                 inputs = {
                     "大纲": self.getCurrentOutline(),
+                    "人物列表": self.character_list,
                     "写作要求": self.user_requirements,
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
@@ -4059,6 +4344,8 @@ class AIGN:
                     "本章故事线": str(current_chapter_storyline),
                     "前2章故事线": compact_prev_storyline,
                     "后2章故事线": compact_next_storyline,
+                    "上文结尾": last_para_excerpt,
+                    "前章过渡提示": prev_transition,
                     "是否最终章": "是"
                 }
             else:
@@ -4219,15 +4506,22 @@ class AIGN:
             
             # 根据精简模式决定输入参数
             if is_compact_mode:
-                # 精简模式：生成正文时只包含：原始大纲（不是详细大纲）；写作要求；各种记忆，设定，计划；前2章后2章的故事线
+                # 精简模式：生成正文时包含：大纲、人物列表、写作要求、各种记忆/设定/计划、前2章后2章故事线、上文结尾、前章过渡提示
                 print("📦 使用精简模式生成正文...")
                 segment_count = getattr(self, 'long_chapter_mode', 0)
                 if segment_count > 0:
                     mode_desc = {2: "2段合并", 3: "3段合并", 4: "4段合并"}
                     print(f"📦 长章节启用（{mode_desc.get(segment_count, '')}）：仅传递前2/后2章总结，不发送任何原文片段")
+                # 获取上文结尾（2000字符）和前章过渡提示
+                last_para_excerpt = self.getLastParagraph(max_length=2000)
+                prev_ch_storyline = self.getCurrentChapterStoryline(self.chapter_count)
+                prev_transition = ""
+                if isinstance(prev_ch_storyline, dict):
+                    prev_transition = prev_ch_storyline.get("transition_to_next", "")
                 # 使用前面已经获取的精简版故事线
                 inputs = {
                     "大纲": self.getCurrentOutline(),
+                    "人物列表": self.character_list,
                     "写作要求": self.user_requirements,
                     "前文记忆": self.writing_memory,
                     "临时设定": self.temp_setting,
@@ -4235,6 +4529,8 @@ class AIGN:
                     "本章故事线": str(current_chapter_storyline),
                     "前2章故事线": compact_prev_storyline,
                     "后2章故事线": compact_next_storyline,
+                    "上文结尾": last_para_excerpt,
+                    "前章过渡提示": prev_transition,
                 }
             else:
                 # 非精简模式：使用与精简模式相同的输入结构，但添加前三章正文（不含上一章）
@@ -4326,6 +4622,11 @@ class AIGN:
                 compact_prev_storyline, compact_next_storyline = self.getCompactStorylines(self.chapter_count + 1)
             else:
                 enhanced_context = self.getEnhancedContext(self.chapter_count + 1)
+            # 获取前章过渡提示（分段生成时仅第1段需要）
+            prev_ch_storyline_seg = self.getCurrentChapterStoryline(self.chapter_count)
+            prev_transition = ""
+            if isinstance(prev_ch_storyline_seg, dict):
+                prev_transition = prev_ch_storyline_seg.get("transition_to_next", "")
             
             for seg_index in range(1, segment_count + 1):
                 # 组装分段输入
@@ -4364,6 +4665,7 @@ class AIGN:
                         print(f"📦 长章节启用（{mode_desc.get(segment_count_val, '')}分段{seg_index}）：仅用前2/后2章总结，不发送原文")
                     seg_inputs = {
                         "大纲": self.getCurrentOutline(),
+                        "人物列表": self.character_list,
                         "写作要求": self.user_requirements,
                         "风格参考": rag_references if 'rag_references' in dir() and rag_references else "",
                         "前文记忆": self.writing_memory,
@@ -4374,6 +4676,8 @@ class AIGN:
                         "当前分段": current_seg_text,
                         "前2章故事线": compact_prev_storyline,
                         "后2章故事线": compact_next_storyline,
+                        "上文结尾": self.getLastParagraph(max_length=2000) if seg_index == 1 else "",
+                        "前章过渡提示": prev_transition if seg_index == 1 else "",
                     }
                 else:
                     # 非精简模式分段：使用精简模式agent，但添加前三章正文（不含上一章）
@@ -4405,7 +4709,7 @@ class AIGN:
                         "最近章节总结": enhanced_context_v2["chapter_summaries"],
                     }
                 # 写作
-                seg_resp = writer_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(seg_inputs), output_keys=["段落", "计划", "临时设定"])
+                seg_resp = writer_agent.invoke(inputs=self._inject_global_context_to_inputs(self._inject_foreshadowing_to_inputs(seg_inputs)), output_keys=["段落", "计划", "临时设定"])
                 seg_text = seg_resp["段落"]
                 seg_key_elements = seg_resp.get("关键元素", "")
                 last_plan = seg_resp.get("计划", last_plan)
@@ -4485,7 +4789,7 @@ class AIGN:
                         else:
                             emb_inputs["上一段原文"] = prev_seg
                             print(f"   📎 已添加上一段原文({len(prev_seg)}字符)以确保段落衔接")
-                emb_resp = emb_agent.invoke(inputs=self._inject_foreshadowing_to_inputs(emb_inputs), output_keys=["润色结果"])
+                emb_resp = emb_agent.invoke(inputs=self._inject_global_context_to_inputs(self._inject_foreshadowing_to_inputs(emb_inputs)), output_keys=["润色结果"])
                 final_seg = emb_resp["润色结果"]
                 parts.append(final_seg)
 
@@ -4495,7 +4799,7 @@ class AIGN:
             next_temp_setting = last_setting
         else:
             resp = writer.invoke(
-                inputs=self._inject_foreshadowing_to_inputs(inputs),
+                inputs=self._inject_global_context_to_inputs(self._inject_foreshadowing_to_inputs(inputs)),
                 output_keys=["段落", "计划", "临时设定"],
             )
             next_paragraph = resp["段落"]
@@ -4535,6 +4839,7 @@ class AIGN:
                 last_para = self.getLastParagraph()
                 
                 embellish_inputs = {
+                    "当前章节": f"第{self.chapter_count + 1}章",
                     "大纲": self.getCurrentOutline(),
                     "润色要求": self.embellishment_idea,
                     "要润色的内容": next_paragraph,
@@ -4566,6 +4871,7 @@ class AIGN:
                 
                 # 注意：非精简模式已通过 "上一章原文" 传入上一章润色后正文，无需再额外添加 "上一段原文"
                 embellish_inputs = {
+                    "当前章节": f"第{self.chapter_count + 1}章",
                     "大纲": self.getCurrentOutline(),
                     "润色要求": self.embellishment_idea,
                     "要润色的内容": next_paragraph,
@@ -4656,6 +4962,7 @@ class AIGN:
                 embellisher = self.ending_embellisher
                 # 为结尾润色器添加特殊参数
                 embellish_inputs["是否最终章"] = "是"
+                embellish_inputs["当前章节"] = f"第{self.chapter_count + 1}章（最终章）"
             elif is_compact_mode:
                 print("📦 使用精简版润色器（精简模式）")
                 embellisher = self.novel_embellisher_compact
@@ -4720,37 +5027,51 @@ class AIGN:
 
         self.no_memory_paragraph += f"\n{next_paragraph}"
 
-        # 最终章不需要生成新记忆和章节总结，直接保存文件即可
-        if is_final_chapter:
-            print(f"💾 最终章完成，直接保存文件（跳过记忆和总结生成）...")
-            self.updateNovelContent()
-            self.recordNovel()
-            self.saveToFile(save_metadata=True)
-            print(f"✅ 第{self.chapter_count}章（最终章）处理完成")
-        else:
-            print(f"💾 更新记忆和保存文件...")
-            self.updateMemory()
-            self.updateNovelContent()
-            self.recordNovel()
-            # 在生成章节过程中保存元数据
-            self.saveToFile(save_metadata=True)
-            
-            # 生成章节总结并更新故事线
-            if self.enable_chapters and self.chapter_count > 0:
-                # 获取章节标题（用于显示）
-                current_storyline = self.getCurrentChapterStoryline(self.chapter_count)
-                chapter_display_title = f"第{self.chapter_count}章"
-                if current_storyline and isinstance(current_storyline, dict) and current_storyline.get("title"):
-                    story_title = current_storyline.get("title", "")
-                    chapter_display_title = f"第{self.chapter_count}章：{story_title}"
-                    
-                print(f"📋 正在生成{chapter_display_title}的剧情总结...")
-                summary_data = self.generateChapterSummary(next_paragraph, self.chapter_count)
-                if summary_data:
-                    self.updateStorylineWithSummary(self.chapter_count, summary_data)
-                    print(f"✅ {chapter_display_title}的故事线已更新")
-            
-            print(f"✅ 第{self.chapter_count}章处理完成")
+        # ⚠️ 关键防护：以下所有操作都在内容已提交（paragraph_list.append + chapter_count更新）之后
+        # 如果这里的任何操作抛出异常，被 _execute_with_retry 捕获后会重新执行 _generate_paragraph_internal
+        # 导致同一章节被重复生成和追加（重复章节 bug 的根因）
+        # 因此必须用 try/except 包裹所有后处理操作，确保异常不会向上传播
+        try:
+            # 最终章不需要生成新记忆和章节总结，直接保存文件即可
+            if is_final_chapter:
+                print(f"💾 最终章完成，直接保存文件（跳过记忆和总结生成）...")
+                self.updateNovelContent()
+                self.recordNovel()
+                self.saveToFile(save_metadata=True)
+                print(f"✅ 第{self.chapter_count}章（最终章）处理完成")
+            else:
+                print(f"💾 更新记忆和保存文件...")
+                self.updateMemory()
+                self.updateGlobalContext()
+                self.updateNovelContent()
+                self.recordNovel()
+                # 在生成章节过程中保存元数据
+                self.saveToFile(save_metadata=True)
+                
+                # 生成章节总结并更新故事线
+                try:
+                    if self.enable_chapters and self.chapter_count > 0:
+                        # 获取章节标题（用于显示）
+                        current_storyline = self.getCurrentChapterStoryline(self.chapter_count)
+                        chapter_display_title = f"第{self.chapter_count}章"
+                        if current_storyline and isinstance(current_storyline, dict) and current_storyline.get("title"):
+                            story_title = current_storyline.get("title", "")
+                            chapter_display_title = f"第{self.chapter_count}章：{story_title}"
+                            
+                        print(f"📋 正在生成{chapter_display_title}的剧情总结...")
+                        summary_data = self.generateChapterSummary(next_paragraph, self.chapter_count)
+                        if summary_data:
+                            self.updateStorylineWithSummary(self.chapter_count, summary_data)
+                            print(f"✅ {chapter_display_title}的故事线已更新")
+                except Exception as e:
+                    print(f"⚠️ 章节总结/故事线更新失败（不影响正文生成）: {e}")
+                
+                print(f"✅ 第{self.chapter_count}章处理完成")
+        except Exception as post_commit_err:
+            # 后处理失败不能触发重试，因为内容已经提交
+            print(f"⚠️ 第{self.chapter_count}章后处理失败（内容已保存，不影响生成）: {post_commit_err}")
+            import traceback
+            traceback.print_exc()
 
         return next_paragraph
     

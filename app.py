@@ -608,7 +608,7 @@ def create_gradio5_original_app():
                     'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
                     'current_output_file': '', 'character_list': '', 'detailed_outline': '',
                     'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
-                    'target_chapter_count': 100
+                    'target_chapter_count': 50
                 })()
         else:
             # 创建模拟实例
@@ -617,7 +617,7 @@ def create_gradio5_original_app():
                 'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
                 'current_output_file': '', 'character_list': '', 'detailed_outline': '',
                 'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
-                'target_chapter_count': 100
+                'target_chapter_count': 50
             })()
         
         # 创建隐藏的aign组件（原版需要）
@@ -693,7 +693,7 @@ def create_gradio5_original_app():
                     "user_idea": default_values.get("user_idea", ""),
                     "user_requirements": default_values.get("user_requirements", ""),
                     "embellishment_idea": default_values.get("embellishment_idea", ""),
-                    "target_chapters": 100
+                    "target_chapters": 50
                 }
             except Exception as e:
                 print(f"⚠️ 获取界面初始化数据失败: {e}")
@@ -719,7 +719,7 @@ def create_gradio5_original_app():
                 "user_idea": "",
                 "user_requirements": "",
                 "embellishment_idea": "",
-                "target_chapters": 100
+                "target_chapters": 50
             }
         
         loaded_data = get_loaded_data_values()
@@ -1192,6 +1192,19 @@ def create_gradio5_original_app():
                     elem_id="status_output",
                     autoscroll=False
                 )
+                
+                # 全局设定显示框 - 放在实时生成状态下方
+                global_context_text = gr.Textbox(
+                    label="🌐 全局设定",
+                    lines=12,
+                    max_lines=25,
+                    interactive=False,
+                    show_copy_button=True,
+                    container=True,
+                    elem_classes=["global-context-display"],
+                    info="显示当前全局设定内容（世界观、角色关系、时间线、伏笔追踪等），随生成进度自动更新",
+                    placeholder="暂无全局设定内容...\n\n💡 提示：全局设定将在小说生成过程中自动创建和更新"
+                )
             
             # 右侧列 (scale=2, 对应原版row3)
             with gr.Column(scale=2, elem_id="row3"):
@@ -1208,6 +1221,20 @@ def create_gradio5_original_app():
                         elem_classes=["stream-panel", "auto-scroll"],
                         autoscroll=True
                     )
+                
+                # 全局设定显示框 - 右侧
+                with gr.Accordion("🌐 全局设定", open=False) as global_context_accordion:
+                    global_context_right = gr.Textbox(
+                        label="",
+                        lines=10,
+                        max_lines=20,
+                        interactive=False,
+                        show_copy_button=True,
+                        placeholder="暂无全局设定内容...",
+                        elem_id="global_context_right",
+                        elem_classes=["global-context-display"]
+                    )
+                
                 # 小说正文 - 始终显示
                 novel_content_text = gr.Textbox(
                     label="📚 小说正文", 
@@ -2732,7 +2759,7 @@ def create_gradio5_original_app():
                         return gr.Button(visible=False)
 
                 def format_storyline_display(storyline_dict, is_generating=False, show_recent_only=False):
-                    """格式化故事线显示（完整实现）"""
+                    """格式化故事线显示（完整实现 - 显示所有字段）"""
                     try:
                         if not storyline_dict or not storyline_dict.get('chapters'):
                             return "暂无故事线内容\n\n💡 提示：\n1. 请先生成大纲和人物列表\n2. 然后点击'生成故事线'按钮\n3. 故事线将为每章提供详细梗概"
@@ -2748,37 +2775,105 @@ def create_gradio5_original_app():
                             display_chapters = chapters
                             formatted_text = f"📖 故事线总览 (共{len(chapters)}章)\n{'='*50}\n\n"
 
-                        # 格式化每章内容
+                        # 格式化每章完整内容
                         for i, chapter in enumerate(display_chapters):
                             ch_num = chapter.get('chapter_number', i + 1)
                             title = chapter.get('title', f'第{ch_num}章')
-                            plot_summary = chapter.get('plot_summary', '暂无梗概')
 
-                            # 限制每章显示长度，避免界面过长
-                            if len(plot_summary) > 600:
-                                plot_summary = plot_summary[:600] + "..."
-
+                            formatted_text += f"{'─'*50}\n"
                             formatted_text += f"【第{ch_num}章】{title}\n"
-                            formatted_text += f"{plot_summary}\n"
+                            formatted_text += f"{'─'*50}\n"
 
-                            # 显示4个剧情分段（如果存在）
+                            # 承接上章
+                            continuation = chapter.get('continuation_from_prev', '')
+                            if continuation:
+                                formatted_text += f"📌 承接上章：{continuation}\n"
+
+                            # 时间节点
+                            time_anchor = chapter.get('time_anchor', '')
+                            if time_anchor:
+                                formatted_text += f"🕐 时间节点：{time_anchor}\n"
+
+                            # 剧情梗概
+                            plot_summary = chapter.get('plot_summary', '暂无梗概')
+                            formatted_text += f"\n📝 剧情梗概：\n{plot_summary}\n"
+
+                            # 主要人物
+                            main_chars = chapter.get('main_characters', [])
+                            if main_chars:
+                                chars_str = '、'.join(main_chars) if isinstance(main_chars, list) else str(main_chars)
+                                formatted_text += f"\n👤 主要人物：{chars_str}\n"
+
+                            # 本章前置条件
+                            prerequisites = chapter.get('prerequisites', '')
+                            if prerequisites:
+                                formatted_text += f"🔗 前置条件：{prerequisites}\n"
+
+                            # 关键事件
+                            key_events = chapter.get('key_events', [])
+                            if key_events:
+                                formatted_text += "\n⚡ 关键事件：\n"
+                                for event in key_events:
+                                    formatted_text += f"  • {event}\n"
+
+                            # 剧情目的
+                            plot_purpose = chapter.get('plot_purpose', '')
+                            if plot_purpose:
+                                formatted_text += f"\n🎯 剧情目的：{plot_purpose}\n"
+
+                            # 情感基调
+                            emotional_tone = chapter.get('emotional_tone', '') or chapter.get('chapter_mood', '')
+                            if emotional_tone:
+                                formatted_text += f"💭 情感基调：{emotional_tone}\n"
+
+                            # 衔接下章
+                            transition = chapter.get('transition_to_next', '')
+                            if transition:
+                                formatted_text += f"➡️ 衔接下章：{transition}\n"
+
+                            # 显示分段详情
                             segments = []
                             try:
                                 segments = chapter.get('plot_segments') or chapter.get('segments') or []
                             except Exception:
                                 segments = []
                             if isinstance(segments, list) and len(segments) > 0:
-                                formatted_text += "分段：\n"
-                                for seg in segments[:4]:
-                                    idx = seg.get('index', len(segments)) if isinstance(seg, dict) else None
-                                    seg_title = seg.get('segment_title', '') if isinstance(seg, dict) else ''
-                                    seg_sum = seg.get('segment_summary', '') if isinstance(seg, dict) else ''
-                                    # 截断摘要
-                                    if isinstance(seg_sum, str) and len(seg_sum) > 120:
-                                        seg_sum = seg_sum[:120] + "..."
-                                    idx_disp = f"{idx}" if idx is not None else "?"
+                                formatted_text += f"\n📋 分段规划：\n"
+                                for seg in segments:
+                                    if not isinstance(seg, dict):
+                                        continue
+                                    idx = seg.get('index', '?')
+                                    seg_title = seg.get('segment_title', '')
+                                    seg_sum = seg.get('segment_summary', '')
+                                    seg_scene = seg.get('segment_scene_time', '')
+                                    seg_purpose = seg.get('segment_purpose', '')
+                                    seg_transition = seg.get('segment_transition', '')
+                                    seg_end = seg.get('segment_end_state', '')
+                                    seg_next = seg.get('segment_next_transition', '')
+
                                     title_disp = f"《{seg_title}》" if seg_title else ""
-                                    formatted_text += f"  - 第{idx_disp}段{title_disp}：{seg_sum}\n"
+                                    formatted_text += f"  ┌─ 第{idx}段{title_disp}\n"
+                                    if seg_sum:
+                                        formatted_text += f"  │ {seg_sum}\n"
+                                    
+                                    # 分段事件
+                                    seg_events = seg.get('segment_key_events', [])
+                                    if seg_events:
+                                        for event in seg_events:
+                                            formatted_text += f"  │ • {event}\n"
+                                    
+                                    if seg_scene:
+                                        formatted_text += f"  │ 📍 场景与时间：{seg_scene}\n"
+                                    if seg_purpose:
+                                        formatted_text += f"  │ 🎯 分段作用：{seg_purpose}\n"
+                                    if seg_transition:
+                                        formatted_text += f"  │ ➡️ 衔接：{seg_transition}\n"
+                                    if seg_end:
+                                        formatted_text += f"  │ 🏁 本章结束状态：{seg_end}\n"
+                                    if seg_next:
+                                        formatted_text += f"  │ ➡️ 过渡到下章：{seg_next}\n"
+                                    formatted_text += f"  └─\n"
+                            
                             formatted_text += "\n"
 
                             
@@ -2940,11 +3035,14 @@ def create_gradio5_original_app():
                         if hasattr(aign_instance, 'storyline') and aign_instance.storyline:
                             storyline_display = format_storyline_display(aign_instance.storyline)
 
-                        return progress_info + [storyline_display]
+                        # 获取全局设定
+                        global_context_display = getattr(aign_instance, 'global_context', '') or '暂无全局设定内容'
+
+                        return progress_info + [storyline_display, global_context_display]
                     except Exception as e:
                         print(f"⚠️ 进度刷新失败: {e}")
                         print(f"⚠️ aign_instance类型: {type(aign_instance)}")
-                        return ["刷新失败", "", "", "", "暂无故事线内容"]
+                        return ["刷新失败", "", "", "", "暂无故事线内容", "暂无全局设定内容"]
 
                 def auto_refresh_progress_with_buttons(aign_instance):
                     """带按钮控制的自动刷新进度函数"""
@@ -2975,18 +3073,33 @@ def create_gradio5_original_app():
                             accordion_open = True  # 未生成时展开数据流面板
 
                         # progress_info包含: [progress_text, output_file, novel_content, stream_content]
-                        # 输出顺序: progress_text, output_file, novel_content, realtime_stream_text, realtime_stream_right, storyline, accordion, auto_btn, stop_btn
+                        # 输出顺序: progress_text, output_file, novel_content, realtime_stream_text, realtime_stream_right, storyline, global_context, global_context_right, accordion, auto_btn, stop_btn
                         stream_content = progress_info[3] if len(progress_info) > 3 else ""
-                        return progress_info + [stream_content, storyline_display, gr.update(open=accordion_open), gr.update(visible=auto_btn_visible), gr.update(visible=stop_btn_visible)]
+                        
+                        # 获取全局设定
+                        global_context_display = getattr(aign_instance, 'global_context', '') or '暂无全局设定内容'
+                        
+                        # 调试：打印全局设定状态（每30秒打印一次）
+                        import time as _time
+                        _now = _time.time()
+                        if not hasattr(auto_refresh_progress_with_buttons, '_last_gc_debug'):
+                            auto_refresh_progress_with_buttons._last_gc_debug = 0
+                        if _now - auto_refresh_progress_with_buttons._last_gc_debug > 30:
+                            gc_len = len(getattr(aign_instance, 'global_context', '') or '')
+                            print(f"🔍 [Timer调试] global_context长度={gc_len}, 显示内容前50字: {global_context_display[:50]}")
+                            auto_refresh_progress_with_buttons._last_gc_debug = _now
+                        
+                        return progress_info + [stream_content, storyline_display, global_context_display, global_context_display, gr.update(open=accordion_open), gr.update(visible=auto_btn_visible), gr.update(visible=stop_btn_visible)]
                     except Exception as e:
                         print(f"⚠️ 进度刷新失败: {e}")
                         print(f"⚠️ aign_instance类型: {type(aign_instance)}")
-                        return ["刷新失败", "", "", "", "", "暂无故事线内容", gr.update(open=True), gr.update(visible=True), gr.update(visible=False)]
+                        return ["刷新失败", "", "", "", "", "暂无故事线内容", "暂无全局设定内容", "暂无全局设定内容", gr.update(open=True), gr.update(visible=True), gr.update(visible=False)]
 
                 refresh_progress_btn.click(
                     auto_refresh_progress,
                     [aign],
-                    [progress_text, output_file_text, novel_content_text, realtime_stream_text, storyline_text]
+                    [progress_text, output_file_text, novel_content_text, realtime_stream_text, storyline_text, global_context_text],
+                    concurrency_limit=None
                 )
 
                 # 绑定自动刷新功能 - Gradio 5.0+新特性
@@ -3008,10 +3121,12 @@ def create_gradio5_original_app():
                 )
 
                 # Timer自动刷新事件 - 每隔指定时间自动更新状态
+                # concurrency_limit=None 允许Timer在自动生成运行期间仍能更新UI
                 progress_timer.tick(
                     fn=auto_refresh_progress_with_buttons,
                     inputs=[aign],
-                    outputs=[progress_text, output_file_text, novel_content_text, realtime_stream_text, realtime_stream_right, storyline_text, realtime_stream_accordion, auto_generate_button, stop_generate_button]
+                    outputs=[progress_text, output_file_text, novel_content_text, realtime_stream_text, realtime_stream_right, storyline_text, global_context_text, global_context_right, realtime_stream_accordion, auto_generate_button, stop_generate_button],
+                    concurrency_limit=None
                 )
 
                 # 配置状态监控事件绑定 - Gradio 5.38.0新特性
@@ -3250,7 +3365,7 @@ def create_gradio5_original_app():
                         
                         # 获取剧情紧凑度设置
                         chapters_per_plot = getattr(aign_instance, 'chapters_per_plot', 5)
-                        num_climaxes = getattr(aign_instance, 'num_climaxes', 10)
+                        num_climaxes = getattr(aign_instance, 'num_climaxes', 20)
                         print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
 
                         # 返回合并的结果，包含按钮状态和剧情紧凑度设置
@@ -3361,7 +3476,7 @@ def create_gradio5_modular_app():
                     'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
                     'current_output_file': '', 'character_list': '', 'detailed_outline': '',
                     'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
-                    'target_chapter_count': 20
+                    'target_chapter_count': 50
                 })()
         else:
             aign_instance = type('DummyAIGN', (), {
@@ -3369,7 +3484,7 @@ def create_gradio5_modular_app():
                 'writing_plan': '', 'temp_setting': '', 'writing_memory': '',
                 'current_output_file': '', 'character_list': '', 'detailed_outline': '',
                 'user_idea': '', 'user_requirements': '', 'embellishment_idea': '',
-                'target_chapter_count': 20
+                'target_chapter_count': 50
             })()
 
         aign = gr.State(aign_instance)

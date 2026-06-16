@@ -30,6 +30,142 @@ class OutlineGenerator:
         self.character_generator = aign_instance.character_generator
         self.detailed_outline_generator = aign_instance.detailed_outline_generator
     
+    # ==================== 截断检测与重试 ====================
+    
+    GENERATION_COMPLETE_MARKER = "===GENERATION_COMPLETE==="
+    
+    def _detect_generation_truncation(self, content: str, content_type: str, min_length: int = 200) -> tuple:
+        """检测生成内容是否被截断
+        
+        通过检查 ===GENERATION_COMPLETE=== 结束标记和内容最低长度来判断。
+        
+        Args:
+            content: 生成的内容
+            content_type: 内容类型名称（如"大纲"、"人物列表"等）
+            min_length: 最低长度阈值
+            
+        Returns:
+            tuple: (is_truncated: bool, reason: str)
+        """
+        if not content or not content.strip():
+            return (True, "内容为空")
+        
+        reasons = []
+        
+        # 检查1：结束标记是否存在
+        if self.GENERATION_COMPLETE_MARKER not in content:
+            reasons.append("缺少===GENERATION_COMPLETE===结束标记")
+        
+        # 检查2：内容长度是否低于最低阈值
+        if len(content.strip()) < min_length:
+            reasons.append(f"内容过短（{len(content.strip())}字符 < {min_length}字符最低阈值）")
+        
+        is_truncated = len(reasons) > 0
+        reason = "；".join(reasons) if reasons else "内容完整"
+        
+        return (is_truncated, reason)
+    
+    def _clean_generation_marker(self, content: str) -> str:
+        """清理生成完成标记，返回纯净内容"""
+        return content.replace(self.GENERATION_COMPLETE_MARKER, "").rstrip()
+    
+    def _generate_with_truncation_retry(
+        self,
+        generator,
+        inputs: dict,
+        output_key: str,
+        content_type: str,
+        min_length: int = 200,
+        max_retries: int = 2,
+    ) -> tuple:
+        """带截断检测的生成调用，自动重试
+        
+        重试策略：
+        1. 第1次：正常生成
+        2. 截断 → 第2次：直接重试
+        3. 仍截断 → 保留最后内容并继续（不中断流程）
+        
+        Args:
+            generator: Agent实例
+            inputs: 输入字典
+            output_key: 输出键名
+            content_type: 内容类型名称
+            min_length: 最低长度阈值
+            max_retries: 最大重试次数
+            
+        Returns:
+            tuple: (content: str, was_truncated: bool)
+                   was_truncated 表示最终是否使用了截断的内容
+        """
+        last_content = ""
+        
+        for attempt in range(1, max_retries + 2):  # 1次正常 + max_retries次重试
+            attempt_label = f"{content_type}-尝试{attempt}"
+            
+            try:
+                if attempt > 1:
+                    print(f"🔄 [{attempt_label}] 检测到{content_type}截断，正在重试...")
+                    if hasattr(self.aign, 'log_message'):
+                        self.aign.log_message(f"🔄 {content_type}检测到截断，正在第{attempt}次重试...")
+                    import time
+                    time.sleep(1)
+                
+                resp = generator.invoke(
+                    inputs=inputs,
+                    output_keys=[output_key],
+                )
+                raw_content = resp[output_key]
+                last_content = raw_content
+                
+                print(f"✅ [{attempt_label}] 生成完成，长度：{len(raw_content)}字符")
+                
+                # 截断检测
+                is_truncated, reason = self._detect_generation_truncation(
+                    raw_content, content_type, min_length
+                )
+                
+                if not is_truncated:
+                    # 未截断，清理标记并返回
+                    clean_content = self._clean_generation_marker(raw_content)
+                    if attempt > 1:
+                        print(f"✅ [{attempt_label}] 重试成功！{content_type}内容完整")
+                        if hasattr(self.aign, 'log_message'):
+                            self.aign.log_message(f"✅ {content_type}重试成功（第{attempt}次），内容完整")
+                    return (clean_content, False)
+                
+                # 截断了
+                print(f"⚠️ [{attempt_label}] 检测到截断: {reason}")
+                
+                if attempt > max_retries:
+                    # 所有重试都失败了，保留最后内容继续
+                    clean_content = self._clean_generation_marker(raw_content)
+                    print(f"\n{'='*70}")
+                    print(f"🚨 [{content_type}] {max_retries}次重试后仍截断，保留当前内容继续")
+                    print(f"   截断原因: {reason}")
+                    print(f"   内容长度: {len(clean_content)}字符")
+                    print(f"{'='*70}\n")
+                    if hasattr(self.aign, 'log_message'):
+                        self.aign.log_message(
+                            f"⚠️ {content_type}经过{max_retries}次重试仍检测到截断（{reason}），"
+                            f"已保留当前内容（{len(clean_content)}字符）继续流程。"
+                        )
+                    return (clean_content, True)
+                    
+            except Exception as e:
+                print(f"❌ [{attempt_label}] 生成调用出错: {e}")
+                if attempt > max_retries:
+                    # 所有尝试都失败
+                    if last_content:
+                        clean_content = self._clean_generation_marker(last_content)
+                        print(f"🚨 [{content_type}] 所有重试失败，使用最后获得的内容")
+                        if hasattr(self.aign, 'log_message'):
+                            self.aign.log_message(f"⚠️ {content_type}生成出错（{e}），使用最后获得的内容")
+                        return (clean_content, True)
+                    raise  # 没有任何内容，让上层处理
+        
+        # 理论上不会到这里
+        return (self._clean_generation_marker(last_content) if last_content else "", True)
+    
     def generate_outline(self, user_idea=None):
         """生成小说大纲
         
@@ -81,11 +217,17 @@ class OutlineGenerator:
                 "目标章节数": str(getattr(self.aign, 'target_chapter_count', 100)),
                 "风格参考": rag_references,
             }
-            resp = self.novel_outline_writer.invoke(
+            resp_content, was_truncated = self._generate_with_truncation_retry(
+                generator=self.novel_outline_writer,
                 inputs=inputs,
-                output_keys=["大纲"],
+                output_key="大纲",
+                content_type="大纲",
+                min_length=500,
             )
-            self.aign.novel_outline = resp["大纲"]
+            self.aign.novel_outline = resp_content
+            
+            if was_truncated:
+                print(f"⚠️ 大纲内容可能被截断，但已保留当前内容继续流程")
             
             # 重要：重置详细大纲相关状态，确保后续生成人物列表时使用新大纲
             # 而不是旧的详细大纲
@@ -351,7 +493,8 @@ class OutlineGenerator:
                 print(f"📚 RAG: 已添加风格参考 ({len(rag_references)} 字符)")
         
         try:
-            resp = self.aign.foreshadowing_generator.invoke(
+            resp_content, was_truncated = self._generate_with_truncation_retry(
+                generator=self.aign.foreshadowing_generator,
                 inputs={
                     "大纲": current_outline,
                     "用户想法": getattr(self.aign, 'user_idea', ''),
@@ -359,10 +502,18 @@ class OutlineGenerator:
                     "伏笔数量": str(foreshadowing_count),
                     "风格参考": rag_references,
                 },
-                output_keys=["伏笔与反转设定"]
+                output_key="伏笔与反转设定",
+                content_type="伏笔",
+                min_length=200,
             )
-            self.aign.foreshadowing = resp["伏笔与反转设定"]
-            print(f"✅ 伏笔生成完成，长度：{len(self.aign.foreshadowing)}字符")
+            self.aign.foreshadowing = resp_content
+            
+            truncation_note = ""
+            if was_truncated:
+                truncation_note = "（⚠️ 检测到截断，已保留当前内容）"
+                print(f"⚠️ 伏笔内容可能被截断，但已保留当前内容继续流程")
+            
+            print(f"✅ 伏笔生成完成，长度：{len(self.aign.foreshadowing)}字符{truncation_note}")
             
             if hasattr(self.aign, 'log_message'):
                 self.aign.log_message(f"✅ 伏笔生成完成（{foreshadowing_count}个）")
@@ -437,11 +588,18 @@ class OutlineGenerator:
                 if retry_count > 0:
                     print(f"🔄 第{retry_count + 1}次尝试生成人物列表...")
                 
-                resp = self.character_generator.invoke(
+                resp_content, was_truncated = self._generate_with_truncation_retry(
+                    generator=self.character_generator,
                     inputs=base_inputs,
-                    output_keys=["人物列表"]
+                    output_key="人物列表",
+                    content_type="人物列表",
+                    min_length=300,
                 )
-                self.aign.character_list = resp["人物列表"]
+                self.aign.character_list = resp_content
+                
+                if was_truncated:
+                    print(f"⚠️ 人物列表内容可能被截断，但已保留当前内容继续流程")
+                
                 success = True
                 
             except Exception as e:
@@ -612,11 +770,19 @@ class OutlineGenerator:
             print(f"🔮 已加入伏笔设定上下文 ({len(foreshadowing)} 字符)")
         
         try:
-            resp = self.detailed_outline_generator.invoke(
+            resp_content, was_truncated = self._generate_with_truncation_retry(
+                generator=self.detailed_outline_generator,
                 inputs=inputs,
-                output_keys=["详细大纲"]
+                output_key="详细大纲",
+                content_type="详细大纲",
+                min_length=1000,
             )
-            self.aign.detailed_outline = resp["详细大纲"]
+            self.aign.detailed_outline = resp_content
+            
+            truncation_note = ""
+            if was_truncated:
+                truncation_note = "（⚠️ 检测到截断，已保留当前内容）"
+                print(f"⚠️ 详细大纲内容可能被截断，但已保留当前内容继续流程")
             
             print(f"✅ 详细大纲生成完成，长度：{len(self.aign.detailed_outline)}字符")
             print(f"📖 详细大纲预览（前500字符）：")

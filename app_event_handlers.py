@@ -226,18 +226,18 @@ def create_page_load_handler(aign_instance, original_modules_loaded: bool = True
             
             # 获取剧情紧凑度设置
             chapters_per_plot = getattr(aign_inst, 'chapters_per_plot', 5)
-            num_climaxes = getattr(aign_inst, 'num_climaxes', 10)
+            num_climaxes = getattr(aign_inst, 'num_climaxes', 20)
             print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
             
             # 获取伏笔数量设置
-            foreshadowing_count = getattr(aign_inst, 'foreshadowing_count', 3)
+            foreshadowing_count = getattr(aign_inst, 'foreshadowing_count', 5)
             print(f"🔮 页面加载：伏笔数量 = {foreshadowing_count}")
             
             # 返回合并的结果，包含按钮状态、长章节模式、剧情紧凑度和伏笔数量设置
             return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, long_chapter_mode_value, chapters_per_plot, num_climaxes, foreshadowing_count]
         except Exception as e:
             print(f"⚠️ 合并页面加载失败: {e}")
-            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), "关闭", 5, 5, 3]
+            return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), "关闭", 5, 20, 5]
     
     return combined_page_load
 
@@ -927,10 +927,101 @@ def bind_main_events(
                 err = f"❌ 人物列表重新生成失败: {e}"
                 yield (err, "")
         
+        def _regenerate_foreshadowing_only(aign_state, outline, user_idea, user_requirements):
+            """仅重新生成伏笔/反转设定（生成器版本，支持实时状态更新）"""
+            import threading
+            import time
+            from datetime import datetime
+            from app_utils import format_status_output, format_time_duration
+            
+            try:
+                a = aign_state.value if hasattr(aign_state, 'value') else aign_state
+                
+                # 同步大纲
+                a.novel_outline = outline or getattr(a, 'novel_outline', '')
+                a.user_idea = user_idea or getattr(a, 'user_idea', '')
+                a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
+                
+                if not a.novel_outline:
+                    yield ("⚠️ 请先生成或输入大纲后再生成伏笔", "")
+                    return
+                
+                foreshadowing_count = getattr(a, 'foreshadowing_count', 5)
+                if foreshadowing_count <= 0:
+                    yield ("ℹ️ 伏笔数量为0，跳过伏笔生成", "")
+                    return
+                
+                if not hasattr(a, 'global_status_history'):
+                    a.global_status_history = []
+                status_history = a.global_status_history
+                
+                start_time = time.time()
+                generation_start_time = datetime.now()
+                start_timestamp = generation_start_time.strftime("%H:%M:%S")
+                
+                status_history.append(["系统", f"🔮 开始重新生成伏笔（目标{foreshadowing_count}个）...", start_timestamp, generation_start_time])
+                
+                from aign_outline_generator import OutlineGenerator
+                outline_gen = OutlineGenerator(a)
+                
+                gen_result = [None]
+                def generate_foreshadowing():
+                    try:
+                        outline_gen.generate_foreshadowing()
+                        gen_result[0] = "success"
+                    except Exception as e:
+                        print(f"⚠️ 伏笔重新生成失败: {e}")
+                        gen_result[0] = f"error: {e}"
+                
+                gen_thread = threading.Thread(target=generate_foreshadowing)
+                gen_thread.start()
+                
+                update_counter = 0
+                while gen_thread.is_alive():
+                    if time.time() - start_time > 300:
+                        break
+                    
+                    if update_counter % 2 == 0:
+                        elapsed_time = int(time.time() - start_time)
+                        current_timestamp = datetime.now().strftime("%H:%M:%S")
+                        foreshadowing_chars = len(a.foreshadowing) if getattr(a, 'foreshadowing', '') else 0
+                        status_text = f"🔮 正在重新生成伏笔...\\n   • 目标: {foreshadowing_count}个\\n   • 已生成: {foreshadowing_chars} 字符\\n   • 已耗时: {format_time_duration(elapsed_time, include_seconds=True)}"
+                        
+                        stage_found = False
+                        for i, item in enumerate(status_history):
+                            if len(item) >= 2 and item[0] == "伏笔重新生成进度":
+                                status_history[i] = ["伏笔重新生成进度", status_text, current_timestamp, generation_start_time]
+                                stage_found = True
+                                break
+                        if not stage_found:
+                            status_history.append(["伏笔重新生成进度", status_text, current_timestamp, generation_start_time])
+                        
+                        yield (format_status_output(status_history), "生成中...")
+                    
+                    update_counter += 1
+                    time.sleep(0.5)
+                
+                gen_thread.join(timeout=30)
+                
+                final_timestamp = datetime.now().strftime("%H:%M:%S")
+                total_elapsed = int(time.time() - start_time)
+                
+                if getattr(a, 'foreshadowing', '') and len(a.foreshadowing) > 0:
+                    status_history.append(["系统", f"✅ 伏笔重新生成完成\\n   • 字数: {len(a.foreshadowing)} 字\\n   • 耗时: {format_time_duration(total_elapsed, include_seconds=True)}", final_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), a.foreshadowing)
+                else:
+                    status_history.append(["系统", "⚠️ 伏笔重新生成失败", final_timestamp, generation_start_time])
+                    yield (format_status_output(status_history), "")
+            
+            except Exception as e:
+                err = f"❌ 伏笔重新生成失败: {e}"
+                yield (err, "")
+        
         # 绑定重新生成按钮
         regen_outline_btn = components.get('regen_outline_button')
         regen_title_btn = components.get('regen_title_button')
         regen_character_btn = components.get('regen_character_button')
+        regen_foreshadowing_btn = components.get('regen_foreshadowing_button')
         
         if regen_outline_btn:
             regen_outline_btn.click(
@@ -951,6 +1042,13 @@ def bind_main_events(
                 fn=_regenerate_character_only,
                 inputs=[aign, novel_outline_text, components.get('foreshadowing_text'), user_idea_text, user_requirements_text, embellishment_idea_text],
                 outputs=[components.get('status_output'), character_list_text]
+            )
+        
+        if regen_foreshadowing_btn:
+            regen_foreshadowing_btn.click(
+                fn=_regenerate_foreshadowing_only,
+                inputs=[aign, novel_outline_text, user_idea_text, user_requirements_text],
+                outputs=[components.get('status_output'), components.get('foreshadowing_text')]
             )
         
         print("✅ 重新生成按钮绑定成功")
@@ -2360,6 +2458,9 @@ def bind_main_events(
                     if hasattr(a, 'storyline') and a.storyline:
                         storyline_display = format_storyline_display(a.storyline)
                     
+                    # 获取全局设定
+                    global_context_display = getattr(a, 'global_context', '') or '暂无全局设定内容'
+                    
                     # 根据生成状态控制按钮可见性
                     if is_generating:
                         auto_btn_visible = False
@@ -2368,10 +2469,10 @@ def bind_main_events(
                         auto_btn_visible = True
                         stop_btn_visible = False
                     
-                    return progress_info + [storyline_display, gr.update(visible=auto_btn_visible), gr.update(visible=stop_btn_visible)]
+                    return progress_info + [storyline_display, global_context_display, gr.update(visible=auto_btn_visible), gr.update(visible=stop_btn_visible)]
                 except Exception as e:
                     print(f"⚠️ 自动刷新失败: {e}")
-                    return ["刷新失败", "", "", "", "暂无故事线内容", gr.update(visible=True), gr.update(visible=False)]
+                    return ["刷新失败", "", "", "", "暂无故事线内容", "暂无全局设定内容", gr.update(visible=True), gr.update(visible=False)]
             
             components['progress_timer'].tick(
                 fn=_wrap_auto_refresh_with_buttons,
@@ -2382,11 +2483,13 @@ def bind_main_events(
                     novel_content_text,
                     components.get('realtime_stream_text'),
                     components.get('storyline_text'),
+                    components.get('global_context_text'),
                     components.get('auto_generate_button'),
                     components.get('stop_generate_button')
-                ]
+                ],
+                concurrency_limit=None
             )
-            print("✅ Timer自动刷新功能已启用")
+            print("✅ Timer自动刷新功能已启用（含全局设定+concurrency_limit=None）")
         
         # 绑定存档管理功能 - 断点续传（使用文件上传）
         if 'save_file_upload' in components:

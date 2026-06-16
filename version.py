@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "5.0.0"
+__version__ = "5.1.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-06-08)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-06-16)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,7 +16,18 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
-        "风格专属提示词模板系统：33种写作风格×4种提示词类型=132个风格专用提示词文件，基于base模板继承",
+        "全局设定系统（GlobalContextUpdater）：全新全局设定智能体，跟踪世界观设定、角色状态、势力关系等全局信息，每章生成后自动更新全局设定上下文",
+        "生成防截断机制：大纲、伏笔、人物列表、详细大纲生成均加入===GENERATION_COMPLETE===结束标记检测和自动重试，最多重试2次后保留内容继续（不中断流程）",
+        "伏笔重新生成按钮：WebUI新增独立的伏笔重新生成按钮，与标题和人物重新生成按钮功能一致",
+        "最后一章优化：最后一章润色完成后直接结束，不再执行多余的记忆和全局设定更新",
+        "章节进度修正：修复WebUI章节进度显示偏差（显示的章节号比实际生成的多1）",
+        "默认参数优化：默认目标章节数50、默认伏笔数量5、默认高潮数量20",
+        "正文/润色提示词增强：结尾正文和结尾润色提示词补齐与正常章节相同的审查、全局设定等新内容",
+        "全局设定注入：正文生成和润色流程中自动注入全局设定上下文，增强世界观一致性",
+        "记忆提示词增强：记忆生成提示词增加结构化输出格式和质量要求",
+        "故事线提示词增强：故事线生成提示词增加详细度和结构要求",
+        "自动保存增强：修复自动保存在某些场景下未正确持久化的问题",
+        "Token缓存优化：新增输入字段重排序机制，提升DeepSeek等支持KV Cache的模型的缓存命中率",
         "oMLX AI提供商：新增Mac优化本地LLM推理服务器支持，OpenAI兼容API",
         "ZenMux AI提供商：统一AI模型路由服务，支持reasoning_effort思考强度控制和提供商路由",
         "故事线Markdown解析器：新增storyline_markdown_parser.py，支持Markdown↔dict双向转换，YAML front matter元数据",
@@ -90,7 +101,8 @@ VERSION_INFO = {
         "NVIDIA AI提供商支持",
         "非精简模式上下文优化",
         "SiliconFlow详细Token统计",
-        "流式输出与控制台显示优化"
+        "流式输出与控制台显示优化",
+        "Markdown故事线解析器双向转换"
     ],
     "ai_providers": [
         "OpenRouter",

@@ -2,6 +2,95 @@
 
 [中文版本](#中文版本)
 
+## [5.1.0] - 2026-06-16 🌐 Global Context System & Anti-Truncation | 全局设定系统与防截断机制
+
+### ✨ Core New Features | 核心新功能
+
+#### 🌍 Global Context System (GlobalContextUpdater) | 全局设定系统
+- **World-State Tracking Agent**: New `GlobalContextUpdater` agent that tracks world-building details, character states, power dynamics, and other global information across chapters
+- **世界设定跟踪智能体**: 全新`GlobalContextUpdater`智能体，跟踪世界观设定、角色状态、势力关系等跨章节全局信息
+- **Auto-Update**: Global context automatically updated after each chapter generation
+- **自动更新**: 每章生成后自动更新全局设定上下文
+- **Context Injection**: Global context automatically injected into writing and polishing prompts for world-building consistency
+- **上下文注入**: 全局设定自动注入正文生成和润色流程，增强世界观一致性
+
+#### 🛡️ Generation Anti-Truncation Mechanism | 生成防截断机制
+- **End Marker Detection**: Added `===GENERATION_COMPLETE===` markers to outline, foreshadowing, character list, and detailed outline generation prompts
+- **结束标记检测**: 大纲、伏笔、人物列表、详细大纲生成提示词均加入`===GENERATION_COMPLETE===`完整性标记
+- **Auto-Retry with Fallback**: Up to 2 retries on truncation detection; keeps last content and continues if still truncated (never interrupts generation flow)
+- **自动重试带兜底**: 截断时最多重试2次，仍截断则保留最后一次内容继续（不中断生成流程）
+- **WebUI Warning**: Truncation warnings displayed in WebUI log when truncation persists after retries
+- **WebUI警告**: 重试后仍截断时在WebUI日志中标记警告
+
+#### 🔮 Foreshadowing Regeneration Button | 伏笔重新生成按钮
+- **Independent Button**: New foreshadowing regeneration button in WebUI, consistent with existing outline/title/character regeneration buttons
+- **独立按钮**: WebUI新增独立的伏笔重新生成按钮，与已有的大纲/标题/人物重新生成按钮功能一致
+
+### 🔧 Improvements | 功能改进
+
+#### ⚡ Last Chapter Optimization | 最后一章优化
+- **Skip Post-Processing**: Final chapter polishing now skips memory update and global context update, directly completing the generation
+- **跳过后处理**: 最后一章润色完成后直接结束，不再执行多余的记忆和全局设定更新
+
+#### 🔧 Chapter Progress Fix | 章节进度修正
+- **Off-by-One Fix**: Fixed WebUI showing chapter N+1 when actually generating chapter N
+- **偏移修复**: 修复WebUI显示的章节号比实际生成的多1的问题
+
+#### 📊 Default Parameters Optimization | 默认参数优化
+- **Target Chapters**: Default changed from 20 to 50
+- **目标章节数**: 默认值从20改为50
+- **Foreshadowing Count**: Default changed from 3 to 5
+- **伏笔数量**: 默认值从3改为5
+- **Climax Count**: Default changed from 10 to 20
+- **高潮数量**: 默认值从10改为20
+
+#### 📝 Prompt Enhancements | 提示词增强
+- **Ending Writer/Embellisher**: Prompts now include review rules, global context, and other features matching normal chapter prompts
+- **结尾正文/润色提示词**: 补齐与正常章节相同的审查规则、全局设定等新内容
+- **Memory Prompt**: Added structured output format and quality requirements
+- **记忆提示词**: 增加结构化输出格式和质量要求
+- **Storyline Prompt**: Enhanced detail level and structure requirements
+- **故事线提示词**: 增加详细度和结构要求
+
+#### 💾 Token Cache Optimization | Token缓存优化
+- **Input Field Reordering**: New `_reorder_inputs_for_cache()` method reorders input fields to maximize KV Cache hit rates for DeepSeek and similar models
+- **输入字段重排序**: 新增`_reorder_inputs_for_cache()`方法，重排序输入字段以提升DeepSeek等模型的KV Cache命中率
+
+### 📄 New Files | 新增文件
+- `prompts/common/global_context_prompt.py`: Global context updater prompt
+
+### 📝 Modified Files | 修改文件
+- `AIGN.py`: GlobalContextUpdater integration, last chapter optimization, chapter progress fix, default parameter changes
+- `AIGN_Prompt_Enhanced.py`: Import global_context_prompt
+- `aign_agents.py`: Token cache reordering
+- `aign_outline_generator.py`: Anti-truncation mechanism for outline/character/foreshadowing/detailed outline
+- `aign_storyline_manager.py`: Storyline prompt improvements
+- `app.py`: Default parameter updates, foreshadowing regeneration
+- `app_data_handlers.py`: Data handling updates
+- `app_event_handlers.py`: Foreshadowing regeneration handler and button binding
+- `app_ui_components.py`: Foreshadowing regeneration button
+- `auto_save_manager.py`: Auto-save improvements
+- `novel_save_manager.py`: Save manager updates
+- `prompts/common/character_prompt.py`: Anti-truncation marker
+- `prompts/common/detailed_outline_prompt.py`: Anti-truncation marker, prompt enhancements
+- `prompts/common/foreshadowing_prompt.py`: Anti-truncation marker
+- `prompts/common/memory_prompt.py`: Structured output format, quality requirements
+- `prompts/common/outline_prompt.py`: Anti-truncation marker
+- `prompts/common/storyline_prompt.py`: Enhanced detail and structure
+- `prompts/common/storyline_prompt_simple.py`: Enhanced detail and structure
+- `prompts/compact/base_beginning_template.py`: Global context injection
+- `prompts/compact/base_embellisher_template.py`: Review rules, global context
+- `prompts/compact/base_ending_template.py`: Review rules, global context
+- `prompts/compact/base_writer_template.py`: Review rules, global context
+- `prompts/standard/base_beginning_template.py`: Global context injection
+- `prompts/standard/base_embellisher_template.py`: Review rules, global context
+- `prompts/standard/base_ending_template.py`: Review rules, global context
+- `prompts/standard/base_writer_template.py`: Review rules, global context
+- `prompts/standard/ending_prompt.py`: Prompt completion
+- `storyline_markdown_parser.py`: Parser improvements
+
+---
+
 ## [5.0.0] - 2026-06-08 🚀 Style Template System & New AI Providers | 风格模板系统与新AI提供商
 
 ### ✨ Core New Features | 核心新功能

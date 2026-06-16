@@ -29,7 +29,8 @@ class AutoSaveManager:
             "detailed_outline": self.save_dir / "detailed_outline.json",
             "storyline": self.save_dir / "storyline.md",
             "user_settings": self.save_dir / "user_settings.json",
-            "metadata": self.save_dir / "metadata.json"
+            "metadata": self.save_dir / "metadata.json",
+            "global_context": self.save_dir / "global_context.json"
         }
         
         print(f"📁 自动保存管理器初始化完成，保存目录: {self.save_dir}")
@@ -112,6 +113,24 @@ class AutoSaveManager:
             return True
         except Exception as e:
             print(f"❌ 伏笔保存失败: {e}")
+            return False
+    
+    def save_global_context(self, global_context: str) -> bool:
+        """保存全局设定追踪"""
+        try:
+            data = {
+                "global_context": global_context,
+                "timestamp": time.time(),
+                "readable_time": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            with open(self.files["global_context"], 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 全局设定已自动保存 ({len(global_context)}字符)")
+            return True
+        except Exception as e:
+            print(f"❌ 全局设定保存失败: {e}")
             return False
     
     def save_detailed_outline(self, detailed_outline: str, target_chapters: int = 0, user_idea: str = "", user_requirements: str = "", embellishment_idea: str = "", style_name: str = "无") -> bool:
@@ -247,6 +266,18 @@ class AutoSaveManager:
             print(f"❌ 伏笔加载失败: {e}")
         return None
     
+    def load_global_context(self) -> Optional[Dict[str, Any]]:
+        """加载全局设定追踪"""
+        try:
+            if self.files["global_context"].exists():
+                with open(self.files["global_context"], 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                print(f"📚 全局设定已自动加载 ({len(data.get('global_context', ''))}字符, {data.get('readable_time', 'unknown time')})")
+                return data
+        except Exception as e:
+            print(f"❌ 全局设定加载失败: {e}")
+        return None
+    
     def load_detailed_outline(self) -> Optional[Dict[str, Any]]:
         """加载详细大纲"""
         try:
@@ -307,12 +338,13 @@ class AutoSaveManager:
             "foreshadowing": self.load_foreshadowing(),
             "detailed_outline": self.load_detailed_outline(),
             "storyline": self.load_storyline(),
-            "user_settings": self.load_user_settings()
+            "user_settings": self.load_user_settings(),
+            "global_context": self.load_global_context()
         }
         
         # 统计加载的数据
         loaded_count = sum(1 for v in result.values() if v is not None)
-        print(f"✅ 自动保存数据加载完成，成功加载 {loaded_count}/7 项")
+        print(f"✅ 自动保存数据加载完成，成功加载 {loaded_count}/{len(result)} 项")
         
         return result
     
@@ -545,7 +577,8 @@ class AutoSaveManager:
             "foreshadowing": self.files["foreshadowing"].exists(),
             "detailed_outline": self.files["detailed_outline"].exists(),
             "storyline": self.files["storyline"].exists(),
-            "user_settings": self.files["user_settings"].exists()
+            "user_settings": self.files["user_settings"].exists(),
+            "global_context": self.files["global_context"].exists()
         }
     
     def get_save_info(self) -> Dict[str, Any]:

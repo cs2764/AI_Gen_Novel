@@ -244,7 +244,7 @@ def create_idea_input_tab(
             components['foreshadowing_count_slider'] = gr.Slider(
                 minimum=0, 
                 maximum=10, 
-                value=3, 
+                value=5, 
                 step=1,
                 label="🔮 伏笔/反转数量", 
                 interactive=True,
@@ -310,7 +310,7 @@ def create_idea_input_tab(
             
             # 伏笔/反转数量滑块（API未配置时禁用）
             components['foreshadowing_count_slider'] = gr.Slider(
-                minimum=0, maximum=10, value=3, step=1,
+                minimum=0, maximum=10, value=5, step=1,
                 label="🔮 伏笔/反转数量", interactive=False,
                 info="设置故事中埋设的伏笔和反转数量"
             )
@@ -377,6 +377,12 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             max_lines=20,
             interactive=True
         )
+        # 伏笔/反转重新生成按钮
+        components['regen_foreshadowing_button'] = gr.Button(
+            "🔄 重新生成伏笔", 
+            variant="secondary", 
+            size="sm"
+        )
         
         components['character_list_text'] = gr.Textbox(
             loaded_data.get("character_list", ""),
@@ -413,7 +419,7 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             components['num_climaxes_slider'] = gr.Slider(
                 minimum=1,
                 maximum=20,
-                value=loaded_data.get("num_climaxes", 5),
+                value=loaded_data.get("num_climaxes", 20),
                 step=1,
                 label="高潮数量",
                 interactive=True,
@@ -635,6 +641,19 @@ def create_auto_generation_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             show_copy_button=True,
             container=True,
             info="当前生成内容的保存路径"
+        )
+        
+        # 全局设定显示框
+        components['global_context_text'] = gr.Textbox(
+            label="🌐 全局设定",
+            lines=24,
+            max_lines=50,
+            interactive=False,
+            show_copy_button=True,
+            container=True,
+            elem_classes=["global-context-display"],
+            info="显示当前全局设定内容（世界观、角色关系、时间线、伏笔追踪等），随生成进度自动更新",
+            placeholder="暂无全局设定内容...\n\n💡 提示：全局设定将在小说生成过程中自动创建和更新"
         )
     
     return components

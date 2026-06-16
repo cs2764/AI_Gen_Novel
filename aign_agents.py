@@ -317,22 +317,40 @@ class MarkdownAgent:
             self.history.append({"role": "assistant", "content": resp["content"]})
     
     def count_tokens(self, text: str) -> int:
-        """使用 cl100k_base 编码器计算文本的 token 数量
+        """估算文本的 token 数量（适用于 DeepSeek/Qwen 等中文优化模型）
+        
+        使用基于字符类型的加权估算，比 cl100k_base (GPT-4 tokenizer) 更准确：
+        - cl100k_base 对中文严重高估（每个汉字约 1.5-2 token），不适用于 DeepSeek
+        - DeepSeek/Qwen 对中文优化后，每个汉字约 0.6-0.7 token
         
         Args:
             text: 要计数的文本
             
         Returns:
-            int: token 数量
+            int: 估算的 token 数量
         """
-        try:
-            encoding = tiktoken.get_encoding("cl100k_base")
-            return len(encoding.encode(text))
-        except Exception as e:
-            print(f"⚠️ Token计数失败: {e}, 使用字符数估算")
-            # 粗略估计: 中文约1.5-2字符/token，英文约4字符/token
-            # 使用保守估计：3字符/token
-            return len(text) // 3
+        if not text:
+            return 0
+        
+        chinese_chars = 0
+        ascii_chars = 0
+        other_chars = 0
+        
+        for ch in text:
+            if '\u4e00' <= ch <= '\u9fff' or '\u3400' <= ch <= '\u4dbf':
+                chinese_chars += 1
+            elif ord(ch) < 128:
+                ascii_chars += 1
+            else:
+                other_chars += 1
+        
+        # DeepSeek/Qwen 的中文 token 效率：
+        # - 中文：约 0.6-0.7 token/字（常用词2-3字编为1 token）
+        # - 英文/ASCII：约 0.25 token/字符（约4字符/token）
+        # - 其他字符（日韩/符号等）：约 1.0 token/字符
+        tokens = chinese_chars * 0.7 + ascii_chars * 0.25 + other_chars * 1.0
+        
+        return max(1, int(tokens))
     
     def get_token_limit(self) -> int:
         """获取当前智能体的 token 限制
@@ -481,12 +499,20 @@ class MarkdownAgent:
             # Token长度检查
             response_content = resp.get("content", "")
             if response_content:
-                token_count = self.count_tokens(response_content)
+                # 优先使用API返回的completion_tokens（模型自身tokenizer的准确计数）
+                # 仅在API未返回时才使用本地估算
+                api_completion_tokens = resp.get('completion_tokens', 0)
+                if api_completion_tokens and api_completion_tokens > 0:
+                    token_count = api_completion_tokens
+                    token_source = "API"
+                else:
+                    token_count = self.count_tokens(response_content)
+                    token_source = "估算"
                 token_limit = self.get_token_limit()
                 
                 if token_count > token_limit:
                     token_retry_count += 1
-                    print(f"⚠️ [{self.name}] API响应超过Token限制: {token_count}/{token_limit} tokens")
+                    print(f"⚠️ [{self.name}] API响应超过Token限制: {token_count}/{token_limit} tokens (来源:{token_source})")
                     print(f"🔄 正在进行第 {token_retry_count}/{max_token_retries} 次重试...")
                     
                     # 记录到父AIGN实例日志

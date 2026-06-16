@@ -40,7 +40,9 @@ character_generator_prompt = """
 • 角色姓名 - 作用描述
 
 # END
+===GENERATION_COMPLETE===
 ```
+**⚠️ 重要：输出完成后必须在最末尾输出 ===GENERATION_COMPLETE=== 标记，表示内容已完整输出。**
 
 ## 语言要求：所有输出必须使用简体中文。所有人物姓名必须使用中文命名。
 

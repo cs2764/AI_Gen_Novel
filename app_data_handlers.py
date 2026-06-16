@@ -197,7 +197,7 @@ def import_auto_saved_data_handler(aign_state):
         if not (hasattr(__main__, 'ORIGINAL_MODULES_LOADED') and __main__.ORIGINAL_MODULES_LOADED) or not aign_instance:
             return [
                 gr.update(visible=True, value="❌ 系统未初始化，无法导入数据"),
-                "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5, 3
+                "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 20, 5
             ]
         
         # 调用AIGN实例的加载方法
@@ -250,19 +250,19 @@ def import_auto_saved_data_handler(aign_state):
                 long_chapter_mode_value,
                 style_name,
                 getattr(aign_instance, 'chapters_per_plot', 5),
-                getattr(aign_instance, 'num_climaxes', 10),
-                getattr(aign_instance, 'foreshadowing_count', 3)
+                getattr(aign_instance, 'num_climaxes', 20),
+                getattr(aign_instance, 'foreshadowing_count', 5)
             ]
         else:
             return [
                 gr.update(visible=True, value="⚠️ 未找到可导入的自动保存数据"),
-                "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5, 3
+                "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 20, 5
             ]
             
     except Exception as e:
         return [
             gr.update(visible=True, value=f"❌ 导入失败: {str(e)}"),
-            "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 5, 3
+            "", "", "", 20, "", "", "", "", "", "暂无故事线内容", "关闭", "无", 5, 20, 5
         ]
 
 

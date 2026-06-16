@@ -251,7 +251,8 @@ class NovelSaveManager:
             "detailed_outline": getattr(aign, 'detailed_outline', ""),
             "character_list": getattr(aign, 'character_list', ""),
             "foreshadowing": getattr(aign, 'foreshadowing', ""),
-            "storyline": getattr(aign, 'storyline', {})
+            "storyline": getattr(aign, 'storyline', {}),
+            "global_context": getattr(aign, 'global_context', "")
         }
     
     def _extract_progress(self, aign) -> Dict[str, Any]:
@@ -311,6 +312,7 @@ class NovelSaveManager:
         aign.character_list = content.get("character_list", "")
         aign.foreshadowing = content.get("foreshadowing", "")
         aign.storyline = content.get("storyline", {})
+        aign.global_context = content.get("global_context", "")
         
         content_items = []
         if aign.novel_title:
@@ -327,6 +329,8 @@ class NovelSaveManager:
             chapters = aign.storyline.get("chapters", [])
             if chapters:
                 content_items.append(f"故事线 ({len(chapters)}章)")
+        if aign.global_context:
+            content_items.append(f"全局设定 ({len(aign.global_context)}字符)")
         
         if content_items:
             print(f"✅ 内容数据已恢复:")
