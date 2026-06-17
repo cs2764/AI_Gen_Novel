@@ -239,6 +239,15 @@ LLM_Novel_Guide/
 
 # Reference/SKILL files (not project code)
 *_SKILL.md
+SKILL.md
+
+# Internal development documents (not for end users)
+GITHUB_PREP_CHECKLIST.md
+GITHUB_PREP_SUMMARY.md
+UPLOAD_INSTRUCTIONS.md
+docs/SHIM_MIGRATION_PLAN.md
+docs/SHIM_REMOVAL_PLAN.md
+docs/CODE_STRUCTURE_OPTIMIZATION_PLAN.md
 
 # Chinese temporary documents
 保存加载功能验证完成.md

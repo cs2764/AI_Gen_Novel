@@ -8,8 +8,8 @@
 ## English Documentation
 
 ### Version Information
-- **Version**: 5.1.0
-- **Release Date**: 2026-06-16
+- **Version**: 5.2.0
+- **Release Date**: 2026-06-17
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -29,8 +29,8 @@
    - User confirmation mechanisms
    - Auto-save and data management
 
-3. **uniai/** - AI Provider Layer
-   - Unified interface for 14 AI providers
+3. **providers/** - AI Provider Layer
+   - providers/uniai/ - Unified interface for 14 AI providers
    - OpenRouter, Claude, Gemini, DeepSeek
    - LM Studio, 智谱AI, 阿里云
    - Fireworks, Grok, Lambda
@@ -38,26 +38,26 @@
    - oMLX (Mac-optimized local LLM)
    - ZenMux (unified model routing)
 
-4. **Configuration System**
-   - config_manager.py - Configuration management
-   - dynamic_config_manager.py - Runtime configuration
-   - config_template.py - Configuration template
+4. **config/** - Configuration System
+   - config/config_manager.py - Configuration management
+   - config/dynamic_config_manager.py - Runtime configuration
+   - config/config_template.py - Configuration template
 
-5. **Data Management**
-   - auto_save_manager.py - Auto-save functionality
-   - aign_local_storage.py - Local data storage
-   - secure_file_manager.py - Secure file operations
+5. **storage/** - Data Management
+   - storage/auto_save_manager.py - Auto-save functionality
+   - storage/aign_local_storage.py - Local data storage
+   - storage/secure_file_manager.py - Secure file operations
 
-6. **Fish Audio S2 Emotion Marking System** (v5.0.0, Experimental - hidden in UI)
-   - AIGN_FishAudio_Prompt.py - Fish Audio S2 emotion/tone marker instructions
-   - fishaudio_cleaner.py - Fish Audio text marker cleaner
-   - epub_fishaudio_tagger.py - EPUB batch emotion/tone tagging processor
+6. **tts/** - TTS & Emotion Marking (v5.0.0, Experimental - hidden in UI)
+   - tts/cosyvoice_cleaner.py - CosyVoice text cleaner
+   - tts/fishaudio_cleaner.py - Fish Audio text marker cleaner
+   - tts/epub_fishaudio_tagger.py - EPUB batch emotion/tone tagging processor
 
-7. **Style & Prompt System** (v5.0.0)
+7. **prompts/** - Style & Prompt System (v5.0.0)
    - prompts/standard/ - 132 style-specific prompt files (33 styles × 4 types)
    - prompts/compact/ - Compact mode prompt files
-   - storyline_markdown_parser.py - Markdown ↔ dict bidirectional parser
-   - AIGN_Prompt_Enhanced.py - Enhanced standard mode prompts
+   - core/storyline_markdown_parser.py - Markdown ↔ dict bidirectional parser
+   - prompts/AIGN_Prompt_Enhanced.py - Enhanced standard mode prompts
 
 #### Agent System
 
@@ -146,36 +146,40 @@ See [README_Provider_Config.md](README_Provider_Config.md) for provider-specific
 5. Click "Generate" and wait for completion
 6. Export your novel in TXT or EPUB format
 
-### Project Structure
+### Project Structure (v5.2.0 Modular Architecture)
 
 ```
 AI_Gen_Novel/
-├── AIGN.py                 # Core generation engine
-├── app.py                  # Web interface
-├── config_template.py      # Configuration template
+├── AIGN.py                 # Core generation engine (Mixin composition)
+├── app.py                  # Web interface entry point
 ├── version.py              # Version information
-├── AIGN_FishAudio_Prompt.py# Fish Audio S2 instructions
-├── epub_fishaudio_tagger.py # EPUB emotion tagger
-├── fishaudio_cleaner.py    # Fish Audio marker cleaner
-├── storyline_markdown_parser.py # Storyline MD parser
-├── uniai/                  # AI provider adapters (14 providers)
-│   ├── openrouterAI.py
-│   ├── claudeAI.py
-│   ├── geminiAI.py
-│   ├── omlxAI.py           # oMLX local LLM
-│   ├── zenmuxAI.py         # ZenMux routing
-│   └── ...
+├── core/                   # Core generation logic
+│   ├── agents/             # Agent system (base_agent, json_agent, retry)
+│   ├── aign_writing.py     # Writing Mixin
+│   ├── aign_storyline.py   # Storyline Mixin
+│   ├── aign_outline.py     # Outline Mixin
+│   ├── aign_auto_generation.py  # Auto-generation Mixin
+│   ├── aign_statistics.py  # Statistics Mixin
+│   └── ...                 # Managers, utilities, parsers
+├── ui/                     # Web interface components
+│   ├── app_layout.py       # Gradio UI layout
+│   ├── handlers_*.py       # Event handlers
+│   └── ...                 # UI components, bridges
+├── config/                 # Configuration management
+├── storage/                # Data persistence layer
+├── providers/              # AI provider layer
+│   └── uniai/              # 14 AI provider adapters
+├── tts/                    # TTS processing (experimental)
+├── utils/                  # Utility modules
+├── scripts/                # Build & deployment scripts
 ├── prompts/                # Prompt templates
 │   ├── standard/           # 132 style-specific prompts
 │   ├── compact/            # Compact mode prompts
 │   ├── long_chapter/       # Long chapter prompts
 │   └── common/             # Shared prompts
-├── aign_*.py              # AIGN modules
-├── app_*.py               # App modules
-├── *_manager.py           # Manager modules
-├── docs/                  # Documentation
-├── test/                  # Test scripts
-└── output/                # Generated novels (not in repo)
+├── docs/                   # Documentation
+├── test/                   # Test scripts
+└── output/                 # Generated novels (not in repo)
 ```
 
 ### Security
@@ -198,8 +202,8 @@ See [LICENSE](LICENSE) for license information.
 ## 中文文档
 
 ### 版本信息
-- **版本**: 5.1.0
-- **发布日期**: 2026-06-16
+- **版本**: 5.2.0
+- **发布日期**: 2026-06-17
 - **Python**: 3.10+
 - **Gradio**: 5.38.0
 
@@ -219,8 +223,8 @@ See [LICENSE](LICENSE) for license information.
    - 用户确认机制
    - 自动保存和数据管理
 
-3. **uniai/** - AI提供商层
-   - 14个AI提供商的统一接口
+3. **providers/** - AI提供商层
+   - providers/uniai/ - 14个AI提供商的统一接口
    - OpenRouter、Claude、Gemini、DeepSeek
    - LM Studio、智谱AI、阿里云
    - Fireworks、Grok、Lambda
@@ -228,26 +232,26 @@ See [LICENSE](LICENSE) for license information.
    - oMLX（Mac优化本地LLM）
    - ZenMux（统一模型路由）
 
-4. **配置系统**
-   - config_manager.py - 配置管理
-   - dynamic_config_manager.py - 运行时配置
-   - config_template.py - 配置模板
+4. **config/** - 配置系统
+   - config/config_manager.py - 配置管理
+   - config/dynamic_config_manager.py - 运行时配置
+   - config/config_template.py - 配置模板
 
-5. **数据管理**
-   - auto_save_manager.py - 自动保存功能
-   - aign_local_storage.py - 本地数据存储
-   - secure_file_manager.py - 安全文件操作
+5. **storage/** - 数据管理
+   - storage/auto_save_manager.py - 自动保存功能
+   - storage/aign_local_storage.py - 本地数据存储
+   - storage/secure_file_manager.py - 安全文件操作
 
-6. **Fish Audio S2语气标记系统** (v5.0.0，实验性功能 - UI中已隐藏)
-   - AIGN_FishAudio_Prompt.py - Fish Audio S2语气/情感标记指令
-   - fishaudio_cleaner.py - Fish Audio文本标记清理
-   - epub_fishaudio_tagger.py - EPUB批量语气/情感标记处理
+6. **tts/** - TTS与语气标记系统 (v5.0.0，实验性功能 - UI中已隐藏)
+   - tts/cosyvoice_cleaner.py - CosyVoice文本清理
+   - tts/fishaudio_cleaner.py - Fish Audio文本标记清理
+   - tts/epub_fishaudio_tagger.py - EPUB批量语气/情感标记处理
 
-7. **风格与提示词系统** (v5.0.0)
+7. **prompts/** - 风格与提示词系统 (v5.0.0)
    - prompts/standard/ - 132个风格专用提示词文件（33种风格×4种类型）
    - prompts/compact/ - 精简模式提示词文件
-   - storyline_markdown_parser.py - Markdown↔dict双向解析器
-   - AIGN_Prompt_Enhanced.py - 增强版标准模式提示词
+   - core/storyline_markdown_parser.py - Markdown↔dict双向解析器
+   - prompts/AIGN_Prompt_Enhanced.py - 增强版标准模式提示词
 
 #### 智能体系统
 
@@ -336,25 +340,34 @@ python app.py
 5. 点击"生成"并等待完成
 6. 导出TXT或EPUB格式的小说
 
-### 项目结构
+### 项目结构 (v5.2.0 模块化架构)
 
 ```
 AI_Gen_Novel/
-├── AIGN.py                 # 核心生成引擎
-├── app.py                  # Web界面
-├── config_template.py      # 配置模板
+├── AIGN.py                 # 核心生成引擎（Mixin组合）
+├── app.py                  # Web界面入口
 ├── version.py              # 版本信息
-├── uniai/                  # AI提供商适配器
-│   ├── openrouterAI.py
-│   ├── claudeAI.py
-│   ├── geminiAI.py
-│   └── ...
-├── aign_*.py              # AIGN模块
-├── app_*.py               # 应用模块
-├── *_manager.py           # 管理器模块
-├── docs/                  # 文档
-├── test/                  # 测试脚本
-└── output/                # 生成的小说（不在仓库中）
+├── core/                   # 核心生成逻辑
+│   ├── agents/             # 智能体系统（base_agent、json_agent、retry）
+│   ├── aign_writing.py     # 写作Mixin
+│   ├── aign_storyline.py   # 故事线Mixin
+│   ├── aign_outline.py     # 大纲Mixin
+│   └── ...                 # 管理器、工具、解析器
+├── ui/                     # Web界面组件
+│   ├── app_layout.py       # Gradio UI布局
+│   ├── handlers_*.py       # 事件处理器
+│   └── ...                 # UI组件、桥接
+├── config/                 # 配置管理
+├── storage/                # 数据持久层
+├── providers/              # AI提供商层
+│   └── uniai/              # 14个AI提供商适配器
+├── tts/                    # TTS处理（实验性）
+├── utils/                  # 工具模块
+├── scripts/                # 构建与部署脚本
+├── prompts/                # 提示词模板
+├── docs/                   # 文档
+├── test/                   # 测试脚本
+└── output/                 # 生成的小说（不在仓库中）
 ```
 
 ### 安全
@@ -374,5 +387,5 @@ AI_Gen_Novel/
 
 ---
 
-**Last Updated / 最后更新**: 2026-06-16
-**Version / 版本**: 5.1.0
+**Last Updated / 最后更新**: 2026-06-17
+**Version / 版本**: 5.2.0

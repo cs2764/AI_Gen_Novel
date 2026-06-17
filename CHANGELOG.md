@@ -2,6 +2,58 @@
 
 [中文版本](#中文版本)
 
+## [5.2.0] - 2026-06-17 🏗️ Code Structure Refactoring | 代码结构重构
+
+### ✨ Core Changes | 核心变更
+
+#### 🏗️ Modular Package Architecture | 模块化包架构
+- **Complete Restructuring**: 67 root-level Python files reorganized into 8 modular packages
+- **完整重构**: 67个根目录Python文件重组为8个模块化包
+- **Package Layout**: `core/`, `ui/`, `config/`, `storage/`, `providers/`, `tts/`, `utils/`, `scripts/`
+- **包布局**: 核心引擎/界面/配置/存储/AI提供商/TTS/工具/脚本
+- **Root Cleanup**: Root directory reduced from 67 Python files to 4 (`app.py`, `AIGN.py`, `version.py`, `config.py`)
+- **根目录清理**: 从67个Python文件精简到4个
+
+#### 📐 AIGN.py Mixin Decomposition | AIGN.py Mixin分解
+- **Line Reduction**: AIGN.py reduced from 7489 to 2155 lines via Mixin inheritance pattern
+- **行数精简**: AIGN.py从7489行精简到2155行
+- **Extracted Mixins**: `StatisticsMixin` (585 lines), `AutoGenerationMixin` (738 lines), `OutlineMixin` (314 lines), `StorylineMixin` (1159 lines), `WritingMixin` (2405 lines)
+- **提取的Mixin**: 统计/自动生成/大纲/故事线/写作5个Mixin模块
+
+#### 📐 app.py Slim | app.py精简
+- **Line Reduction**: app.py reduced from 3656 to 306 lines
+- **行数精简**: app.py从3656行精简到306行
+- **Layout Extraction**: UI layout moved to `ui/app_layout.py`
+- **布局提取**: UI布局移至ui/app_layout.py
+- **Event Handler Split**: `app_event_handlers.py` (2929 lines) split into `ui/handlers_common.py`, `ui/handlers_generation.py`, `ui/handlers_config.py`, `ui/handlers_page_load.py`
+- **事件处理拆分**: 事件处理器拆分为4个专用模块
+
+#### 🔧 Agent System Restructuring | 智能体系统重构
+- **Package Split**: `aign_agents.py` (1645 lines) → `core/agents/` package with `base_agent.py`, `json_agent.py`, `retry.py`
+- **包拆分**: aign_agents.py拆分为core/agents/包结构
+
+#### 🔧 Additional Splits | 其他拆分
+- **enhanced_storyline_generator.py**: Split into `core/storyline_error_handler.py` + `core/storyline_truncation.py`
+- **web_config_interface.py**: Split into `ui/config_ui_builder.py` + slimmed main file
+
+### 🛡️ Migration Details | 迁移细节
+- **Zero Breaking Changes**: All 241 legacy import statements migrated to new package paths
+- **零破坏性变更**: 全部241处旧名导入迁移完成
+- **Validation**: `check_legacy_imports.py` gate: 0 legacy imports remaining
+- **验证**: 遗留导入检查闸门：0处残留
+- **77 Shims Removed**: All compatibility shim files deleted after full migration
+- **77个Shim已删除**: 完整迁移后删除所有兼容性转发文件
+
+### 📄 New Documentation | 新增文档
+- `docs/CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md`: Detailed per-file change tracking
+- `docs/CODE_STRUCTURE_OPTIMIZATION_PLAN.md`: Implementation plan with safety constraints
+- `docs/SHIM_MIGRATION_PLAN.md`: Line-level import migration plan
+- `docs/SHIM_REMOVAL_PLAN.md`: Shim removal strategy
+- `scripts/check_legacy_imports.py`: Long-term legacy import guard
+- `scripts/migrate_legacy_imports.py`: One-time migration script (removed after migration completed)
+
+---
+
 ## [5.1.0] - 2026-06-16 🌐 Global Context System & Anti-Truncation | 全局设定系统与防截断机制
 
 ### ✨ Core New Features | 核心新功能

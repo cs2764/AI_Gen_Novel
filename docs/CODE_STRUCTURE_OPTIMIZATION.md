@@ -1,15 +1,14 @@
 # 代码结构优化分析报告 (Code Structure Optimization Analysis)
 
 **创建日期**: 2026-03-13
-**最近更新**: 2026-06-16
-**当前版本**: v5.0.0 (2026-06-08 发布版)
+**最近更新**: 2026-06-17
+**当前版本**: v5.2.0 (2026-06-17 发布版)
 **项目**: AI_Gen_Novel2
 
 > [!NOTE]
-> **本文档是一份重构提案，尚未实施。** 截至最近更新，项目仍是根目录平铺的模块集合
-> （`core/`、`ui/`、`config/` 等包结构尚未创建，文件未移动）。各大文件自首次分析以来均有增长，
-> 本次更新刷新了全部行数指标，并补充了新增模块。文中给出的 `AIGN.py` 行号为**近似值**，仅用于
-> 定位功能区块，实际行号会随开发变动，请以方法名为准。
+> **本文档所述重构已全部实施完成。** 于 v5.2.0 (2026-06-17) 完成全部 Phase 0–7，
+> 根目录从 67 个 Python 文件精简至 4 个，AIGN.py 从 7489 行精简至 2155 行。
+> 详细变更记录见 [CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md](./CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md)。
 
 ---
 
@@ -63,7 +62,7 @@ EPUB 产物等，进一步加剧了根目录的拥挤。
 | `embellish_truncation_detector.py` | 205 | 润色截断检测与重试 |
 | `epub_fishaudio_tagger.py` | 597 | 【实验性】EPUB Fish Audio S2 语气打标器（UI 已隐藏） |
 | `fishaudio_cleaner.py` | 354 | 【实验性】Fish Audio 文本清理工具 |
-| `version.py` | 135 | 版本信息（v5.0.0） |
+| `version.py` | 135 | 版本信息（v5.1.0） |
 | `scan_secrets.py` | — | GitHub 上传前密钥泄露扫描脚本 |
 
 ---
@@ -518,15 +517,16 @@ AI_Gen_Novel2/
 
 ### Phase 0: 准备工作（预计 1 小时）
 
-- [ ] 备份整个项目
-- [ ] 创建 `core/`, `ui/`, `config/`, `storage/`, `providers/`, `tts/`, `utils/`, `scripts/` 目录结构
-- [ ] 在每个包中创建 `__init__.py`
+- [x] 备份整个项目（已完成：`backups/pre_refactor_2026-06-16/`）
+- [x] 创建 `core/`, `ui/`, `config/`, `storage/`, `providers/`, `tts/`, `utils/`, `scripts/` 目录结构
+- [x] 在每个包中创建 `__init__.py`
+- [x] 参阅 [执行计划](./CODE_STRUCTURE_OPTIMIZATION_PLAN.md) 与 [变更记录](./CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md)
 
 ### Phase 1: 拆分 AIGN.py 统计模块（风险低）
 
-- [ ] 提取统计/监控方法到 `core/aign_statistics.py`（~900 行）
-- [ ] 使用 Mixin 模式保持向后兼容
-- [ ] 测试所有统计功能正常
+- [x] 提取统计/监控方法到 `core/aign_statistics.py`（585 行）
+- [x] 使用 Mixin 模式保持向后兼容
+- [ ] 测试所有统计功能正常（**待停止运行中 WebUI 并重启后验证**）
 
 ### Phase 2: 拆分 AIGN.py 自动生成模块（风险低-中）
 
@@ -558,6 +558,8 @@ AI_Gen_Novel2/
 
 > [!IMPORTANT]
 > **每个 Phase 完成后都应该运行完整测试，确保功能不受影响。**
+> **每处理完一个源文件，必须在 [变更记录](./CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md) 中追加一条记录（源文件 → 产出文件 → 同步修改的文件），便于审查。**
+> **WebUI 运行期间不得启动新实例或执行 `import app`；仅改源码 + `py_compile`；完整验证待停止程序并重启后进行（见 [执行计划 §1.2](./CODE_STRUCTURE_OPTIMIZATION_PLAN.md#12-运行中实例安全约束重要)）。**
 > 建议一次只做一个 Phase，确认稳定后再进行下一步。
 
 ---
@@ -611,7 +613,7 @@ class AIGN(StatisticsMixin, ...):
 
 ## 总结
 
-| 指标 | 当前 (v5.0.0) | 优化后 |
+| 指标 | 当前 (v5.1.0) | 优化后 |
 | --- | --- | --- |
 | 根目录 Python 文件数 | 67 | **~10** |
 | `AIGN.py` 行数 | 7489 | **~800** |

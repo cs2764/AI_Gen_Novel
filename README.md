@@ -1,50 +1,46 @@
-# 🤖 AI Novel Generator v5.1.0 | AI 网络小说生成器
+# 🤖 AI Novel Generator v5.2.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v5.1.0 (2026-06-16)
+## 🎉 What's New in v5.2.0 (2026-06-17)
+
+**🏗️ Code Structure Refactoring!** Complete modular architecture overhaul — 67 root-level Python files reorganized into 8 packages (`core/`, `ui/`, `config/`, `storage/`, `providers/`, `tts/`, `utils/`, `scripts/`). AIGN.py reduced from 7489→2155 lines via Mixin pattern. app.py from 3656→306 lines.
+
+### ✨ Core Changes | 核心变更
+
+#### 🏗️ Modular Package Architecture | 模块化包架构
+- **8 Packages**: `core/`, `ui/`, `config/`, `storage/`, `providers/`, `tts/`, `utils/`, `scripts/`
+- **8个模块包**: 核心引擎/界面/配置/存储/AI提供商/TTS/工具/脚本
+- **AIGN.py Mixin Decomposition**: 7489→2155 lines; extracted `StatisticsMixin`, `AutoGenerationMixin`, `OutlineMixin`, `StorylineMixin`, `WritingMixin`
+- **AIGN.py Mixin分解**: 从7489行精简到2155行，提取5个Mixin模块
+- **Agent System**: `aign_agents.py` (1645 lines) → `core/agents/` package (base_agent, json_agent, retry)
+- **智能体系统**: 拆分为独立包结构
+- **app.py Slim**: 3656→306 lines; UI layout extracted to `ui/app_layout.py`, events split into `ui/handlers_*.py`
+- **app.py精简**: 从3656行精简到306行，布局和事件处理独立
+
+### 🔧 Technical Details | 技术细节
+- **Zero Breaking Changes**: All imports updated; full backward compatibility maintained
+- **零破坏性变更**: 所有导入路径已更新，完全向后兼容
+- **Root Directory**: Reduced from 67 Python files to 4 (`app.py`, `AIGN.py`, `version.py`, `config.py`)
+- **根目录**: 从67个Python文件精简到4个
+- **Restructuring Guide**: See [docs/CODE_RESTRUCTURING.md](docs/CODE_RESTRUCTURING.md) for the full before/after comparison
+- **重构指南**: 完整重构前后对比见 [代码重构指南](docs/CODE_RESTRUCTURING.md)
+- **Detailed Changelog**: See [docs/CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md](docs/CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md)
+- **详细变更记录**: 见代码结构优化变更记录
+
+---
+
+## 📚 Previous Version: v5.1.0 (2026-06-16)
 
 **🌐 Global Context System & Anti-Truncation!** New GlobalContextUpdater agent for world-state tracking, generation truncation detection with auto-retry for outlines/characters/foreshadowing, and foreshadowing regeneration button.
-
-### ✨ Core New Features | 核心新功能
-
-#### 🌍 Global Context System | 全局设定系统
-- **GlobalContextUpdater Agent**: Tracks world-building details, character states, power dynamics across chapters
-- **全局设定智能体**: 跟踪世界观设定、角色状态、势力关系等全局信息，每章生成后自动更新
-- **Context Injection**: Global context automatically injected into writing and polishing prompts
-- **上下文注入**: 全局设定自动注入正文生成和润色流程，增强世界观一致性
-
-#### 🛡️ Generation Anti-Truncation | 生成防截断机制
-- **End Marker Detection**: `===GENERATION_COMPLETE===` markers for outline, foreshadowing, character list, and detailed outline
-- **结束标记检测**: 大纲、伏笔、人物列表、详细大纲均加入完整性标记检测
-- **Auto-Retry**: Up to 2 retries on truncation detection; keeps content and continues if still truncated (never interrupts flow)
-- **自动重试**: 截断时最多重试2次，仍截断则保留内容继续（不中断流程）
-
-#### 🔮 Foreshadowing Regeneration | 伏笔重新生成
-- **New Button**: Independent foreshadowing regeneration button in WebUI
-- **新按钮**: WebUI新增独立的伏笔重新生成按钮
-
-### 🔧 Improvements | 功能改进
-- **Last Chapter Optimization**: Skip memory/global context updates after final chapter polishing | 最后一章润色后直接结束
-- **Chapter Progress Fix**: Fixed WebUI showing chapter N+1 when generating chapter N | 修复章节进度显示偏差
-- **Default Parameters**: Target chapters 50, foreshadowing count 5, climax count 20 | 默认参数优化
-- **Prompt Enhancement**: Ending writer/embellisher prompts now include review and global context features | 结尾提示词补齐新内容
-- **Memory Prompt Enhancement**: Structured output format and quality requirements | 记忆提示词增强
-- **Token Cache Optimization**: Input field reordering for better KV Cache hit rates | Token缓存优化
 
 ---
 
 ## 📚 Previous Version: v5.0.0 (2026-06-08)
 
 **🚀 Style Template System & New AI Providers!** Major release featuring 132 style-specific prompt templates, 2 new AI providers (oMLX + ZenMux), storyline Markdown parser, and more.
-
----
-
-## 📚 Previous Version: v4.9.1 (2026-03-16)
-
-**🔧 JSON Repair Enhancement & WebUI Progress Fix!** Integrated [json_repair](https://github.com/mangiucugna/json_repair) library for robust JSON parsing, improved WebUI storyline progress tracking, and fixed LM Studio API compatibility.
 
 ---
 
@@ -341,17 +337,24 @@ python app.py
 
 ## 🔧 高级配置
 
-### 📁 文件结构
+### 📁 文件结构 (v5.2.0 模块化架构)
 ```
 AI_Gen_Novel/
-├── app.py                 # 主应用程序
-├── config_template.py     # 配置模板
-├── AIGN.py               # 核心生成逻辑
-├── auto_save_manager.py  # 自动保存管理
-├── local_data_manager.py # 本地数据管理
-├── output/               # 生成的小说文件（不上传）
-├── autosave/            # 自动保存数据（不上传）
-└── uniai/               # AI提供商适配器
+├── AIGN.py                 # 核心生成引擎（Mixin组合）
+├── app.py                  # Web界面入口
+├── version.py              # 版本信息
+├── core/                   # 核心生成逻辑（写作/大纲/故事线/智能体）
+├── ui/                     # Web界面组件（布局/事件处理/组件）
+├── config/                 # 配置管理
+├── storage/                # 数据持久层（自动保存/本地存储）
+├── providers/              # AI提供商层
+│   └── uniai/              # 14个AI提供商适配器
+├── tts/                    # TTS处理（实验性）
+├── utils/                  # 工具模块
+├── scripts/                # 构建与部署脚本
+├── prompts/                # 提示词模板（132个风格专用）
+├── output/                 # 生成的小说文件（不上传）
+└── autosave/               # 自动保存数据（不上传）
 ```
 
 ### ⚙️ 配置文件说明
@@ -377,14 +380,17 @@ TEMPERATURE_SETTINGS = {
 
 > 本 README 仅保留最近 5 次更新及大版本（x.0.0）更新记录，完整历史见 [CHANGELOG.md](CHANGELOG.md)。
 
+### v5.2.0 (2026-06-17) 🚀
+- 🏗️ **代码结构重构**：67个根目录Python文件重组为8个模块化包（core/ui/config/storage/providers/tts/utils/scripts）
+- 📐 **AIGN.py Mixin分解**：从7489行精简到2155行，提取StatisticsMixin、AutoGenerationMixin、OutlineMixin、StorylineMixin、WritingMixin
+- 📐 **app.py精简**：从3656行精简到306行，布局提取到ui/app_layout.py
+- 🔧 **智能体系统重构**：aign_agents.py拆分为core/agents/包（base_agent、json_agent、retry）
+- ✅ **零破坏性变更**：所有241处旧名导入迁移完成，完全向后兼容
+
 ### v5.1.0 (2026-06-16) 🚀
 - 🌍 **全局设定系统（GlobalContextUpdater）**：全新全局设定智能体，跟踪世界观设定、角色状态、势力关系等全局信息
 - 🛡️ **生成防截断机制**：大纲、伏笔、人物列表、详细大纲均加入===GENERATION_COMPLETE===结束标记检测和自动重试
 - 🔮 **伏笔重新生成按钮**：WebUI新增独立的伏笔重新生成按钮
-- ⚡ **最后一章优化**：最后一章润色完成后直接结束，不再执行多余的记忆和全局设定更新
-- 🔧 **章节进度修正**：修复WebUI章节进度显示偏差（显示的章节号比实际生成的多1）
-- 📊 **默认参数优化**：默认目标章节数50、默认伏笔数量5、默认高潮数量20
-- 📝 **正文/润色提示词增强**：结尾正文和结尾润色提示词补齐审查、全局设定等新内容
 - 💾 **Token缓存优化**：新增输入字段重排序机制，提升KV Cache命中率
 
 ### v5.0.0 (2026-06-08) 🚀
@@ -392,11 +398,6 @@ TEMPERATURE_SETTINGS = {
 - 🌐 **oMLX AI提供商**：Mac优化本地LLM推理服务器支持，OpenAI兼容API
 - 🌐 **ZenMux AI提供商**：统一AI模型路由服务，支持reasoning_effort思考强度控制和提供商路由
 - 📖 **故事线Markdown解析器**：支持Markdown↔dict双向转换，YAML front matter元数据
-- 🚧 **Fish Audio S2语气标记功能**：实验性功能，已包含在代码中但UI中暂时隐藏
-
-### v4.9.1 (2026-03-16) 🎉
-- 🔧 **JSON修复增强**：集成json_repair库替代手写正则修复，大幅提升JSON解析成功率
-- 📊 **WebUI故事线进度改进**：修复假超时问题，完成后显示章节标题预览和失败统计
 
 ### v4.9.0 (2026-03-15) 🎉
 - 🛡️ **润色截断检测与重试系统**：通过完成标识、句子完整性和长度比率三重检测，支持3次自动重试
@@ -405,7 +406,6 @@ TEMPERATURE_SETTINGS = {
 ### v4.8.0 (2026-03-12) 🎉
 - 🔮 **伏笔/反转生成系统**：全新伏笔设计专家智能体，根据大纲自动生成伏笔和反转
 - 📝 **实时文本框同步**：写作想法、写作要求、润色要求每次API调用都从文本框实时读取
-- 📊 **目标章节数引导大纲**：目标章节数滑块移至创意输入面板
 
 ### v4.0.0 (2026-01-21) 🚀
 - 🔍 **RAG风格学习**：与AI_Gen_Novel_Style_RAG服务集成，语义检索风格一致的写作参考
@@ -427,6 +427,7 @@ TEMPERATURE_SETTINGS = {
 - 🔧 [配置指南](README_Provider_Config.md) - AI提供商配置
 - 💾 [数据管理](LOCAL_DATA_MANAGEMENT.md) - 本地数据管理
 - 🏗️ [架构文档](ARCHITECTURE.md) - 系统架构设计
+- 📦 [代码重构指南](docs/CODE_RESTRUCTURING.md) - v5.2.0模块化架构重构说明
 - 🚀 [优化策略探索](docs/optimization_strategies/) - 下一步功能优化计划和可行性分析
 
 ## ❓ 常见问题
@@ -538,7 +539,7 @@ Made with ❤️ by AI Novel Generator Team
 
 版本历史仅保留**最近 5 次更新**及**大版本更新**（v3.0、v4.0、v5.0）。详见：
 
-- [What's New in v5.1.0](#-whats-new-in-v510-2026-06-16) — 最新版本详情
+- [What's New in v5.2.0](#-whats-new-in-v520-2026-06-17) — 最新版本详情
 - [Version History | 版本历史](#-version-history--版本历史) — 保留的版本记录
 - [CHANGELOG.md](CHANGELOG.md) — 全部历史版本
 
@@ -658,6 +659,7 @@ python app.py
 - ⚙️ [配置指南](README_Provider_Config.md) - AI提供商配置
 - 💾 [数据管理](LOCAL_DATA_MANAGEMENT.md) - 本地数据管理
 - 🏗️ [架构文档](ARCHITECTURE.md) - 系统架构设计
+- 📦 [代码重构指南](docs/CODE_RESTRUCTURING.md) - v5.2.0模块化架构重构说明
 
 ### ❓ 常见问题
 

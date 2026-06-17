@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "5.1.0"
+__version__ = "5.2.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-06-16)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-06-17)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,7 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "代码结构重构：从根目录67个Python文件平铺架构升级为8个模块化包（core/ui/config/storage/providers/tts/utils/scripts），AIGN.py从7489行精简到2155行，app.py从3656行精简到306行",
         "全局设定系统（GlobalContextUpdater）：全新全局设定智能体，跟踪世界观设定、角色状态、势力关系等全局信息，每章生成后自动更新全局设定上下文",
         "生成防截断机制：大纲、伏笔、人物列表、详细大纲生成均加入===GENERATION_COMPLETE===结束标记检测和自动重试，最多重试2次后保留内容继续（不中断流程）",
         "伏笔重新生成按钮：WebUI新增独立的伏笔重新生成按钮，与标题和人物重新生成按钮功能一致",
