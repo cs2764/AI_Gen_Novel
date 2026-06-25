@@ -348,7 +348,7 @@ class ManagerCoordinator:
     def full_generation_workflow(self, user_idea: str, 
                                  user_requirements: str = "",
                                  embellishment_idea: str = "",
-                                 target_chapter_count: int = 20) -> bool:
+                                 target_chapter_count: int = 50) -> bool:
         """
         完整的小说生成工作流程
         

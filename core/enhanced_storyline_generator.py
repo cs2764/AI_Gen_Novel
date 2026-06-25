@@ -18,6 +18,13 @@ except ImportError:
 
 from core.storyline_error_handler import StorylineErrorHandlerMixin
 from core.storyline_truncation import StorylineTruncationMixin
+from core.storyline_chapter_utils import (
+    extract_chapter_range_from_text,
+    infer_chapter_range_from_chapters,
+    normalize_batch_chapters,
+    dedupe_chapters_by_number,
+    normalize_chapter_title,
+)
 
 
 class EnhancedStorylineGenerator(StorylineErrorHandlerMixin, StorylineTruncationMixin):
@@ -28,6 +35,8 @@ class EnhancedStorylineGenerator(StorylineErrorHandlerMixin, StorylineTruncation
         self.aign_instance = aign_instance  # 用于更新实时数据流窗口
         self.max_retries = 2
         self.provider_name = self._detect_provider()
+        self._batch_start_chapter: Optional[int] = None
+        self._batch_end_chapter: Optional[int] = None
         
         # Token 计数（用于显示详细token使用信息）
         try:
@@ -868,12 +877,35 @@ class EnhancedStorylineGenerator(StorylineErrorHandlerMixin, StorylineTruncation
             print(f"❌ 结构验证出错: {e}")
             return False
     
+    def _get_batch_chapter_range(
+        self,
+        messages: List[Dict[str, str]],
+    ) -> Optional[Tuple[int, int]]:
+        """获取当前批次的章节范围（优先使用调用方显式传入的范围）。"""
+        if self._batch_start_chapter and self._batch_end_chapter:
+            return self._batch_start_chapter, self._batch_end_chapter
+        for message in messages:
+            if message.get("role") == "user" and message.get("content"):
+                chapter_range = extract_chapter_range_from_text(message["content"])
+                if chapter_range:
+                    return chapter_range
+        return None
+
+    def _get_expected_chapter_count(self, messages: List[Dict[str, str]]) -> int:
+        chapter_range = self._get_batch_chapter_range(messages)
+        if chapter_range:
+            start, end = chapter_range
+            return end - start + 1
+        return self._extract_chapter_count_from_messages(messages)
+
     def generate_storyline_batch(
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.8,
         require_segments: bool = True,
-        segment_count: int = 4
+        segment_count: int = 4,
+        start_chapter: Optional[int] = None,
+        end_chapter: Optional[int] = None,
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         生成故事线批次，统一使用Markdown格式：
@@ -894,31 +926,41 @@ class EnhancedStorylineGenerator(StorylineErrorHandlerMixin, StorylineTruncation
         print(f"📋 require_segments: {require_segments} (类型: {type(require_segments).__name__})")
         print(f"📦 segment_count: {segment_count} (类型: {type(segment_count).__name__})")
         print(f"📝 输出格式: Markdown（统一格式）")
+        if start_chapter and end_chapter:
+            print(f"🎯 批次章节范围: 第{start_chapter}-{end_chapter}章（共{end_chapter - start_chapter + 1}章）")
         if require_segments:
             print(f"✅ 分段要求: 需要{segment_count}段")
         else:
             print(f"✅ 分段要求: 仅需梗概，不要求分段")
         print("🚀" * 35 + "\n")
 
-        # 方法1: Markdown格式生成（所有提供商统一使用）
-        data, status = self.generate_with_fallback_repair(messages, temperature, require_segments, segment_count)
-        if data:
-            self._log_successful_generation("markdown_generation", 1, data)
-            return data, status
-
-        # 方法2: 渐进式生成（针对容易截断的场景）
-        print("🔄 Markdown主方法失败，尝试渐进式生成策略...")
-        expected_count = self._extract_chapter_count_from_messages(messages)
-        if expected_count > 3:
-            data, status = self._attempt_progressive_generation(messages, expected_count, require_segments, segment_count)
+        self._batch_start_chapter = start_chapter
+        self._batch_end_chapter = end_chapter
+        try:
+            # 方法1: Markdown格式生成（所有提供商统一使用）
+            data, status = self.generate_with_fallback_repair(messages, temperature, require_segments, segment_count)
             if data:
-                print(f"✅ 渐进式生成成功：{status}")
+                data = self._post_process_storyline(data, messages)
+                self._log_successful_generation("markdown_generation", 1, data)
                 return data, status
 
-        # 所有方法都失败
-        print("❌ 所有生成方法都失败，跳过此批次")
-        self._save_error_data("all_methods_failed", messages, "", "All generation methods failed")
-        return None, "all_methods_failed"
+            # 方法2: 渐进式生成（针对容易截断的场景）
+            print("🔄 Markdown主方法失败，尝试渐进式生成策略...")
+            expected_count = self._get_expected_chapter_count(messages)
+            if expected_count > 3:
+                data, status = self._attempt_progressive_generation(messages, expected_count, require_segments, segment_count)
+                if data:
+                    data = self._post_process_storyline(data, messages)
+                    print(f"✅ 渐进式生成成功：{status}")
+                    return data, status
+
+            # 所有方法都失败
+            print("❌ 所有生成方法都失败，跳过此批次")
+            self._save_error_data("all_methods_failed", messages, "", "All generation methods failed")
+            return None, "all_methods_failed"
+        finally:
+            self._batch_start_chapter = None
+            self._batch_end_chapter = None
     
     def _attempt_progressive_generation(self, messages: List[Dict[str, str]], expected_count: int, require_segments: bool = True, segment_count: int = 4) -> Tuple[Optional[Dict[str, Any]], str]:
         """渐进式生成：如果10章失败，尝试5章，如果5章失败，尝试3章"""
@@ -1222,33 +1264,66 @@ class EnhancedStorylineGenerator(StorylineErrorHandlerMixin, StorylineTruncation
         except UnicodeEncodeError:
             print(f"   • UTF-8编码: 可能有问题")
     
+    def _post_process_storyline(
+        self,
+        data: Optional[Dict[str, Any]],
+        messages: List[Dict[str, str]],
+    ) -> Optional[Dict[str, Any]]:
+        """生成后规范化：去重、修正章节号、统一标题格式。"""
+        if not data or not isinstance(data.get("chapters"), list):
+            return data
+
+        chapter_range = self._get_batch_chapter_range(messages)
+
+        if chapter_range:
+            start_chapter, end_chapter = chapter_range
+            normalized, meta = normalize_batch_chapters(data["chapters"], start_chapter, end_chapter)
+            if not normalized and data["chapters"]:
+                inferred = infer_chapter_range_from_chapters(data["chapters"])
+                if inferred:
+                    print(f"⚠️ 显式范围第{start_chapter}-{end_chapter}章无匹配，尝试章号推断 {inferred}")
+                    normalized, meta = normalize_batch_chapters(data["chapters"], inferred[0], inferred[1])
+            data["chapters"] = normalized
+            if meta.get("out_of_range_dropped"):
+                print(f"🔧 后处理：丢弃范围外章节 {meta['out_of_range_dropped']} 条")
+        else:
+            chapters, dupes = dedupe_chapters_by_number(data["chapters"])
+            for chapter in chapters:
+                ch_num = chapter.get("chapter_number", 0)
+                if ch_num:
+                    chapter["title"] = normalize_chapter_title(chapter.get("title", ""), ch_num)
+            if dupes:
+                print(f"🔧 生成后去重：移除重复章节号 {sorted(set(dupes))}")
+            data["chapters"] = chapters
+
+        return data
+
     def _extract_chapter_count_from_messages(self, messages: List[Dict[str, str]]) -> int:
         """从消息中提取期望的章节数量"""
+        chapter_range = self._get_batch_chapter_range(messages)
+        if chapter_range:
+            start, end = chapter_range
+            return end - start + 1
+
         for message in messages:
             if message.get("role") == "user" and "content" in message:
                 content = message["content"]
                 
-                # 寻找章节范围指示
+                # 仅匹配显式批次范围，避免误匹配大纲中的阶段范围
                 range_patterns = [
-                    r"第(\d+)-(\d+)章",  # 第31-40章
-                    r"(\d+)-(\d+)章",    # 31-40章
-                    r"章节范围.*?(\d+)-(\d+)",  # 章节范围: 31-40
-                    r"生成(\d+)章",      # 生成10章
+                    r"\*\*章节范围:\*\*\s*(\d+)\s*-\s*(\d+)\s*章",
+                    r"章节范围\s*[：:]\s*(\d+)\s*-\s*(\d+)\s*章",
+                    r"请为第\s*(\d+)\s*章到第\s*(\d+)\s*章",
                 ]
                 
                 for pattern in range_patterns:
                     matches = re.search(pattern, content)
                     if matches:
-                        if len(matches.groups()) == 2:
-                            start, end = int(matches.group(1)), int(matches.group(2))
-                            return end - start + 1
-                        elif len(matches.groups()) == 1:
-                            return int(matches.group(1))
+                        start, end = int(matches.group(1)), int(matches.group(2))
+                        return end - start + 1
                 
-                # 如果找不到明确的范围，默认返回10
-                if "第31章到第40章" in content or "31-40章" in content:
-                    return 10
-                elif "生成完整的10章" in content:
-                    return 10
+                match = re.search(r"生成(\d+)章", content)
+                if match:
+                    return int(match.group(1))
         
         return 10  # 默认值

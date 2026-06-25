@@ -77,7 +77,7 @@ def bind_main_events(
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 
                 # 同步目标章节数
-                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 100)
+                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 50)
                 
                 # 初始化状态历史
                 if not hasattr(a, 'global_status_history'):
@@ -91,7 +91,7 @@ def bind_main_events(
                 
                 # 添加开始状态
                 # 同步伏笔数量设置
-                a.foreshadowing_count = int(foreshadowing_count) if foreshadowing_count else 3
+                a.foreshadowing_count = int(foreshadowing_count) if foreshadowing_count else 8
                 
                 status_history.append(["系统", "🚀 开始生成大纲、标题、伏笔和人物列表...", start_timestamp, generation_start_time])
                 
@@ -674,7 +674,7 @@ def bind_main_events(
                     yield ("⚠️ 请先生成或输入大纲后再生成伏笔", "")
                     return
                 
-                foreshadowing_count = getattr(a, 'foreshadowing_count', 5)
+                foreshadowing_count = getattr(a, 'foreshadowing_count', 8)
                 if foreshadowing_count <= 0:
                     yield ("ℹ️ 伏笔数量为0，跳过伏笔生成", "")
                     return
@@ -869,7 +869,7 @@ def bind_main_events(
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
                 a.character_list = character_list or getattr(a, 'character_list', '')
-                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
+                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 50)
                 # 同步伏笔设定
                 if foreshadowing is not None:
                     a.foreshadowing = foreshadowing
@@ -1091,7 +1091,7 @@ def bind_main_events(
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.novel_outline = outline or getattr(a, 'novel_outline', '')
                 a.character_list = character_list or getattr(a, 'character_list', '')
-                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
+                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 50)
                 # 同步伏笔设定
                 if foreshadowing is not None:
                     a.foreshadowing = foreshadowing
@@ -1526,18 +1526,21 @@ def bind_main_events(
                     status_history.append(["重复章节修复", "🔧 开始检查和修复重复章节...", start_timestamp, datetime.now()])
                     
                     if hasattr(a, 'storyline') and a.storyline and a.storyline.get('chapters'):
+                        from core.storyline_chapter_utils import (
+                            dedupe_chapters_by_number,
+                            finalize_storyline_chapters,
+                        )
                         chapters = a.storyline['chapters']
                         original_count = len(chapters)
-                        
-                        seen_titles = set()
-                        unique_chapters = []
-                        
-                        for chapter in chapters:
-                            title = chapter.get('title', '') if isinstance(chapter, dict) else str(chapter)[:50]
-                            if title not in seen_titles:
-                                seen_titles.add(title)
-                                unique_chapters.append(chapter)
-                        
+                        target = getattr(a, 'target_chapter_count', 0) or original_count
+
+                        if target > 0:
+                            unique_chapters, _ = finalize_storyline_chapters(chapters, target)
+                        else:
+                            unique_chapters, dupes = dedupe_chapters_by_number(chapters)
+                            if dupes:
+                                print(f"⚠️ 去重：移除重复章节号 {sorted(set(dupes))}")
+
                         a.storyline['chapters'] = unique_chapters
                         removed_count = original_count - len(unique_chapters)
                         
@@ -1821,7 +1824,7 @@ def bind_main_events(
                 a.user_requirements = user_requirements or getattr(a, 'user_requirements', '')
                 a.embellishment_idea = embellishment_idea or getattr(a, 'embellishment_idea', '')
                 a.novel_outline = novel_outline or getattr(a, 'novel_outline', '')
-                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 20)
+                a.target_chapter_count = int(target_chapters) if target_chapters else getattr(a, 'target_chapter_count', 50)
                 # 同步伏笔设定
                 if foreshadowing is not None:
                     a.foreshadowing = foreshadowing
@@ -2264,7 +2267,7 @@ def bind_main_events(
                         
                         # 获取风格和精简模式设置
                         style_name = getattr(a, 'style_name', '无')
-                        compact_mode = getattr(a, 'compact_mode', True)
+                        compact_mode = getattr(a, 'compact_mode', False)
                         
                         status_msg = f"✅ 存档载入成功！\n\n📚 标题: {getattr(a, 'novel_title', '未知')}\n📊 进度: {getattr(a, 'chapter_count', 0)}/{getattr(a, 'target_chapter_count', 0)}章\n📝 正文: {len(getattr(a, 'novel_content', '') or '')}字符\n📚 风格: {style_name}\n🎯 精简模式: {'开启' if compact_mode else '关闭'}\n\n💡 可点击'开始自动生成'继续生成"
                         
@@ -2272,7 +2275,7 @@ def bind_main_events(
                             getattr(a, 'user_idea', '') or '',
                             getattr(a, 'user_requirements', '') or '',
                             getattr(a, 'embellishment_idea', '') or '',
-                            getattr(a, 'target_chapter_count', 20),
+                            getattr(a, 'target_chapter_count', 50),
                             getattr(a, 'novel_outline', '') or '',
                             getattr(a, 'novel_title', '') or '',
                             getattr(a, 'character_list', '') or '',

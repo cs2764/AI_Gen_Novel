@@ -2490,7 +2490,7 @@ def create_gradio5_original_app():
                                     cache_display = f"{cache_stats}"
                             
                             # 计算预计总字数（基于实际平均值）
-                            target_chapters = getattr(aign_instance, 'target_chapter_count', 100)
+                            target_chapters = getattr(aign_instance, 'target_chapter_count', 50)
                             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
                             current_chars = content_stats.get('total_chars', 0)
                             
@@ -2582,7 +2582,7 @@ def create_gradio5_original_app():
                                 auto_save_info = "检查失败"
 
                             # 计算预计总字数（简化版，基于实际平均值）
-                            target_chapters = getattr(aign_instance, 'target_chapter_count', 100)
+                            target_chapters = getattr(aign_instance, 'target_chapter_count', 50)
                             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
                             
                             # 基于已生成内容计算实际平均字数
@@ -2682,7 +2682,7 @@ def create_gradio5_original_app():
                                 getattr(aign_instance, 'novel_title', '') or '',    # novel_title_text
                                 getattr(aign_instance, 'character_list', '') or '', # character_list_text
                                 getattr(aign_instance, 'detailed_outline', '') or '', # detailed_outline_text
-                                getattr(aign_instance, 'target_chapter_count', 100),  # target_chapters_slider
+                                getattr(aign_instance, 'target_chapter_count', 50),  # target_chapters_slider
                                 format_storyline_display(getattr(aign_instance, 'storyline', None)) if hasattr(aign_instance, 'storyline') and aign_instance.storyline else "暂无故事线内容"  # storyline_text
                             ]
                         else:
@@ -3326,7 +3326,7 @@ def create_gradio5_original_app():
                         import_button_state = check_auto_saved_data()
                         
                         # 获取剧情紧凑度设置
-                        chapters_per_plot = getattr(aign_instance, 'chapters_per_plot', 5)
+                        chapters_per_plot = getattr(aign_instance, 'chapters_per_plot', 2)
                         num_climaxes = getattr(aign_instance, 'num_climaxes', 20)
                         print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
 
@@ -3339,7 +3339,7 @@ def create_gradio5_original_app():
                         return [provider_info, main_data[0], "", "", main_data[1], main_data[2], main_data[3], main_data[4], main_data[5], main_data[6], import_button_state, chapters_per_plot, num_climaxes]
                     except Exception as e:
                         print(f"⚠️ 合并页面加载失败: {e}")
-                        return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), 5, 5]
+                        return ["配置加载失败"] + [""] * 9 + [gr.Button(visible=False), 2, 20]
 
 
                 demo.load(

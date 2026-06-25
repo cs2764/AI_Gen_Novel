@@ -39,8 +39,17 @@ class OutlineGenerator:
         
         通过检查 ===GENERATION_COMPLETE=== 结束标记和内容最低长度来判断。
         
+        注意：getOutput() 使用 "# key" 格式解析输出。当模型按格式输出：
+            # 伏笔与反转设定
+            [内容]
+            # END
+            ===GENERATION_COMPLETE===
+        解析器遇到 "# END" 时会切换到新 section，因此 ===GENERATION_COMPLETE===
+        不会包含在目标 output_key 的 section 内容中。
+        所以这里同时检查 ===GENERATION_COMPLETE=== 和内容是否被 # END 正常截断。
+        
         Args:
-            content: 生成的内容
+            content: 生成的内容（解析后的 section 内容）
             content_type: 内容类型名称（如"大纲"、"人物列表"等）
             min_length: 最低长度阈值
             
@@ -50,15 +59,48 @@ class OutlineGenerator:
         if not content or not content.strip():
             return (True, "内容为空")
         
+        # 检查1：结束标记是否存在
+        # 由于 getOutput 的 # key 解析机制，===GENERATION_COMPLETE=== 可能
+        # 在 # END section 中而不在当前 section 中。
+        # 因此同时检查：
+        # - ===GENERATION_COMPLETE=== 在内容中（模型没有使用 # END 格式时）
+        # - 内容本身合理完整（模型使用了 # END 格式，标记被解析器分离到 END section）
+        has_complete_marker = self.GENERATION_COMPLETE_MARKER in content
+        
+        # 检查内容末尾是否自然结束（被 # END 截断的内容通常不会在中间断开）
+        # 如果内容长度 >= min_length 且没有在句子中间断开，认为是 # END 正常截断
+        content_stripped = content.strip()
+        
+        # 判断是否被 # END 正常截断：内容足够长且末尾是自然结束
+        # （中文句号、感叹号、换行、列表项结尾等）
+        natural_endings = ('。', '！', '？', '）', '」', '】', '\n', '…', 
+                          '.', '!', '?', ')', ']', '>', '-', '：', ':',
+                          '※', '★', '☆', '✓', '✔')
+        ends_naturally = any(content_stripped.endswith(e) for e in natural_endings) if content_stripped else False
+        
+        # 如果有完整标记，或者内容足够长且自然结束，认为未截断
+        if has_complete_marker:
+            return (False, "内容完整")
+        
         reasons = []
         
-        # 检查1：结束标记是否存在
-        if self.GENERATION_COMPLETE_MARKER not in content:
-            reasons.append("缺少===GENERATION_COMPLETE===结束标记")
+        # 如果内容足够长且自然结束，很可能是 # END 正常截断掉了标记
+        if len(content_stripped) >= min_length and ends_naturally:
+            # 这种情况下不视为截断
+            return (False, "内容完整（# END 截断标记）")
+        
+        # 内容不够长或不自然结束，可能真的被截断了
+        if not has_complete_marker and not ends_naturally:
+            reasons.append("缺少===GENERATION_COMPLETE===结束标记且内容未自然结束")
+        elif not has_complete_marker:
+            # 有自然结束但内容太短
+            if len(content_stripped) < min_length:
+                reasons.append(f"内容过短（{len(content_stripped)}字符 < {min_length}字符最低阈值）")
         
         # 检查2：内容长度是否低于最低阈值
-        if len(content.strip()) < min_length:
-            reasons.append(f"内容过短（{len(content.strip())}字符 < {min_length}字符最低阈值）")
+        if len(content_stripped) < min_length:
+            if f"内容过短" not in (reasons[0] if reasons else ""):
+                reasons.append(f"内容过短（{len(content_stripped)}字符 < {min_length}字符最低阈值）")
         
         is_truncated = len(reasons) > 0
         reason = "；".join(reasons) if reasons else "内容完整"
@@ -214,7 +256,7 @@ class OutlineGenerator:
             inputs = {
                 "用户想法": self.aign.user_idea,
                 "写作要求": getattr(self.aign, 'user_requirements', ''),
-                "目标章节数": str(getattr(self.aign, 'target_chapter_count', 100)),
+                "目标章节数": str(getattr(self.aign, 'target_chapter_count', 50)),
                 "风格参考": rag_references,
             }
             resp_content, was_truncated = self._generate_with_truncation_retry(
@@ -471,7 +513,7 @@ class OutlineGenerator:
             self.aign.foreshadowing = ""
             return ""
         
-        foreshadowing_count = getattr(self.aign, 'foreshadowing_count', 3)
+        foreshadowing_count = getattr(self.aign, 'foreshadowing_count', 8)
         if foreshadowing_count <= 0:
             print("ℹ️ 伏笔数量为0，跳过伏笔生成")
             self.aign.foreshadowing = ""
@@ -688,8 +730,8 @@ class OutlineGenerator:
         try:
             from core.dynamic_plot_structure import generate_plot_structure, format_structure_for_prompt
             # 传递用户自定义的剧情紧凑度设置
-            chapters_per_plot = getattr(self.aign, 'chapters_per_plot', 5)
-            num_climaxes = getattr(self.aign, 'num_climaxes', 10)
+            chapters_per_plot = getattr(self.aign, 'chapters_per_plot', 2)
+            num_climaxes = getattr(self.aign, 'num_climaxes', 20)
             plot_structure = generate_plot_structure(
                 self.aign.target_chapter_count, 
                 chapters_per_plot=chapters_per_plot,

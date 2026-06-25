@@ -1,38 +1,38 @@
-# 🤖 AI Novel Generator v5.2.0 | AI 网络小说生成器
+# 🤖 AI Novel Generator v5.3.0 | AI 网络小说生成器
 
 [中文文档](#中文文档) | [English Documentation](#english-documentation)
 
 ---
 
-## 🎉 What's New in v5.2.0 (2026-06-17)
+## 🎉 What's New in v5.3.0 (2026-06-25)
 
-**🏗️ Code Structure Refactoring!** Complete modular architecture overhaul — 67 root-level Python files reorganized into 8 packages (`core/`, `ui/`, `config/`, `storage/`, `providers/`, `tts/`, `utils/`, `scripts/`). AIGN.py reduced from 7489→2155 lines via Mixin pattern. app.py from 3656→306 lines.
+**🔧 Chapter Title System & EPUB Validation!** Complete overhaul of the chapter title architecture with 3-layer completion cascade, EPUB post-generation 3-way validation, retry mechanism fix to prevent duplicate chapters, and storyline deduplication at batch and global levels.
 
 ### ✨ Core Changes | 核心变更
 
-#### 🏗️ Modular Package Architecture | 模块化包架构
-- **8 Packages**: `core/`, `ui/`, `config/`, `storage/`, `providers/`, `tts/`, `utils/`, `scripts/`
-- **8个模块包**: 核心引擎/界面/配置/存储/AI提供商/TTS/工具/脚本
-- **AIGN.py Mixin Decomposition**: 7489→2155 lines; extracted `StatisticsMixin`, `AutoGenerationMixin`, `OutlineMixin`, `StorylineMixin`, `WritingMixin`
-- **AIGN.py Mixin分解**: 从7489行精简到2155行，提取5个Mixin模块
-- **Agent System**: `aign_agents.py` (1645 lines) → `core/agents/` package (base_agent, json_agent, retry)
-- **智能体系统**: 拆分为独立包结构
-- **app.py Slim**: 3656→306 lines; UI layout extracted to `ui/app_layout.py`, events split into `ui/handlers_*.py`
-- **app.py精简**: 从3656行精简到306行，布局和事件处理独立
+#### 📖 Chapter Title Architecture | 章节标题系统重构
+- **3-Layer Title Completion**: Validation → Heuristic inference → LLM batch generation cascade
+- **三层标题补全**: 验证→启发式推断→LLM批量生成三级级联
+- **New Modules**: `core/storyline_chapter_utils.py`, `core/storyline_title_service.py`, `core/chapter_content_utils.py`
+- **新增模块**: 故事线章节工具/标题服务/正文解析三个专用模块
+
+#### 📊 EPUB Validation & Retry Fix | EPUB校验与重试修复
+- **3-Way Chapter Count Validation**: EPUB vs parsed vs target chapter count comparison with diagnostic output
+- **三方章节数校验**: EPUB章节数 vs txt解析数 vs 目标章节数，自动诊断输出
+- **Duplicate Chapter Prevention**: Detects committed content before retry to prevent duplicate chapters
+- **防止重复章节**: 重试前检测paragraph_list增长，已提交内容则跳过重试
 
 ### 🔧 Technical Details | 技术细节
-- **Zero Breaking Changes**: All imports updated; full backward compatibility maintained
-- **零破坏性变更**: 所有导入路径已更新，完全向后兼容
-- **Root Directory**: Reduced from 67 Python files to 4 (`app.py`, `AIGN.py`, `version.py`, `config.py`)
-- **根目录**: 从67个Python文件精简到4个
-- **Restructuring Guide**: See [docs/CODE_RESTRUCTURING.md](docs/CODE_RESTRUCTURING.md) for the full before/after comparison
-- **重构指南**: 完整重构前后对比见 [代码重构指南](docs/CODE_RESTRUCTURING.md)
-- **Detailed Changelog**: See [docs/CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md](docs/CODE_STRUCTURE_OPTIMIZATION_CHANGELOG.md)
-- **详细变更记录**: 见代码结构优化变更记录
+- **max_tokens=65536**: All major agents (outline/storyline/character/foreshadowing) now support thinking-chain models with large reasoning tokens
+- **max_tokens=65536**: 全部主要智能体支持含reasoning token的思维链模型
+- **Default Tuning**: `chapters_per_plot` 5→2, `num_climaxes` 10→20 for better default novel structure
+- **参数调优**: chapters_per_plot 5→2，num_climaxes 10→20，默认结构更合理
+- **Detailed Changelog**: See [CHANGELOG.md](CHANGELOG.md) for the full change list
+- **详细变更记录**: 完整变更列表见 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
-## 📚 Previous Version: v5.1.0 (2026-06-16)
+## 📚 Previous Version: v5.2.0 (2026-06-17)
 
 **🌐 Global Context System & Anti-Truncation!** New GlobalContextUpdater agent for world-state tracking, generation truncation detection with auto-retry for outlines/characters/foreshadowing, and foreshadowing regeneration button.
 
@@ -380,6 +380,13 @@ TEMPERATURE_SETTINGS = {
 
 > 本 README 仅保留最近 5 次更新及大版本（x.0.0）更新记录，完整历史见 [CHANGELOG.md](CHANGELOG.md)。
 
+### v5.3.0 (2026-06-25) 🔧
+- 📖 **章节标题系统重构**：三层补全架构（验证→启发式推断→LLM批量生成），新增storyline_chapter_utils/storyline_title_service/chapter_content_utils三个专用模块
+- 📊 **EPUB生成后三方校验**：EPUB章节数 vs txt解析数 vs 目标章节数自动对比诊断
+- 🔧 **重试机制修复**：检测paragraph_list已增长后跳过重试，彻底防止重复章节生成
+- 📚 **故事线去重**：批次级+全局双重去重，自动修正章节号偏移
+- ⚡ **max_tokens=65536**：全部主要生成器支持含reasoning token的思维链模型
+
 ### v5.2.0 (2026-06-17) 🚀
 - 🏗️ **代码结构重构**：67个根目录Python文件重组为8个模块化包（core/ui/config/storage/providers/tts/utils/scripts）
 - 📐 **AIGN.py Mixin分解**：从7489行精简到2155行，提取StatisticsMixin、AutoGenerationMixin、OutlineMixin、StorylineMixin、WritingMixin
@@ -402,10 +409,6 @@ TEMPERATURE_SETTINGS = {
 ### v4.9.0 (2026-03-15) 🎉
 - 🛡️ **润色截断检测与重试系统**：通过完成标识、句子完整性和长度比率三重检测，支持3次自动重试
 - 📏 **标题长度严格限制**：标题字数收紧为严格不超过10字
-
-### v4.8.0 (2026-03-12) 🎉
-- 🔮 **伏笔/反转生成系统**：全新伏笔设计专家智能体，根据大纲自动生成伏笔和反转
-- 📝 **实时文本框同步**：写作想法、写作要求、润色要求每次API调用都从文本框实时读取
 
 ### v4.0.0 (2026-01-21) 🚀
 - 🔍 **RAG风格学习**：与AI_Gen_Novel_Style_RAG服务集成，语义检索风格一致的写作参考
@@ -539,7 +542,7 @@ Made with ❤️ by AI Novel Generator Team
 
 版本历史仅保留**最近 5 次更新**及**大版本更新**（v3.0、v4.0、v5.0）。详见：
 
-- [What's New in v5.2.0](#-whats-new-in-v520-2026-06-17) — 最新版本详情
+- [What's New in v5.3.0](#-whats-new-in-v530-2026-06-25) — 最新版本详情
 - [Version History | 版本历史](#-version-history--版本历史) — 保留的版本记录
 - [CHANGELOG.md](CHANGELOG.md) — 全部历史版本
 

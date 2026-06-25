@@ -53,7 +53,7 @@ def update_progress(aign_instance):
             auto_save_info = _check_auto_save_status()
 
             # 计算预计总字数（基于实际平均值）
-            target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
+            target_chapters = getattr(aign_instance, 'target_chapter_count', 50)
             current_chapter_count = getattr(aign_instance, 'chapter_count', 0)
             current_novel_content = getattr(aign_instance, 'novel_content', '')
             
@@ -105,6 +105,21 @@ def update_progress(aign_instance):
                     progress_text += f"\n\n{token_report}"
                 if time_report:
                     progress_text += f"\n\n{time_report}"
+
+                integrity = completion_info.get('chapter_integrity') or {}
+                epub_count = completion_info.get('epub_chapter_count')
+                target = completion_info.get('target_chapter_count') or generation_status.get('target_chapters', 0)
+                if integrity and not integrity.get('complete'):
+                    progress_text += f"\n\n⚠️ 章节完整性提示:"
+                    if integrity.get('missing_header_positions'):
+                        nums = integrity['missing_header_positions']
+                        progress_text += f"\n• {len(nums)} 个段落缺少标准章节标题（位置: {','.join(str(n) for n in nums[:15])}{'...' if len(nums) > 15 else ''}）"
+                    if integrity.get('wrong_number_positions'):
+                        progress_text += f"\n• {len(integrity['wrong_number_positions'])} 处标题章号与段落位置不符"
+                    if epub_count is not None and target and epub_count < target:
+                        progress_text += f"\n• EPUB 导出: {epub_count}/{target} 章"
+                elif epub_count is not None and target and epub_count == target:
+                    progress_text += f"\n\n✅ EPUB 章节完整性: {epub_count}/{target} 章"
 
             progress_text += f"""
 
@@ -228,7 +243,7 @@ def import_auto_saved_data_handler(aign_state):
             print(f"   • 用户想法: {len(getattr(aign_instance, 'user_idea', '') or '')}字符")
             print(f"   • 写作要求: {len(getattr(aign_instance, 'user_requirements', '') or '')}字符")
             print(f"   • 润色要求: {len(getattr(aign_instance, 'embellishment_idea', '') or '')}字符")
-            print(f"   • 目标章节: {getattr(aign_instance, 'target_chapter_count', 20)}")
+            print(f"   • 目标章节: {getattr(aign_instance, 'target_chapter_count', 50)}")
             print(f"   • 大纲: {len(getattr(aign_instance, 'novel_outline', '') or '')}字符")
             print(f"   • 标题: {getattr(aign_instance, 'novel_title', '') or '未设置'}")
             print(f"   • 人物列表: {len(getattr(aign_instance, 'character_list', '') or '')}字符")
@@ -240,7 +255,7 @@ def import_auto_saved_data_handler(aign_state):
                 getattr(aign_instance, 'user_idea', '') or '',
                 getattr(aign_instance, 'user_requirements', '') or '',
                 getattr(aign_instance, 'embellishment_idea', '') or '',
-                getattr(aign_instance, 'target_chapter_count', 20),
+                getattr(aign_instance, 'target_chapter_count', 50),
                 getattr(aign_instance, 'novel_outline', '') or '',
                 getattr(aign_instance, 'novel_title', '') or '',
                 getattr(aign_instance, 'character_list', '') or '',
@@ -249,9 +264,9 @@ def import_auto_saved_data_handler(aign_state):
                 storyline_display,
                 long_chapter_mode_value,
                 style_name,
-                getattr(aign_instance, 'chapters_per_plot', 5),
+                getattr(aign_instance, 'chapters_per_plot', 2),
                 getattr(aign_instance, 'num_climaxes', 20),
-                getattr(aign_instance, 'foreshadowing_count', 5)
+                getattr(aign_instance, 'foreshadowing_count', 8)
             ]
         else:
             return [
@@ -384,7 +399,7 @@ def _update_progress_simple(aign_instance):
     auto_save_info = _check_auto_save_status()
 
     # 计算预计总字数
-    target_chapters = getattr(aign_instance, 'target_chapter_count', 20)
+    target_chapters = getattr(aign_instance, 'target_chapter_count', 50)
     estimated_total_chars = target_chapters * 2500
     
     progress_text = f"""📊 生成进度监控

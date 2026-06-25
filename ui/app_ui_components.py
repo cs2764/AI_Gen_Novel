@@ -233,7 +233,7 @@ def create_idea_input_tab(
             components['target_chapters_slider'] = gr.Slider(
                 minimum=5, 
                 maximum=500, 
-                value=loaded_data.get("target_chapters", 100), 
+                value=loaded_data.get("target_chapters", 50), 
                 step=1,
                 label="📚 目标章节数", 
                 interactive=True,
@@ -243,8 +243,8 @@ def create_idea_input_tab(
             # 伏笔/反转数量滑块
             components['foreshadowing_count_slider'] = gr.Slider(
                 minimum=0, 
-                maximum=10, 
-                value=5, 
+                maximum=20, 
+                value=8, 
                 step=1,
                 label="🔮 伏笔/反转数量", 
                 interactive=True,
@@ -303,14 +303,14 @@ def create_idea_input_tab(
             
             # 目标章节数设定（API未配置时禁用）
             components['target_chapters_slider'] = gr.Slider(
-                minimum=5, maximum=500, value=100, step=1,
+                minimum=5, maximum=500, value=50, step=1,
                 label="📚 目标章节数", interactive=False,
                 info="设置小说目标章节数"
             )
             
             # 伏笔/反转数量滑块（API未配置时禁用）
             components['foreshadowing_count_slider'] = gr.Slider(
-                minimum=0, maximum=10, value=5, step=1,
+                minimum=0, maximum=20, value=8, step=1,
                 label="🔮 伏笔/反转数量", interactive=False,
                 info="设置故事中埋设的伏笔和反转数量"
             )
@@ -410,7 +410,7 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             components['chapters_per_plot_slider'] = gr.Slider(
                 minimum=1,
                 maximum=30,
-                value=loaded_data.get("chapters_per_plot", 5),
+                value=loaded_data.get("chapters_per_plot", 2),
                 step=1,
                 label="剧情节奏 (章/剧情)",
                 interactive=True,
@@ -418,7 +418,7 @@ def create_outline_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
             )
             components['num_climaxes_slider'] = gr.Slider(
                 minimum=1,
-                maximum=20,
+                maximum=30,
                 value=loaded_data.get("num_climaxes", 20),
                 step=1,
                 label="高潮数量",
@@ -551,7 +551,7 @@ def create_auto_generation_tab(loaded_data: Dict[str, Any]) -> Dict[str, Any]:
         with gr.Row():
             components['compact_mode_checkbox'] = gr.Checkbox(
                 label="精简模式", 
-                value=True, 
+                value=False, 
                 interactive=True,
                 info="🎯 优化提示词和参数，预计减少40-50%的API成本，同时保持高质量输出"
             )

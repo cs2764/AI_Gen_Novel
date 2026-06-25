@@ -5,9 +5,9 @@
 AI 网络小说生成器 - 版本信息
 """
 
-__version__ = "5.2.0"
+__version__ = "5.3.0"
 __author__ = "AI Novel Generator Team"
-__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-06-17)"
+__description__ = "AI 网络小说生成器 - GitHub发布版 (2026-06-25)"
 __url__ = "https://github.com/cs2764/AI_Gen_Novel"
 
 VERSION_INFO = {
@@ -16,6 +16,14 @@ VERSION_INFO = {
     "description": __description__,
     "url": __url__,
     "features": [
+        "章节标题系统重构：三层补全架构（验证→启发式推断→LLM批量生成），新增storyline_chapter_utils/storyline_title_service/chapter_content_utils三个专用模块，以及chapter_title_prompt提示词",
+        "EPUB生成后三方校验：EPUB章节数 vs txt解析数 vs 目标章节数的自动对比诊断，输出详细差异报告",
+        "paragraph_list标题规范化：EPUB导出前自动修复历史存档中缺失的章节标题行，兼容旧版数据",
+        "重试机制修复：检测到内容已提交（paragraph_list已增长）后跳过重试，彻底防止重复章节生成",
+        "故事线去重：故事线更新后自动去除重复章节号，批次级去重+全局去重双重保障",
+        "max_tokens=65536：大纲/故事线/人物/详细大纲/伏笔生成器全部增加max_tokens参数，支持含reasoning token的思维链模型",
+        "默认参数调整：chapters_per_plot默认值5→2，num_climaxes默认值10→20，storyline_target_chapters阈值100→50",
+        "故事线批次规范化：新的批次范围解析、章节号修正、范围外章节丢弃全流程",
         "代码结构重构：从根目录67个Python文件平铺架构升级为8个模块化包（core/ui/config/storage/providers/tts/utils/scripts），AIGN.py从7489行精简到2155行，app.py从3656行精简到306行",
         "全局设定系统（GlobalContextUpdater）：全新全局设定智能体，跟踪世界观设定、角色状态、势力关系等全局信息，每章生成后自动更新全局设定上下文",
         "生成防截断机制：大纲、伏笔、人物列表、详细大纲生成均加入===GENERATION_COMPLETE===结束标记检测和自动重试，最多重试2次后保留内容继续（不中断流程）",

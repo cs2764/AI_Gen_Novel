@@ -114,7 +114,7 @@ LAMBDA3_CONFIG = {
 }
 
 NOVEL_SETTINGS = {
-    "default_chapters": 100,
+    "default_chapters": 50,
     "enable_chapters": True,
     "enable_ending": True,
     "auto_save": True,
@@ -551,7 +551,7 @@ def update_aign_settings(aign_instance, allow_incomplete: bool = True):
     # 应用小说设置
     novel_settings = config.get('novel_settings', {})
     if novel_settings:
-        aign_instance.target_chapter_count = novel_settings.get('default_chapters', 100)
+        aign_instance.target_chapter_count = novel_settings.get('default_chapters', 50)
         aign_instance.enable_chapters = novel_settings.get('enable_chapters', True)
         aign_instance.enable_ending = novel_settings.get('enable_ending', True)
     

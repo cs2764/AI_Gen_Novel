@@ -221,7 +221,9 @@ class StorylineMixin:
                 # 使用增强生成器生成故事线
                 batch_storyline, generation_status = enhanced_generator.generate_storyline_batch(
                     messages=messages,
-                    temperature=base_temperature
+                    temperature=base_temperature,
+                    start_chapter=start_chapter,
+                    end_chapter=end_chapter,
                 )
                 
                 # 更新状态信息，显示使用的方法
@@ -973,7 +975,9 @@ class StorylineMixin:
                     messages = [{"role": "user", "content": repair_prompt}]
                     batch_storyline, generation_status = enhanced_generator.generate_storyline_batch(
                         messages=messages, temperature=0.8,
-                        require_segments=require_segments, segment_count=segment_count
+                        require_segments=require_segments, segment_count=segment_count,
+                        start_chapter=start_chapter,
+                        end_chapter=end_chapter,
                     )
                     if batch_storyline:
                         print(f"✅ 增强生成器修复成功: {generation_status}")

@@ -2,6 +2,57 @@
 
 [中文版本](#中文版本)
 
+## [5.3.0] - 2026-06-25 🔧 Chapter Title System & EPUB Validation | 章节标题系统与EPUB校验
+
+### ✨ New Features | 新功能
+
+#### 📖 Chapter Title Architecture Overhaul | 章节标题系统重构
+- **3-Layer Title Completion**: Validation → Heuristic inference → LLM batch generation cascade
+- **三层标题补全架构**: 验证 → 启发式推断 → LLM批量生成三级级联
+- **New Modules**: `core/storyline_chapter_utils.py`, `core/storyline_title_service.py`, `core/chapter_content_utils.py`
+- **新模块**: storyline_chapter_utils/storyline_title_service/chapter_content_utils三个专用模块
+- **LLM Batch Prompt**: `prompts/common/chapter_title_prompt.py` for batch title generation in storyline phase
+- **批量生成提示词**: chapter_title_prompt.py，在故事线阶段为缺失标题的章节批量调用LLM补全
+
+#### 📊 EPUB Post-Generation Validation | EPUB生成后三方校验
+- **3-Way Chapter Count Comparison**: EPUB chapters vs txt-parsed chapters vs target count, with diagnostic output
+- **三方章节数对比**: EPUB章节数 vs txt解析数 vs 目标章节数，自动输出详细差异报告
+- **Parsing Diagnostics**: Automatically identifies chapters with non-standard title formats causing parse failures
+- **解析诊断**: 自动识别因标题格式不符合「第X章」规则而导致解析失败的章节
+
+#### 🔧 Retry Mechanism Fix | 重试机制修复
+- **Duplicate Chapter Prevention**: Detects when chapter content is already committed (paragraph_list grown) before retrying, skips retry to prevent duplicates
+- **防止重复章节**: 重试前检查paragraph_list是否已增长，检测到内容已提交则跳过重试，彻底防止重复章节
+
+### 🔧 Improvements | 功能改进
+
+#### 📚 Storyline Deduplication | 故事线去重
+- **Batch-level Dedup**: Each storyline generation batch deduplicates by chapter_number, keeping the richest entry
+- **批次级去重**: 每批故事线生成后按章节号去重，保留内容最丰富的版本
+- **Global Dedup**: Post-generation global deduplication and chapter number correction
+- **全局去重**: 生成完成后执行全局去重和章节号修正
+
+#### ⚡ max_tokens=65536 for All Major Agents | 大模型组件 max_tokens 扩展
+- **Agents Updated**: Outline writer, storyline generator, character generator, detailed outline generator, foreshadowing generator all set max_tokens=65536
+- **更新的智能体**: 大纲/故事线/人物/详细大纲/伏笔生成器全部增加max_tokens=65536，支持含reasoning消息的思维链模型
+
+#### ⚙️ Default Parameter Adjustments | 默认参数调整
+- `chapters_per_plot`: 5 → 2 (finer plot granularity | 更细的情节粒度)
+- `num_climaxes`: 10 → 20 (more climax points by default | 默认更多高潮节点)
+- `storyline_target_chapters` threshold: 100 → 50 (more conservative auto-load | 更保守的自动加载)
+
+#### 🗂️ paragraph_list Header Normalization | paragraph_list 标题规范化
+- **Legacy Data Fix**: Before EPUB export, normalizes all paragraph headers to standard `第N章：标题` format, fixing historical save files lacking proper headers
+- **兼容旧版存档**: EPUB导出前自动将所有段落标题规范化为「第N章：标题」格式，修复历史存档中缺失章节标题行的问题
+
+#### 🔄 Storyline Batch Normalization | 故事线批次规范化
+- **Range Parsing**: Priority-matched batch range markers prevent mismatches from outline content
+- **范围解析**: 优先匹配显式批次标记，避免因大纲正文中出现的「第X-Y章」导致范围误解析
+- **Out-of-range Chapter Drop**: Chapters outside the expected batch range are automatically discarded
+- **范围外章节丢弃**: 自动丢弃不属于当前批次范围的章节
+
+---
+
 ## [5.2.0] - 2026-06-17 🏗️ Code Structure Refactoring | 代码结构重构
 
 ### ✨ Core Changes | 核心变更

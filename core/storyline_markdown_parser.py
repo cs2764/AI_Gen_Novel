@@ -62,8 +62,8 @@ def parse_storyline_markdown(text: str) -> Optional[Dict[str, Any]]:
     chapters = []
     
     # 按 ## 第X章 分割章节
-    # 匹配模式: ## 第1章：标题 或 ## 第1章: 标题 或 ## 第1章 标题
-    chapter_pattern = r'^##\s+第\s*(\d+)\s*章\s*[：:]\s*(.+?)$'
+    # 匹配: ## 第1章：标题 / ## 第1章:标题 / ## 第1章 标题
+    chapter_pattern = r'^##\s+第\s*(\d+)\s*章(?:\s*[：:]\s*|\s+)(.+?)$'
     
     # 找到所有章节标题的位置
     chapter_starts = []
@@ -80,7 +80,7 @@ def parse_storyline_markdown(text: str) -> Optional[Dict[str, Any]]:
     if not chapter_starts:
         print(f"⚠️ Markdown解析: 未找到章节标题（## 第X章：标题）")
         # 尝试备用模式：# 第X章
-        alt_pattern = r'^#\s+第\s*(\d+)\s*章\s*[：:]\s*(.+?)$'
+        alt_pattern = r'^#\s+第\s*(\d+)\s*章(?:\s*[：:]\s*|\s+)(.+?)$'
         for i, line in enumerate(lines):
             match = re.match(alt_pattern, line.strip())
             if match:
@@ -113,9 +113,21 @@ def parse_storyline_markdown(text: str) -> Optional[Dict[str, Any]]:
     
     if not chapters:
         return None
-    
+
+    from core.storyline_chapter_utils import dedupe_chapters_by_number, normalize_chapter_title
+
+    before = len(chapters)
+    chapters, dupes = dedupe_chapters_by_number(chapters)
+    for chapter in chapters:
+        ch_num = chapter.get("chapter_number", 0)
+        if ch_num:
+            chapter["title"] = normalize_chapter_title(chapter.get("title", ""), ch_num)
+
+    if dupes:
+        print(f"⚠️ Markdown解析: 移除重复章节号 {sorted(set(dupes))}（{before}→{len(chapters)}章）")
+
     print(f"✅ Markdown解析: 成功解析 {len(chapters)} 章故事线")
-    
+
     return {"chapters": chapters}
 
 

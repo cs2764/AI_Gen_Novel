@@ -11,6 +11,16 @@ AIGN故事线管理模块 - 处理故事线生成、验证、修复
 
 import time
 
+from core.storyline_chapter_utils import (
+    finalize_storyline_chapters,
+    format_chapter_header,
+    merge_storyline_chapters,
+    normalize_batch_chapters,
+    normalize_chapter_title,
+    validate_storyline_chapter_integrity,
+)
+from core.storyline_title_service import StorylineTitleService, is_valid_storyline_title
+
 
 class StorylineManager:
     """故事线管理类，封装所有故事线相关操作"""
@@ -231,7 +241,9 @@ class StorylineManager:
                         messages=messages,
                         temperature=0.8,
                         require_segments=require_segments,
-                        segment_count=segment_count
+                        segment_count=segment_count,
+                        start_chapter=start_chapter,
+                        end_chapter=end_chapter,
                     )
                     
                     if batch_storyline is None:
@@ -278,6 +290,24 @@ class StorylineManager:
                         })
                         continue
                 
+                # 批次规范化：去重、修正章节号、统一标题
+                normalized_chapters, norm_meta = normalize_batch_chapters(
+                    batch_storyline.get("chapters", []),
+                    start_chapter,
+                    end_chapter,
+                )
+                batch_storyline["chapters"] = normalized_chapters
+
+                # 故事线阶段：补全/规范化本批次章节标题
+                batch_storyline["chapters"], title_meta = self._ensure_batch_chapter_titles(
+                    batch_storyline["chapters"],
+                )
+                if title_meta.get("heuristic_fixed") or title_meta.get("llm_fixed"):
+                    print(
+                        f"📖 本批次标题补全：启发式 {title_meta.get('heuristic_fixed', 0)} 章，"
+                        f"LLM {title_meta.get('llm_fixed', 0)} 章"
+                    )
+
                 # 严格验证批次故事线
                 validation_result = self._validate_storyline_batch(
                     batch_storyline, start_chapter, end_chapter
@@ -295,8 +325,11 @@ class StorylineManager:
                     })
                     continue
                 
-                # 验证通过，合并到总故事线中
-                self.aign.storyline["chapters"].extend(batch_storyline["chapters"])
+                # 验证通过，按章节号合并到总故事线（同号覆盖，避免重复）
+                self.aign.storyline["chapters"] = merge_storyline_chapters(
+                    self.aign.storyline.get("chapters", []),
+                    batch_storyline["chapters"],
+                )
                 
                 print(f"✅ 第{start_chapter}-{end_chapter}章故事线生成完成")
                 print(f"📊 本批次生成章节数：{len(batch_storyline['chapters'])}")
@@ -329,6 +362,42 @@ class StorylineManager:
                 })
                 continue
         
+        # 全局去重与标题规范化
+        target_chapters = getattr(self.aign, 'target_chapter_count', 0)
+        if self.aign.storyline.get("chapters") and target_chapters > 0:
+            finalized, finalize_meta = finalize_storyline_chapters(
+                self.aign.storyline["chapters"],
+                target_chapters,
+            )
+            self.aign.storyline["chapters"] = finalized
+
+            # 故事线阶段：全局章节标题补全（正文与 EPUB 唯一标题来源）
+            self.aign.storyline["chapters"], title_finalize_meta = self._finalize_storyline_titles(
+                self.aign.storyline["chapters"],
+            )
+            if title_finalize_meta.get("heuristic_fixed") or title_finalize_meta.get("llm_fixed"):
+                print(
+                    f"📖 故事线标题全局补全：启发式 {title_finalize_meta.get('heuristic_fixed', 0)} 章，"
+                    f"LLM {title_finalize_meta.get('llm_fixed', 0)} 章"
+                )
+            if title_finalize_meta.get("still_invalid"):
+                nums = title_finalize_meta["still_invalid"][:15]
+                print(f"⚠️ 仍有 {len(title_finalize_meta['still_invalid'])} 章标题欠佳: {nums}")
+
+            integrity = validate_storyline_chapter_integrity(
+                self.aign.storyline["chapters"],
+                target_chapters,
+            )
+            if not integrity["valid"]:
+                print(f"⚠️ 故事线完整性检查未通过：")
+                if integrity["duplicates"]:
+                    print(f"   • 重复章节号: {integrity['duplicates']}")
+                if integrity["missing"]:
+                    missing = integrity["missing"]
+                    print(f"   • 缺失章节: {missing[:20]}{'...' if len(missing) > 20 else ''}")
+                if integrity["extra"]:
+                    print(f"   • 多余章节: {integrity['extra']}")
+
         # 生成完成总结
         self._generate_storyline_summary()
         
@@ -467,6 +536,8 @@ class StorylineManager:
             prompt += f"如上方模板存在分段要求，请忽略分段相关要求，按本次指示执行。\n"
         prompt += f"**重要：必须生成完整的{expected_count}章内容，一章都不能少！**\n"
         prompt += f"必须严格按照Markdown格式输出，不要使用JSON格式。\n"
+        prompt += f"**章节标题（关键）：每章标题在 `## 第N章：标题` 中一次性确定，将直接用于全书正文与 EPUB 目录，正文阶段不再重新起名。**\n"
+        prompt += f"标题须 2-16 字、概括本章核心事件，禁止「第N章标题」「有意义的章节标题」等占位语。\n"
         prompt += f"确保每章都有有意义的标题和详细的剧情梗概。\n\n"
 
         # 根据模式追加精简/长章节指导
@@ -761,9 +832,12 @@ class StorylineManager:
         if "title" in chapter:
             title = chapter["title"]
             if isinstance(title, str):
-                if len(title.strip()) < 2:
+                clean = normalize_chapter_title(title, ch_num if ch_num > 0 else expected_number)
+                if clean.endswith("待补充标题"):
+                    issues.append(f"第{expected_number}章: 标题无效或为占位标题")
+                elif len(clean) < 2:
                     issues.append(f"第{expected_number}章: 标题过短")
-                elif len(title.strip()) > 100:
+                elif len(clean) > 100:
                     issues.append(f"第{expected_number}章: 标题过长")
         
         # 逻辑一致性验证
@@ -772,6 +846,17 @@ class StorylineManager:
         
         return issues
     
+    def _ensure_batch_chapter_titles(self, chapters):
+        """本批次故事线生成后补全章节标题。"""
+        service = StorylineTitleService(self.aign)
+        # 批次内先用启发式，避免每批都调 LLM
+        return service.ensure_all_chapter_titles(chapters, use_llm=False)
+
+    def _finalize_storyline_titles(self, chapters):
+        """故事线全部生成完成后，统一补全章节标题（含 LLM）。"""
+        service = StorylineTitleService(self.aign)
+        return service.ensure_all_chapter_titles(chapters, use_llm=True)
+
     def _generate_storyline_summary(self):
         """生成故事线生成总结"""
         generated_chapters = len(self.aign.storyline['chapters'])
@@ -931,7 +1016,9 @@ class StorylineManager:
                         messages=messages,
                         temperature=0.8,
                         require_segments=require_segments,
-                        segment_count=segment_count
+                        segment_count=segment_count,
+                        start_chapter=start_chapter,
+                        end_chapter=end_chapter,
                     )
                     
                     if batch_storyline is None:
@@ -976,27 +1063,28 @@ class StorylineManager:
                         continue
                 
                 # 验证生成的故事线
+                normalized_chapters, _ = normalize_batch_chapters(
+                    batch_storyline.get("chapters", []),
+                    start_chapter,
+                    end_chapter,
+                )
+                batch_storyline["chapters"] = normalized_chapters
+
+                batch_storyline["chapters"], _ = self._ensure_batch_chapter_titles(
+                    batch_storyline["chapters"],
+                )
+
                 validation_result = self._validate_storyline_batch(batch_storyline, start_chapter, end_chapter)
                 
                 if validation_result["valid"]:
-                    # 找到并替换现有故事线中对应的章节
-                    existing_chapters = self.aign.storyline.get("chapters", [])
-                    
-                    # 移除旧的失败章节
-                    self.aign.storyline["chapters"] = [
-                        ch for ch in existing_chapters 
-                        if not (start_chapter <= ch.get('chapter_number', 0) <= end_chapter)
-                    ]
-                    
-                    # 添加修复后的章节
-                    new_chapters = batch_storyline.get("chapters", [])
-                    self.aign.storyline["chapters"].extend(new_chapters)
-                    
-                    # 按章节号重新排序
-                    self.aign.storyline["chapters"].sort(key=lambda item: item.get("chapter_number", 0))
+                    # 按章节号合并修复结果
+                    self.aign.storyline["chapters"] = merge_storyline_chapters(
+                        self.aign.storyline.get("chapters", []),
+                        batch_storyline.get("chapters", []),
+                    )
                     
                     print(f"✅ 第{start_chapter}-{end_chapter}章修复成功")
-                    print(f"   修复章节数：{len(new_chapters)}")
+                    print(f"   修复章节数：{len(batch_storyline.get('chapters', []))}")
                     repaired_batches += 1
                 else:
                     print(f"❌ 第{start_chapter}-{end_chapter}章验证失败: {validation_result['error']}")
@@ -1015,6 +1103,18 @@ class StorylineManager:
                     "error": f"修复时异常: {str(e)}"
                 })
         
+        # 修复完成后全局去重
+        target_chapters = getattr(self.aign, 'target_chapter_count', 0)
+        if self.aign.storyline.get("chapters") and target_chapters > 0:
+            finalized, _ = finalize_storyline_chapters(
+                self.aign.storyline["chapters"],
+                target_chapters,
+            )
+            self.aign.storyline["chapters"] = finalized
+            self.aign.storyline["chapters"], _ = self._finalize_storyline_titles(
+                self.aign.storyline["chapters"],
+            )
+
         # 输出修复结果
         total_chapters = len(self.aign.storyline.get("chapters", []))
         success_rate = (repaired_batches / len(failed_batches_backup)) * 100 if failed_batches_backup else 100

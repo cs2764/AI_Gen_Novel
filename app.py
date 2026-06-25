@@ -138,7 +138,7 @@ def create_gradio5_modular_app():
             "user_idea": "",
             "user_requirements": "",
             "embellishment_idea": "",
-            "target_chapters": 20
+            "target_chapters": 50
         }
         try:
             # 复用现有函数，保证与原逻辑一致

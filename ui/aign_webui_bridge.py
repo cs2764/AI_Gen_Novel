@@ -326,14 +326,18 @@ class WebUIBridge:
                 current_operation = f"正在生成第{generation_status['current_chapter'] + 1}章"
         elif hasattr(self.parent_aign, 'generation_completion_info') and self.parent_aign.generation_completion_info and self.parent_aign.generation_completion_info.get('completed'):
             info = self.parent_aign.generation_completion_info
-            total_words = info.get('total_word_count', 0)
-            if total_words >= 10000:
-                word_display = f"{total_words/10000:.1f}万字"
-            elif total_words >= 1000:
-                word_display = f"{total_words/1000:.1f}千字"
+            if info.get('display_message'):
+                current_operation = info['display_message']
             else:
-                word_display = f"{total_words}字"
-            current_operation = f"✅ 生成完成！共 {info.get('chapter_count', 0)} 章，{word_display}，耗时 {info.get('total_time', '未知')}"
+                from core.chapter_content_utils import format_completion_operation
+                current_operation = format_completion_operation(
+                    info.get('chapter_count', 0),
+                    info.get('total_word_count', 0),
+                    info.get('total_time', '未知'),
+                    integrity=info.get('chapter_integrity'),
+                    epub_chapter_count=info.get('epub_chapter_count'),
+                    target_count=info.get('target_chapter_count'),
+                )
         
         return {
             'timestamp': current_time,

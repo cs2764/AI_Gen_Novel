@@ -124,16 +124,16 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
         self.novel_title = ""
         self.enable_chapters = True
         self.chapter_count = 0
-        self.target_chapter_count = 20
+        self.target_chapter_count = 50
         self.enable_ending = True
         self.auto_generation_running = False
         self.current_output_file = ""
-        self.compact_mode = True  # 精简模式，默认开启
+        self.compact_mode = False  # 精简模式，默认关闭
         # 长章节模式：0=关闭，2=2段合并，3=3段合并，4=4段合并（默认关闭）
         self.long_chapter_mode = 0
         # 剧情紧凑度设置：控制剧情节奏和高潮分布
-        self.chapters_per_plot = 5  # 每个剧情单元的章节数，默认5章
-        self.num_climaxes = 10      # 故事高潮总数，默认10个
+        self.chapters_per_plot = 2  # 每个剧情单元的章节数，默认2章
+        self.num_climaxes = 20      # 故事高潮总数，默认20个
         # RAG设置：检索结果数量
         self.rag_top_k = 10  # RAG检索返回结果数量，默认10，范围5-30
 
@@ -238,7 +238,7 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
         
         # 伏笔/反转相关属性
         self.foreshadowing = ""
-        self.foreshadowing_count = 3  # 默认伏笔数量
+        self.foreshadowing_count = 8  # 默认伏笔数量
         
         # 故事线和人物列表相关属性
         self.character_list = ""
@@ -320,11 +320,14 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
             print(f"🌡️ 大纲/正文/润色 Agent 使用 provider_temperature: {provider_temperature}")
 
         # 大纲生成器使用固定temperature 0.95，不跟随提供商设置
+        # max_tokens=65536: 需要足够大以容纳 reasoning_effort="max" 时
+        # 思考过程的 token 消耗（思考+输出共享 max_completion_tokens 额度）
         self.novel_outline_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=novel_outline_writer_prompt,
             name="NovelOutlineWriter",
             temperature=0.95,
+            max_tokens=65536,
         )
         self.novel_beginning_writer = MarkdownAgent(
             chatLLM=self.chatLLM,
@@ -467,11 +470,13 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
             temperature=base_temperature,
         )
         # 故事线生成器使用固定temperature 0.95，不跟随提供商设置
+        # max_tokens=65536: 容纳 reasoning 消耗
         self.storyline_generator = JSONMarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=storyline_generator_prompt,
             name="StorylineGenerator",
             temperature=0.95,
+            max_tokens=65536,
         )
         
         # 初始化故事线管理器
@@ -480,11 +485,13 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
         print("📋 故事线管理器已初始化")
         
         # 人物列表生成器使用固定temperature 0.95，不跟随提供商设置
+        # max_tokens=65536: 容纳 reasoning 消耗
         self.character_generator = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=character_generator_prompt,
             name="CharacterGenerator",
             temperature=0.95,
+            max_tokens=65536,
         )
         
         # 章节总结生成器
@@ -496,20 +503,24 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
         )
         
         # 详细大纲生成器
+        # max_tokens=65536: 容纳 reasoning 消耗
         self.detailed_outline_generator = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=detailed_outline_generator_prompt,
             name="DetailedOutlineGenerator",
             temperature=provider_temperature,
+            max_tokens=65536,
         )
         
         # 伏笔/反转生成器
+        # max_tokens=65536: 容纳 reasoning 消耗
         from prompts.AIGN_Prompt_Enhanced import foreshadowing_generator_prompt
         self.foreshadowing_generator = MarkdownAgent(
             chatLLM=self.chatLLM,
             sys_prompt=foreshadowing_generator_prompt,
             name="ForeshadowingGenerator",
             temperature=0.95,
+            max_tokens=65536,
         )
         
         # 全局设定追踪器
@@ -920,7 +931,7 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
                 self.storyline = story_data.get("storyline", {})
                 # 从故事线中加载目标章节数（只在还是默认值时更新，可能被用户设置覆盖）
                 storyline_target_chapters = story_data.get("target_chapters", 0)
-                if storyline_target_chapters > 0 and self.target_chapter_count <= 100:  # 只在还是默认值时更新
+                if storyline_target_chapters > 0 and self.target_chapter_count <= 50:  # 只在还是默认值时更新
                     self.target_chapter_count = storyline_target_chapters
                     print(f"📊 从故事线载入目标章节数: {self.target_chapter_count}（可能被用户设置覆盖）")
                 # 如果前面没有用户输入数据，从故事线中加载
@@ -1055,8 +1066,8 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
                 "enable_ending": getattr(self, 'enable_ending', True),
                 "long_chapter_mode": long_chapter_mode_value,
                 "fishaudio_mode": getattr(self, 'fishaudio_mode', False),
-                "chapters_per_plot": getattr(self, 'chapters_per_plot', 5),
-                "num_climaxes": getattr(self, 'num_climaxes', 10)
+                "chapters_per_plot": getattr(self, 'chapters_per_plot', 2),
+                "num_climaxes": getattr(self, 'num_climaxes', 20)
             }
             
             result = self._save_to_local("user_settings", settings=settings)
@@ -1645,6 +1656,9 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
             # 生成EPUB文件名
             base_name = os.path.splitext(self.current_output_file)[0]
             epub_file = f"{base_name}.epub"
+
+            # 导出前规范化 paragraph_list 标题，修复历史存档中缺失的章节标题行
+            self._normalize_paragraph_list_headers()
             
             # 创建EPUB书籍
             book = epub.EpubBook()
@@ -1841,13 +1855,147 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
             print(f"   • 章节数量: {len(epub_chapters)} 章")
             print(f"   • 文件大小: {os.path.getsize(epub_file) / 1024:.1f} KB")
             
+            # ====== EPUB 生成后校验 ======
+            # 对比 EPUB 章节数 vs txt 解析章节数 vs 目标章节数
+            epub_chapter_count = len(epub_chapters)
+            parsed_chapter_count = len(chapters)  # _parseChaptersFromContent 解析的总数
+            target_count = getattr(self, 'target_chapter_count', 0)
+            paragraph_count = len(getattr(self, 'paragraph_list', []))
+            
+            self._last_epub_chapter_count = len(epub_chapters)
+            self._last_epub_validation = {
+                "target_count": target_count,
+                "paragraph_count": paragraph_count,
+                "parsed_chapter_count": parsed_chapter_count,
+                "epub_chapter_count": epub_chapter_count,
+            }
+
+            if target_count > 0:
+                print(f"\n{'='*60}")
+                print(f"📋 EPUB 生成后校验")
+                print(f"{'='*60}")
+                print(f"   目标章节数:           {target_count}")
+                print(f"   paragraph_list 段落数: {paragraph_count}")
+                print(f"   解析章节数:           {parsed_chapter_count}")
+                print(f"   EPUB 实际章节数:      {epub_chapter_count}")
+                
+                if epub_chapter_count == target_count:
+                    print(f"   ✅ EPUB 章节数与目标一致")
+                elif epub_chapter_count < target_count:
+                    if parsed_chapter_count == epub_chapter_count:
+                        # txt 解析和 EPUB 数量一致，说明问题在解析层
+                        print(f"   ⚠️ EPUB 和 txt 解析数量一致({epub_chapter_count})，但少于目标({target_count})")
+                        if paragraph_count >= target_count:
+                            print(f"   💡 paragraph_list 有 {paragraph_count} 个段落，但解析只得到 {parsed_chapter_count} 章")
+                            print(f"   💡 可能原因: 某些章节的标题格式不符合 '第X章' 解析规则")
+                            # 尝试诊断哪些段落没被正确解析
+                            self._diagnose_parsing_issues(chapters, target_count)
+                        else:
+                            print(f"   💡 paragraph_list 也只有 {paragraph_count} 个段落，说明生成阶段就有缺失")
+                    elif parsed_chapter_count > epub_chapter_count:
+                        # txt 解析到了但 EPUB 里少了，说明 EPUB 构建过程中跳过了某些章节
+                        skipped_count = parsed_chapter_count - epub_chapter_count
+                        print(f"   ⚠️ txt 解析有 {parsed_chapter_count} 章，但 EPUB 只有 {epub_chapter_count} 章")
+                        print(f"   💡 EPUB 构建过程中跳过了 {skipped_count} 个章节（可能因内容太短或格式异常）")
+                        
+                        # 找出哪些章节被跳过
+                        import re
+                        epub_chapter_titles = set()
+                        for ec in epub_chapters:
+                            title = ec.title if hasattr(ec, 'title') else ''
+                            match = re.search(r'第(\d+)章', title)
+                            if match:
+                                epub_chapter_titles.add(int(match.group(1)))
+                        
+                        parsed_chapter_titles = set()
+                        for title, _ in chapters:
+                            match = re.search(r'第(\d+)章', title)
+                            if match:
+                                parsed_chapter_titles.add(int(match.group(1)))
+                        
+                        skipped_in_epub = sorted(parsed_chapter_titles - epub_chapter_titles)
+                        if skipped_in_epub:
+                            ranges = self._format_chapter_ranges(skipped_in_epub) if hasattr(self, '_format_chapter_ranges') else str(skipped_in_epub)
+                            print(f"   ❌ EPUB 中缺失的章节: {ranges}")
+                            
+                            # 尝试修复：重新添加被跳过的章节（放宽验证条件）
+                            print(f"   🔧 尝试修复：重新生成 EPUB（放宽内容验证条件）...")
+                            self._rebuild_epub_with_relaxed_validation(epub_file, chapters)
+                
+                elif epub_chapter_count > target_count:
+                    print(f"   ⚠️ EPUB 章节数({epub_chapter_count})超过目标({target_count})，可能有重复章节")
+                
+                print(f"{'='*60}\n")
+            
         except Exception as e:
             print(f"❌ 保存EPUB文件失败: {e}")
             import traceback
             traceback.print_exc()
     
+    def _normalize_paragraph_list_headers(self):
+        """导出前规范化 paragraph_list 中每段的章节标题行。"""
+        from core.chapter_content_utils import ensure_chapter_header, parse_chapter_title_line, split_paragraph_header
+
+        paragraph_list = getattr(self, 'paragraph_list', None)
+        if not paragraph_list:
+            return
+
+        fixed = 0
+        for idx, paragraph in enumerate(paragraph_list):
+            expected_num = idx + 1
+            text = str(paragraph or "").strip()
+            if not text:
+                continue
+
+            first_line, _ = split_paragraph_header(text)
+            parsed = parse_chapter_title_line(first_line)
+            if parsed and parsed[0] == expected_num:
+                continue
+
+            title_hint = None
+            storyline = self.getCurrentChapterStoryline(expected_num)
+            if storyline and isinstance(storyline, dict):
+                title_hint = storyline.get("title")
+
+            paragraph_list[idx] = ensure_chapter_header(text, expected_num, title_hint=title_hint)
+            fixed += 1
+
+        if fixed:
+            print(f"🔧 已规范化 {fixed} 个段落的章节标题")
+            if hasattr(self, 'update_novel_content'):
+                self.update_novel_content()
+            elif hasattr(self, 'utilities') and hasattr(self.utilities, 'update_novel_content'):
+                self.utilities.update_novel_content()
+
     def _parseChaptersFromContent(self):
         """从小说内容中解析章节"""
+        from core.chapter_content_utils import (
+            is_chapter_title_line,
+            parse_chapters_from_paragraph_list,
+            parse_chapter_title_line,
+        )
+
+        paragraph_list = getattr(self, 'paragraph_list', []) or []
+        target_count = getattr(self, 'target_chapter_count', 0) or 0
+
+        def _storyline_title(chapter_number):
+            storyline = self.getCurrentChapterStoryline(chapter_number)
+            if storyline and isinstance(storyline, dict):
+                return storyline.get("title") or None
+            return None
+
+        # 优先使用 paragraph_list（每段=一章，比重新扫描 novel_content 更可靠）
+        if paragraph_list:
+            print(f"   • 使用 paragraph_list 解析章节（{len(paragraph_list)} 段）")
+            chapters = parse_chapters_from_paragraph_list(
+                paragraph_list,
+                title_resolver=_storyline_title,
+                target_count=target_count if target_count > 0 else None,
+            )
+            print(f"   • 解析到章节: {len(chapters)}个")
+            print(f"   • 有效章节: {len(chapters)}个")
+            return chapters
+
         if not self.novel_content or not self.novel_content.strip():
             print("   • 小说内容为空")
             return []
@@ -1870,40 +2018,25 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
             if line == self.novel_title or line.startswith('='):
                 continue
                 
-            # 检测章节标题（第X章：）- 改进的检测逻辑
-            is_chapter_title = False
-            
-            # 检查是否是章节标题的多种格式
-            if line.startswith('第') and '章' in line:
-                # 检查是否包含数字
-                if any(char.isdigit() for char in line):
-                    is_chapter_title = True
-                    # 额外检查：排除误判
-                    if line.count('第') > 1 or line.count('章') > 1:
-                        # 可能是内容中的描述，进一步验证
-                        colon_pos = line.find('：')
-                        if colon_pos == -1:
-                            colon_pos = line.find(':')
-                        if colon_pos > 0 and colon_pos < 20:  # 冒号位置合理
-                            is_chapter_title = True
-                        else:
-                            is_chapter_title = False
-                            
-            if is_chapter_title:
+            # 严格匹配章节标题行（排除正文叙述句）
+            if is_chapter_title_line(line):
                 found_chapters += 1
                 print(f"   • 找到章节标题: {line}")
                 # 保存前一章节
                 if current_chapter_title:
                     content_text = '\n'.join(current_chapter_content).strip()
-                    # 即使内容为空也保存，后续会处理
                     chapters.append((current_chapter_title, content_text if content_text else ""))
                     print(f"   • 保存章节: {current_chapter_title} (内容长度: {len(content_text)})")
                 
-                # 开始新章节
-                current_chapter_title = line
+                parsed = parse_chapter_title_line(line)
+                if parsed:
+                    from core.storyline_chapter_utils import format_chapter_header
+                    ch_num, title = parsed
+                    current_chapter_title = format_chapter_header(ch_num, title)
+                else:
+                    current_chapter_title = line
                 current_chapter_content = []
             elif current_chapter_title and line:
-                # 添加章节内容
                 current_chapter_content.append(line)
         
         # 添加最后一章
@@ -1965,6 +2098,132 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
             return "    <p>本章暂无内容，请稍后查看。作者正在努力创作中，敬请期待精彩内容。</p>"
             
         return result
+    
+    def _diagnose_parsing_issues(self, parsed_chapters, target_count):
+        """诊断章节解析问题：检查 paragraph_list 中哪些段落没有被正确解析为章节"""
+        import re
+        
+        # 从 parsed_chapters 中提取已解析到的章节号
+        parsed_chapter_nums = set()
+        for title, _ in parsed_chapters:
+            match = re.search(r'第(\d+)章', title)
+            if match:
+                parsed_chapter_nums.add(int(match.group(1)))
+        
+        # 从 paragraph_list 中提取章节号
+        paragraph_chapter_nums = {}
+        for idx, paragraph in enumerate(self.paragraph_list):
+            header = paragraph[:300] if len(paragraph) > 300 else paragraph
+            match = re.search(r'第(\d+)章', header)
+            if match:
+                ch_num = int(match.group(1))
+                paragraph_chapter_nums[ch_num] = {
+                    'index': idx,
+                    'header': header[:80],
+                    'length': len(paragraph),
+                    'in_parsed': ch_num in parsed_chapter_nums
+                }
+        
+        # 找出在 paragraph_list 中存在但未被解析到的章节
+        missing_in_parse = set(paragraph_chapter_nums.keys()) - parsed_chapter_nums
+        if missing_in_parse:
+            print(f"   📋 以下章节在 paragraph_list 中存在但未被 txt 解析器识别:")
+            for ch_num in sorted(missing_in_parse):
+                info = paragraph_chapter_nums[ch_num]
+                print(f"      第{ch_num}章: 段落索引={info['index']}, 长度={info['length']}字符")
+                print(f"         标题行: {info['header']}")
+    
+    def _rebuild_epub_with_relaxed_validation(self, epub_file, all_chapters):
+        """放宽验证条件重新构建 EPUB
+        
+        当检测到 EPUB 中章节被跳过时，重新构建 EPUB 文件，
+        去掉内容长度<20的跳过条件，确保所有解析到的章节都包含在内。
+        
+        Args:
+            epub_file: EPUB 文件路径
+            all_chapters: 所有解析到的章节列表 [(title, content), ...]
+        """
+        try:
+            book = epub.EpubBook()
+            book.set_identifier(f"novel_{datetime.now().strftime('%Y%m%d_%H%M%S')}_fixed")
+            book.set_title(self.novel_title)
+            book.set_language('zh')
+            book.add_author('AI小说生成器')
+            
+            style = '''
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #333; text-align: center; }
+            p { text-indent: 2em; line-height: 1.6; }
+            '''
+            nav_css = epub.EpubItem(uid="nav", file_name="style/nav.css", media_type="text/css", content=style)
+            book.add_item(nav_css)
+            
+            epub_chapters = []
+            spine = ['nav']
+            toc = []
+            skipped = []
+            
+            for i, (chapter_title, chapter_content) in enumerate(all_chapters):
+                if not chapter_title or not chapter_title.strip():
+                    chapter_title = f"第{i+1}章"
+                
+                if not chapter_content or not chapter_content.strip():
+                    chapter_content = "本章暂无内容。"
+                    skipped.append(chapter_title)
+                
+                chapter_file_name = f'chapter_{i+1}.xhtml'
+                html_content = self._formatContentToHtml(chapter_content)
+                
+                if not html_content or not html_content.strip():
+                    html_content = "    <p>本章暂无内容。</p>"
+                
+                safe_title = chapter_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+                
+                chapter_html = f"""<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>{safe_title}</title>
+    <meta charset="UTF-8"/>
+</head>
+<body>
+    <h1>{safe_title}</h1>
+{html_content}
+</body>
+</html>"""
+                
+                epub_chapter = epub.EpubHtml(
+                    title=safe_title,
+                    file_name=chapter_file_name,
+                    lang='zh'
+                )
+                epub_chapter.content = chapter_html
+                
+                book.add_item(epub_chapter)
+                epub_chapters.append(epub_chapter)
+                spine.append(epub_chapter)
+                toc.append(epub.Link(chapter_file_name, chapter_title, f"chapter_{i+1}"))
+            
+            if not epub_chapters:
+                print(f"   ❌ 修复失败：没有有效的章节内容")
+                return
+            
+            book.toc = toc
+            book.add_item(epub.EpubNcx())
+            book.add_item(epub.EpubNav())
+            book.spine = spine
+            
+            epub.write_epub(epub_file, book, {'epub3_landmark': False})
+            
+            print(f"   ✅ EPUB 已重新生成（放宽验证）: {len(epub_chapters)} 章")
+            if skipped:
+                print(f"   ⚠️ 以下章节内容为空: {', '.join(skipped)}")
+            print(f"   📚 文件: {epub_file}")
+            print(f"   📊 文件大小: {os.path.getsize(epub_file) / 1024:.1f} KB")
+            
+        except Exception as e:
+            print(f"   ❌ EPUB 修复重建失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _refresh_webui_settings(self):
         """从WebUI实时设置中刷新写作要求和润色要求
@@ -2062,7 +2321,7 @@ class AIGN(StatisticsMixin, AutoGenerationMixin, OutlineMixin, StorylineMixin, W
                 return ""
             
             # 根据精简模式调整检索数量：非精简模式时检索数量翻倍
-            compact_mode = getattr(self, 'compact_mode', True)
+            compact_mode = getattr(self, 'compact_mode', False)
             actual_top_k = top_k if compact_mode else top_k * 2
             
             # 执行检索

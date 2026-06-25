@@ -222,17 +222,17 @@ class NovelSaveManager:
     def _extract_settings(self, aign) -> Dict[str, Any]:
         """提取用户设置"""
         return {
-            "target_chapter_count": getattr(aign, 'target_chapter_count', 20),
+            "target_chapter_count": getattr(aign, 'target_chapter_count', 50),
             "compact_mode": getattr(aign, 'compact_mode', True),
             "enable_chapters": getattr(aign, 'enable_chapters', True),
             "enable_ending": getattr(aign, 'enable_ending', True),
             "long_chapter_mode": getattr(aign, 'long_chapter_mode', 0),
             "cosyvoice_mode": getattr(aign, 'cosyvoice_mode', False),
             "style_name": getattr(aign, 'style_name', "无"),
-            "chapters_per_plot": getattr(aign, 'chapters_per_plot', 5),
-            "num_climaxes": getattr(aign, 'num_climaxes', 10),
+            "chapters_per_plot": getattr(aign, 'chapters_per_plot', 2),
+            "num_climaxes": getattr(aign, 'num_climaxes', 20),
             "use_detailed_outline": getattr(aign, 'use_detailed_outline', False),
-            "foreshadowing_count": getattr(aign, 'foreshadowing_count', 3)
+            "foreshadowing_count": getattr(aign, 'foreshadowing_count', 8)
         }
     
     def _extract_user_inputs(self, aign) -> Dict[str, Any]:
@@ -271,17 +271,17 @@ class NovelSaveManager:
     
     def _restore_settings(self, aign, settings: Dict[str, Any]):
         """恢复用户设置"""
-        aign.target_chapter_count = settings.get("target_chapter_count", 20)
-        aign.compact_mode = settings.get("compact_mode", True)
+        aign.target_chapter_count = settings.get("target_chapter_count", 50)
+        aign.compact_mode = settings.get("compact_mode", False)
         aign.enable_chapters = settings.get("enable_chapters", True)
         aign.enable_ending = settings.get("enable_ending", True)
         aign.long_chapter_mode = settings.get("long_chapter_mode", 0)
         aign.cosyvoice_mode = settings.get("cosyvoice_mode", False)
         aign.style_name = settings.get("style_name", "无")
-        aign.chapters_per_plot = settings.get("chapters_per_plot", 5)
-        aign.num_climaxes = settings.get("num_climaxes", 5)
+        aign.chapters_per_plot = settings.get("chapters_per_plot", 2)
+        aign.num_climaxes = settings.get("num_climaxes", 20)
         aign.use_detailed_outline = settings.get("use_detailed_outline", False)
-        aign.foreshadowing_count = settings.get("foreshadowing_count", 3)
+        aign.foreshadowing_count = settings.get("foreshadowing_count", 8)
         
         print(f"✅ 设置已恢复")
         print(f"   • 目标章节: {aign.target_chapter_count}章")

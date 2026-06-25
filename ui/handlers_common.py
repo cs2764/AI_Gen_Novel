@@ -227,12 +227,12 @@ def create_page_load_handler(aign_instance, original_modules_loaded: bool = True
             print(f"📊 页面加载：长章节模式 = {long_chapter_mode_value}")
             
             # 获取剧情紧凑度设置
-            chapters_per_plot = getattr(aign_inst, 'chapters_per_plot', 5)
+            chapters_per_plot = getattr(aign_inst, 'chapters_per_plot', 2)
             num_climaxes = getattr(aign_inst, 'num_climaxes', 20)
             print(f"📊 页面加载：剧情紧凑度 = {chapters_per_plot}章/剧情, {num_climaxes}个高潮")
             
             # 获取伏笔数量设置
-            foreshadowing_count = getattr(aign_inst, 'foreshadowing_count', 5)
+            foreshadowing_count = getattr(aign_inst, 'foreshadowing_count', 8)
             print(f"🔮 页面加载：伏笔数量 = {foreshadowing_count}")
             
             # 返回合并的结果，包含按钮状态、长章节模式、剧情紧凑度和伏笔数量设置

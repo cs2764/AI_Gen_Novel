@@ -853,16 +853,16 @@ class WritingMixin:
         if self.enable_chapters:
             self.chapter_count = 1
             
-            # 尝试从故事线获取第一章标题
+            title_hint = None
             current_storyline = self.getCurrentChapterStoryline(self.chapter_count)
-            if current_storyline and isinstance(current_storyline, dict) and current_storyline.get("title"):
-                story_title = current_storyline.get("title", "")
-                chapter_title = f"第{self.chapter_count}章：{story_title}"
-            else:
-                chapter_title = f"第{self.chapter_count}章"
-            
-            beginning = f"{chapter_title}\n\n{beginning}"
-            print(f"📖 已生成 {chapter_title}")
+            if current_storyline and isinstance(current_storyline, dict):
+                title_hint = current_storyline.get("title")
+
+            from core.chapter_content_utils import ensure_chapter_header
+            beginning = ensure_chapter_header(beginning, self.chapter_count, title_hint=title_hint)
+            if not title_hint:
+                print(f"⚠️ 第1章故事线缺少标题，已使用占位/推断标题")
+            print(f"📖 已写入故事线标题：第{self.chapter_count}章")
 
         self.paragraph_list.append(beginning)
         
@@ -1129,6 +1129,16 @@ class WritingMixin:
         # 确保storyline存在
         if not hasattr(self, 'storyline') or not self.storyline:
             self.storyline = {"chapters": []}
+
+        from core.storyline_chapter_utils import (
+            dedupe_chapters_by_number,
+            normalize_chapter_title,
+        )
+
+        clean_title = normalize_chapter_title(
+            summary_data.get("title", f"第{chapter_number}章"),
+            chapter_number,
+        )
         
         # 查找对应章节
         chapter_found = False
@@ -1137,7 +1147,7 @@ class WritingMixin:
                 # 更新现有章节
                 self.storyline["chapters"][i] = {
                     "chapter_number": chapter_number,
-                    "title": summary_data.get("title", f"第{chapter_number}章"),
+                    "title": clean_title,
                     "plot_summary": summary_data.get("plot_summary", ""),
                     "main_characters": summary_data.get("main_characters", []),
                     "key_events": summary_data.get("key_events", []),
@@ -1152,7 +1162,7 @@ class WritingMixin:
             # 添加新章节
             new_chapter = {
                 "chapter_number": chapter_number,
-                "title": summary_data.get("title", f"第{chapter_number}章"),
+                "title": clean_title,
                 "plot_summary": summary_data.get("plot_summary", ""),
                 "main_characters": summary_data.get("main_characters", []),
                 "key_events": summary_data.get("key_events", []),
@@ -1161,9 +1171,12 @@ class WritingMixin:
                 "transition_to_next": summary_data.get("connection_points", "")
             }
             self.storyline["chapters"].append(new_chapter)
-            
-        # 按章节号排序
-        self.storyline["chapters"].sort(key=lambda item: item.get("chapter_number", 0))
+
+        # 去重并排序，防止同章号重复条目
+        deduped, dupes = dedupe_chapters_by_number(self.storyline.get("chapters", []))
+        if dupes:
+            print(f"⚠️ 故事线更新后去重：移除重复章节号 {sorted(set(dupes))}")
+        self.storyline["chapters"] = deduped
         
         print(f"✅ 第{chapter_number}章的故事线已更新")
         
@@ -1331,9 +1344,21 @@ class WritingMixin:
         last_error = None
         error_details = []
         
+        # 🔧 修复：记录调用前的段落数，用于检测内容是否已提交
+        paragraphs_before_call = len(self.paragraph_list) if hasattr(self, 'paragraph_list') else 0
+        
         while retry_count <= max_retries:
             try:
                 if retry_count > 0:
+                    # 🔧 修复：重试前检查内容是否已提交
+                    # 如果 paragraph_list 已增长，说明上一次尝试已成功提交内容
+                    # 后续的异常来自后处理（记忆更新、总结生成等），不应重新生成章节
+                    if hasattr(self, 'paragraph_list'):
+                        current_paragraphs = len(self.paragraph_list)
+                        if current_paragraphs > paragraphs_before_call:
+                            print(f"⚠️ {operation_name}: 检测到内容已提交(段落数: {paragraphs_before_call} → {current_paragraphs})，跳过重试")
+                            self.log_message(f"⚠️ {operation_name}: 内容已提交，跳过重试以防止重复章节")
+                            return True, None, None
                     print(f"🔄 正在进行第{retry_count}次重试...")
                     # 根据错误类型智能调整重试间隔
                     if last_error:
@@ -2171,8 +2196,16 @@ class WritingMixin:
                         else:
                             emb_inputs["上一段原文"] = prev_seg
                             print(f"   📎 已添加上一段原文({len(prev_seg)}字符)以确保段落衔接")
-                emb_resp = emb_agent.invoke(inputs=self._inject_global_context_to_inputs(self._inject_foreshadowing_to_inputs(emb_inputs)), output_keys=["润色结果"])
-                final_seg = emb_resp["润色结果"]
+                # 🔧 修复：使用 _embellish_with_retry 替代直接 invoke，
+                # 保持与非分段模式一致的截断检测和自动回退逻辑，
+                # 避免 API 失败时抛出异常触发整章重试导致重复生成
+                final_seg = self._embellish_with_retry(
+                    embellisher=emb_agent,
+                    embellish_inputs=emb_inputs,
+                    original_content=seg_text,
+                    chapter_number=self.chapter_count + 1,
+                    context_label=f"分段{seg_index}润色",
+                )
                 parts.append(final_seg)
 
             # 合并分段
@@ -2364,21 +2397,21 @@ class WritingMixin:
             next_paragraph = self.sanitize_generated_text(next_paragraph)
         
         # 添加章节标题（如果开启章节功能）
-        # 🔧 使用临时变量，延迟到内容实际提交后再更新 chapter_count
-        new_chapter_count = self.chapter_count  # 默认不变
-        if self.enable_chapters and not next_paragraph.startswith("第"):
-            new_chapter_count = self.chapter_count + 1
-            
-            # 尝试从故事线获取章节标题
+        from core.chapter_content_utils import ensure_chapter_header
+        new_chapter_count = self.chapter_count + 1
+        if self.enable_chapters:
+            title_hint = None
             current_storyline = self.getCurrentChapterStoryline(new_chapter_count)
-            if current_storyline and isinstance(current_storyline, dict) and current_storyline.get("title"):
-                story_title = current_storyline.get("title", "")
-                chapter_title = f"第{new_chapter_count}章：{story_title}"
-            else:
-                chapter_title = f"第{new_chapter_count}章"
-            
-            next_paragraph = f"{chapter_title}\n\n{next_paragraph}"
-            print(f"📖 已生成 {chapter_title}")
+            if current_storyline and isinstance(current_storyline, dict):
+                title_hint = current_storyline.get("title")
+            next_paragraph = ensure_chapter_header(
+                next_paragraph,
+                new_chapter_count,
+                title_hint=title_hint,
+            )
+            if not title_hint:
+                print(f"⚠️ 第{new_chapter_count}章故事线缺少标题，已使用占位/推断标题")
+            print(f"📖 已写入故事线标题：第{new_chapter_count}章")
             
         # 确保最终章以"（全文完）"结尾并添加模型信息（完全由程序控制）
         if is_final_chapter:
@@ -2456,3 +2489,210 @@ class WritingMixin:
             traceback.print_exc()
 
         return next_paragraph
+
+    def _verify_chapters(self):
+        """校验 paragraph_list 中的章节完整性
+        
+        Returns:
+            list: 缺失的章节号列表（已排序），如果全部齐全则返回空列表
+        """
+        from core.chapter_content_utils import analyze_chapter_integrity, parse_chapter_title_line, split_paragraph_header
+
+        target = getattr(self, 'target_chapter_count', 0) or 0
+        if not self.paragraph_list:
+            print("⚠️ 章节校验：paragraph_list 为空")
+            return list(range(1, target + 1)) if target else []
+
+        integrity = analyze_chapter_integrity(self.paragraph_list, target)
+        self._last_chapter_integrity = integrity
+
+        print(f"\n{'='*60}")
+        print(f"📋 章节完整性校验")
+        print(f"{'='*60}")
+        print(f"   目标章节数: {target}")
+        print(f"   paragraph_list 段落数: {integrity['paragraph_count']}")
+
+        if integrity['missing_by_count']:
+            print(f"   ❌ 段落数不足，缺失: {self._format_chapter_ranges(integrity['missing_by_count'])}")
+        if integrity['missing_header_positions']:
+            print(f"   ⚠️ 无标准标题的段落: {self._format_chapter_ranges(integrity['missing_header_positions'])}")
+        if integrity['wrong_number_positions']:
+            for pos, header_num, _ in integrity['wrong_number_positions'][:10]:
+                print(f"   ⚠️ 第{pos}段标题章号(第{header_num}章)与位置不符")
+        if integrity['duplicate_header_numbers']:
+            print(f"   ⚠️ 重复章号: {integrity['duplicate_header_numbers']}")
+
+        if integrity['complete']:
+            print(f"   ✅ 所有章节均已生成且标题规范")
+        else:
+            print(f"   ⚠️ 章节完整性存在问题，EPUB 将按 paragraph_list 逐段导出")
+
+        print(f"{'='*60}\n")
+
+        # 返回真正缺失的章节（段落数不足）
+        missing = list(integrity['missing_by_count'])
+
+        # 段落数足够但标题不规范时，不视为「缺章」（内容存在，EPUB 按位置导出）
+        if not missing and integrity['paragraph_count'] >= target:
+            found_nums = set()
+            for idx, paragraph in enumerate(self.paragraph_list[:target]):
+                first_line, _ = split_paragraph_header(str(paragraph or ""))
+                parsed = parse_chapter_title_line(first_line)
+                if parsed:
+                    found_nums.add(parsed[0])
+                else:
+                    found_nums.add(idx + 1)
+            expected = set(range(1, target + 1))
+            missing = sorted(expected - found_nums)
+
+        return missing
+    
+    def _format_chapter_ranges(self, chapter_numbers):
+        """将章节号列表格式化为范围显示，如 [5,6,7,10] → '第5-7章, 第10章'"""
+        if not chapter_numbers:
+            return "无"
+        
+        ranges = []
+        range_start = chapter_numbers[0]
+        range_end = chapter_numbers[0]
+        
+        for ch_num in chapter_numbers[1:]:
+            if ch_num == range_end + 1:
+                range_end = ch_num
+            else:
+                if range_start == range_end:
+                    ranges.append(f"第{range_start}章")
+                else:
+                    ranges.append(f"第{range_start}-{range_end}章")
+                range_start = ch_num
+                range_end = ch_num
+        
+        # 添加最后一组
+        if range_start == range_end:
+            ranges.append(f"第{range_start}章")
+        else:
+            ranges.append(f"第{range_start}-{range_end}章")
+        
+        return ", ".join(ranges)
+    
+    def _repair_missing_chapters(self, missing_chapters, max_rounds=3):
+        """修复缺失的章节
+        
+        对每个缺失的章节号，设置正确的 chapter_count 并调用生成逻辑重新生成，
+        然后将生成的内容插入到 paragraph_list 的正确位置。
+        
+        Args:
+            missing_chapters: 缺失的章节号列表
+            max_rounds: 最大修复轮次（防止无限循环）
+            
+        Returns:
+            list: 修复后仍然缺失的章节号列表
+        """
+        if not missing_chapters:
+            return []
+        
+        print(f"\n{'='*60}")
+        print(f"🔧 开始修复缺失章节")
+        print(f"   缺失章节: {self._format_chapter_ranges(missing_chapters)}")
+        print(f"{'='*60}")
+        
+        still_missing = list(missing_chapters)
+        
+        for round_num in range(1, max_rounds + 1):
+            if not still_missing:
+                break
+            
+            print(f"\n🔄 修复轮次 {round_num}/{max_rounds}，待修复: {self._format_chapter_ranges(still_missing)}")
+            
+            repaired_in_round = []
+            
+            for ch_num in list(still_missing):
+                print(f"\n📖 正在修复第{ch_num}章...")
+                
+                # 保存当前状态
+                original_chapter_count = self.chapter_count
+                
+                try:
+                    # 临时设置 chapter_count 为目标章节的前一章
+                    self.chapter_count = ch_num - 1
+                    
+                    # 调用内部生成方法
+                    self._generate_paragraph_internal()
+                    
+                    # 检查生成是否成功（chapter_count 应该被递增到 ch_num）
+                    if self.chapter_count == ch_num:
+                        # 生成的内容已被 _generate_paragraph_internal 追加到 paragraph_list 末尾
+                        # 需要将其从末尾取出并插入到正确位置
+                        new_paragraph = self.paragraph_list.pop()
+                        
+                        # 找到正确的插入位置（按章节号排序）
+                        insert_pos = self._find_insert_position(ch_num)
+                        self.paragraph_list.insert(insert_pos, new_paragraph)
+                        
+                        repaired_in_round.append(ch_num)
+                        print(f"   ✅ 第{ch_num}章修复成功，插入位置: {insert_pos}")
+                    else:
+                        print(f"   ❌ 第{ch_num}章修复失败：chapter_count 不匹配 (期望{ch_num}, 实际{self.chapter_count})")
+                        
+                except Exception as e:
+                    print(f"   ❌ 第{ch_num}章修复失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    # 恢复 chapter_count 为原始值或更新后的最大值
+                    self.chapter_count = max(original_chapter_count, self.chapter_count)
+            
+            # 更新仍然缺失的列表
+            for ch in repaired_in_round:
+                if ch in still_missing:
+                    still_missing.remove(ch)
+            
+            if repaired_in_round:
+                print(f"\n✅ 第{round_num}轮修复完成: 已修复 {self._format_chapter_ranges(repaired_in_round)}")
+            else:
+                print(f"\n⚠️ 第{round_num}轮未能修复任何章节，停止修复")
+                break
+        
+        # 修复完成后，更新 novel_content
+        if missing_chapters != still_missing:
+            self.updateNovelContent()
+            print(f"\n📝 已更新 novel_content")
+        
+        # 修复后确保 chapter_count 准确
+        self.chapter_count = len(self.paragraph_list)
+        
+        # 输出最终结果
+        print(f"\n{'='*60}")
+        print(f"🔧 修复结果")
+        print(f"   已修复: {len(missing_chapters) - len(still_missing)}/{len(missing_chapters)} 章")
+        if still_missing:
+            print(f"   仍缺失: {self._format_chapter_ranges(still_missing)}")
+        else:
+            print(f"   ✅ 所有缺失章节已修复")
+        print(f"   当前 paragraph_list 段落数: {len(self.paragraph_list)}")
+        print(f"   当前 chapter_count: {self.chapter_count}")
+        print(f"{'='*60}\n")
+        
+        return still_missing
+    
+    def _find_insert_position(self, target_chapter_num):
+        """在 paragraph_list 中找到指定章节号应该插入的位置
+        
+        Args:
+            target_chapter_num: 目标章节号
+            
+        Returns:
+            int: 插入位置索引
+        """
+        import re
+        
+        for idx, paragraph in enumerate(self.paragraph_list):
+            header = paragraph[:200] if len(paragraph) > 200 else paragraph
+            match = re.search(r'第(\d+)章', header)
+            if match:
+                existing_num = int(match.group(1))
+                if existing_num > target_chapter_num:
+                    return idx
+        
+        # 如果没有找到更大的章节号，插入到末尾
+        return len(self.paragraph_list)

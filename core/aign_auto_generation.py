@@ -293,10 +293,41 @@ class AutoGenerationMixin:
                     print(completion_msg)
                     self._sync_to_webui(completion_msg)
                     
-                    # 确保最后一章内容和元数据被保存
+                    # ====== 章节完整性校验与修复（EPUB 保存前） ======
+                    try:
+                        missing_chapters = self._verify_chapters()
+                        if missing_chapters:
+                            repair_msg = f"🔧 检测到 {len(missing_chapters)} 个缺失章节，正在自动修复..."
+                            print(repair_msg)
+                            self._sync_to_webui(repair_msg)
+                            
+                            still_missing = self._repair_missing_chapters(missing_chapters)
+                            
+                            if still_missing:
+                                fail_msg = f"⚠️ 修复完成，但仍有 {len(still_missing)} 个章节无法修复: {self._format_chapter_ranges(still_missing)}"
+                                print(fail_msg)
+                                self._sync_to_webui(fail_msg)
+                            else:
+                                success_msg = f"✅ 所有缺失章节已修复，当前共 {len(self.paragraph_list)} 章"
+                                print(success_msg)
+                                self._sync_to_webui(success_msg)
+                    except Exception as verify_err:
+                        print(f"⚠️ 章节校验/修复过程出错（不影响保存）: {verify_err}")
+                        import traceback
+                        traceback.print_exc()
+                    
+                    # 确保最后一章内容和元数据被保存（修复后重新保存）
                     self.saveToFile(save_metadata=True)
                     # 生成EPUB格式文件
                     self.saveToEpub()
+
+                    from core.chapter_content_utils import analyze_chapter_integrity, format_completion_operation
+                    chapter_integrity = analyze_chapter_integrity(
+                        self.paragraph_list,
+                        self.target_chapter_count,
+                    )
+                    self._last_chapter_integrity = chapter_integrity
+                    epub_chapter_count = getattr(self, '_last_epub_chapter_count', len(self.paragraph_list))
                     
                     # 更新存档状态为completed并清理（完成后不再需要断点续传）
                     try:
@@ -332,11 +363,27 @@ class AutoGenerationMixin:
                     self.generation_completion_info = {
                         "completed": True,
                         "chapter_count": self.chapter_count,
+                        "target_chapter_count": self.target_chapter_count,
+                        "paragraph_count": len(self.paragraph_list),
+                        "epub_chapter_count": epub_chapter_count,
                         "total_word_count": total_word_count,
                         "total_time": self.format_time_duration(total_time, include_seconds=True),
                         "token_report": token_report,
-                        "time_report": time_report
+                        "time_report": time_report,
+                        "chapter_integrity": chapter_integrity,
+                        "missing_header_positions": chapter_integrity.get("missing_header_positions", []),
+                        "integrity_complete": chapter_integrity.get("complete", False),
                     }
+                    completion_display = format_completion_operation(
+                        self.chapter_count,
+                        total_word_count,
+                        self.generation_completion_info["total_time"],
+                        integrity=chapter_integrity,
+                        epub_chapter_count=epub_chapter_count,
+                        target_count=self.target_chapter_count,
+                    )
+                    self.generation_completion_info["display_message"] = completion_display
+                    self._sync_to_webui(completion_display)
                 else:
                     # 生成被停止
                     print("=" * 60)
@@ -574,15 +621,18 @@ class AutoGenerationMixin:
                 current_operation = f"正在生成第{generation_status['current_chapter'] + 1}章"
         elif hasattr(self, 'generation_completion_info') and self.generation_completion_info and self.generation_completion_info.get('completed'):
             info = self.generation_completion_info
-            total_words = info.get('total_word_count', 0)
-            # 格式化字数显示
-            if total_words >= 10000:
-                word_display = f"{total_words/10000:.1f}万字"
-            elif total_words >= 1000:
-                word_display = f"{total_words/1000:.1f}千字"
+            if info.get('display_message'):
+                current_operation = info['display_message']
             else:
-                word_display = f"{total_words}字"
-            current_operation = f"✅ 生成完成！共 {info.get('chapter_count', 0)} 章，{word_display}，耗时 {info.get('total_time', '未知')}"
+                from core.chapter_content_utils import format_completion_operation
+                current_operation = format_completion_operation(
+                    info.get('chapter_count', 0),
+                    info.get('total_word_count', 0),
+                    info.get('total_time', '未知'),
+                    integrity=info.get('chapter_integrity'),
+                    epub_chapter_count=info.get('epub_chapter_count'),
+                    target_count=info.get('target_chapter_count'),
+                )
 
         return {
             'timestamp': current_time,

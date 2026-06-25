@@ -180,16 +180,17 @@ class MarkdownAgent:
         # 检查智能体名称（不区分大小写）
         agent_name = self.name.lower()
         
-        # 15,000 token 限制的智能体（较小的辅助任务）
+        # 32,000 token 限制的智能体（较小的辅助任务）
         limited_agents = ['memorymaker', 'chaptersummarygenerator', 
-                          'charactergenerator', 'titlegenerator']
+                          'titlegenerator']
         
         for limited in limited_agents:
             if limited in agent_name:
                 return 32000
         
-        # 其他智能体 40,000 token 限制（主要生成任务）
-        return 40000
+        # 其他智能体使用实例的 max_tokens 值作为限制（默认65536）
+        # 这样可以与 AIGN.py 中为各 Agent 设置的 max_tokens 保持一致
+        return getattr(self, 'max_tokens', 65536)
 
     def detect_repetition_loop(self, text: str) -> dict:
         """检测文本中是否存在重复循环（LLM陷入重复输出）
